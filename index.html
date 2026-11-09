@@ -1,77 +1,68 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#101613"><meta name="description" content="探索河南大学金明校区的三维校园、卫星影像与地面漫游。">
-<title>河大地图 · 金明校区</title>
-<link rel="stylesheet" href="./assets/leaflet.css">
-<link rel="stylesheet" href="./style.css">
-<script type="importmap">{"imports":{"three":"./assets/three.module.min.js"}}</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#244b3e">
+  <title>河南大学 · 金明校园三维漫游</title>
+  <link rel="stylesheet" href="./viewer.css">
+  <link rel="icon" href="data:,">
+  <script type="importmap">{"imports":{"three":"./assets/three.module.min.js"}}</script>
+  <script src="./assets/leaflet.js" defer></script>
+  <script src="./assets/esri-leaflet.js" defer></script>
+  <script src="./main.js" type="module"></script>
 </head>
 <body>
-<header class="top">
-  <a class="brand" href="./" aria-label="河大地图首页"><span class="brand-mark" data-icon="brand"></span><span><b>河大地图</b><small>HENU CAMPUS ATLAS</small></span></a>
-  <div class="top-place"><span data-icon="pin"></span> 河南大学 <i></i> 金明校区</div>
-  <button class="source-button" id="sources"><span data-icon="info"></span><span>关于与来源</span></button>
-</header>
-<main class="workspace">
-  <aside class="sidebar" aria-label="校园地点">
-    <section class="intro">
-      <div class="eyebrow"><span></span> 校园图集 <i></i> CAMPUS ATLAS</div>
-      <h1>金明校区</h1>
-      <p><span data-icon="pin"></span> 河南省开封市 · 龙亭区</p>
+  <main class="campus-app">
+    <aside class="sidebar" aria-label="校园地点导航">
+      <a class="brand" href="./" aria-label="返回校园全景">
+        <span class="brand-symbol" data-icon="brand"></span>
+        <span><strong>金明校园</strong><small>河南大学 · 三维漫游</small></span>
+      </a>
+      <div class="sidebar-intro"><span class="eyebrow">CAMPUS EXPLORER</span><h1>走近校园的每一处</h1><p>从全景俯瞰，到林荫道上的漫步。</p></div>
+      <label class="search-box" for="search"><span data-icon="search"></span><input id="search" type="search" placeholder="搜索地点" autocomplete="off"><kbd>/</kbd></label>
+      <div class="list-heading"><h2>校园地点</h2><span id="place-count">正在加载</span></div>
+      <nav id="place-list" aria-label="地点列表"></nav>
+      <footer class="sidebar-footer"><span class="status-dot"></span><span>校园轮廓 · 精细化示意模型</span><button id="sources" class="icon-button" type="button" title="模型与来源说明" aria-label="模型与来源说明" data-icon="info"></button></footer>
+    </aside>
+
+    <section class="viewport" aria-label="交互式校园地图">
+      <div id="stage" tabindex="0" aria-label="三维校园，拖动旋转，滚轮缩放；漫游时使用 W A S D 或方向键移动"></div>
+      <div id="labels" aria-label="地图地点"></div>
+      <div class="viewport-top">
+        <div class="mode-caption"><span class="live-dot"></span><div><strong id="mode-label">三维校园</strong><small id="mode-note">精细化模型 · 建筑高度估算</small></div></div>
+        <div class="mode-switch" role="group" aria-label="查看模式">
+          <button type="button" class="active" data-mode="model" aria-pressed="true"><span data-icon="cube"></span><span>模型</span></button>
+          <button type="button" data-mode="walk" aria-pressed="false"><span data-icon="walk"></span><span>漫游</span></button>
+          <button type="button" data-mode="satellite" aria-pressed="false"><span data-icon="satellite"></span><span>卫星</span></button>
+        </div>
+      </div>
+      <div class="map-controls" role="group" aria-label="地图视角">
+        <button type="button" id="north" class="icon-button north-control" title="朝向正北" aria-label="朝向正北"><span data-icon="north"></span><small>N</small></button>
+        <div class="control-pair"><button type="button" id="zoom-in" class="icon-button" title="放大" aria-label="放大" data-icon="plus"></button><button type="button" id="zoom-out" class="icon-button" title="缩小" aria-label="缩小" data-icon="minus"></button></div>
+        <button type="button" id="home" class="icon-button" title="回到校园全景" aria-label="回到校园全景" data-icon="target"></button>
+        <button type="button" id="fullscreen" class="icon-button" title="全屏" aria-label="切换全屏" data-icon="expand"></button>
+      </div>
+      <article id="detail" class="detail-card" aria-live="polite" hidden></article>
+      <div id="street-help" class="street-help" hidden><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · 拖动环顾</span><div><button type="button" id="walk-back" aria-label="后退五米">后退</button><button type="button" id="walk-forward" aria-label="前进五米">前进</button><button type="button" id="map-photos">实拍对照</button></div></div>
+      <div id="fallback" role="status">正在构建校园场景…</div>
+      <div id="notice" role="status" hidden></div>
+      <div class="viewport-bottom"><div id="scale"><span id="scale-label">100 米</span></div><span class="orbit-help">拖动旋转 · 右键平移 · 滚轮缩放</span><span id="esri-credit" hidden>影像 © Esri 及其数据提供方</span></div>
     </section>
-    <section class="places">
-      <label class="search"><span data-icon="search"></span><input type="search" id="search" placeholder="搜索校区地点…" aria-label="搜索校区地点"><kbd>/</kbd></label>
-      <div class="places-title"><span>探索地标</span><small id="place-count"></small></div>
-      <div id="place-list" class="place-list"></div>
-    </section>
-    <div class="sidebar-foot"><span data-icon="compass"></span><span><b>操作提示</b><br>拖动旋转 · 滚轮缩放 · 右键拖动平移</span></div>
-  </aside>
-  <section class="viewport" aria-label="金明校区交互地图">
-    <div id="stage" tabindex="0" aria-label="3D 校园场景"></div>
-    <div id="fallback" class="loading" role="status">正在载入金明校区…</div>
-    <div class="map-heading"><span class="mode-label"><i></i><b id="mode-label">三维校园</b></span><span id="mode-note">校园实地轮廓 · 建筑高度估算</span></div>
-    <div id="labels" class="labels"></div>
-    <div class="tools" aria-label="地图操作">
-      <button id="north" title="转回正北" aria-label="转回正北"><span class="compass-needle"><b>N</b><span data-icon="north"></span></span></button>
-      <div class="zoom-tools"><button id="zoom-in" title="放大" aria-label="放大" data-icon="plus"></button><button id="zoom-out" title="缩小" aria-label="缩小" data-icon="minus"></button></div>
-      <button id="home" title="回到校区总览" aria-label="回到校区总览" data-icon="target"></button>
-      <button id="fullscreen" title="全屏" aria-label="切换全屏" data-icon="expand"></button>
-    </div>
-    <button id="map-photos" class="map-photos" hidden>查看校方实拍 ↗</button>
-    <div id="notice" class="notice" role="status" hidden></div>
-    <div id="street-help" class="street-help" hidden><span>拖动看四周 · ↑ ↓ 或 W / S 移动</span><div><button id="walk-forward" aria-label="向前移动">↑</button><button id="walk-back" aria-label="向后移动">↓</button></div></div>
-    <article id="detail" class="detail" hidden></article>
-    <div class="map-bottom">
-      <nav class="modes" aria-label="地图图层">
-        <button data-mode="model" class="active" aria-pressed="true"><span data-icon="cube"></span><b>3D 校园</b></button>
-        <button data-mode="satellite" aria-pressed="false"><span data-icon="satellite"></span><b>卫星影像</b></button>
-        <button data-mode="walk" aria-pressed="false"><span data-icon="walk"></span><b>地面漫游</b></button>
-      </nav>
-      <div class="map-meta"><div id="scale"><span id="scale-label"></span><i></i></div><div class="credits"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a><a id="esri-credit" href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener" hidden>影像 © Esri、Vantor、Earthstar Geographics 及 GIS 社区</a></div></div>
-    </div>
-  </section>
-</main>
-<dialog id="about">
-  <div class="dialog-head"><div class="eyebrow"><span></span> CAMPUS ATLAS</div><button id="close-about" aria-label="关闭" data-icon="close"></button></div>
-  <h2>关于这张地图</h2>
-  <p>地点位于开封市龙亭区金明大道北段。这是一份独立制作的校园导览。</p>
-  <ul>
-    <li><a href="https://www.openstreetmap.org/relation/9907800" target="_blank" rel="noopener">OpenStreetMap 校园数据 ↗</a>。用于生成校区轮廓、道路和建筑平面，数据按 ODbL 提供。缺少高度数据的建筑按类型估算，外立面与树木为示意。</li>
-    <li><a href="https://kyc.henu.edu.cn/__local/2/C3/85/071BBDE78FE9842123BFA551A1A_1B97BBCF_2716B6.pdf#page=54" target="_blank" rel="noopener">河南大学校方平面图 ↗</a>。用于核对地名和相对位置，并补绘图书馆与明德广场。校门位置与补绘轮廓为近似。</li>
-    <li><a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener">Esri World Imagery ↗</a>。卫星图层在线加载，影像拍摄时间与地图数据可能不同。</li>
-    <li><a href="https://zbcg.henu.edu.cn/xwtz/5707.chtml" target="_blank" rel="noopener">校方实拍照片 ↗</a>。地面漫游为 3D 模拟。地面漫游中的“查看校方实拍”可打开照片对照。</li>
-  </ul>
-</dialog>
-<dialog id="photo-dialog">
-  <div class="dialog-head"><div class="eyebrow"><span></span> 校方实拍</div><button id="close-photos" aria-label="关闭照片" data-icon="close"></button></div>
-  <h2 id="photo-title">图书馆正面</h2>
-  <figure class="photo-frame"><img id="campus-photo" alt="" referrerpolicy="no-referrer" hidden><span id="photo-status" role="status">正在加载校方照片…</span></figure>
-  <div class="photo-nav"><button data-photo-tab aria-pressed="true">图书馆</button><button data-photo-tab aria-pressed="false">西门航拍</button><button data-photo-tab aria-pressed="false">圆形广场</button><a href="https://zbcg.henu.edu.cn/xwtz/5707.chtml" target="_blank" rel="noopener">校方来源 ↗</a></div>
-</dialog>
-<script src="./assets/leaflet.js"></script>
-<script src="./assets/esri-leaflet.js"></script>
-<script type="module" src="./main.js"></script>
+  </main>
+
+  <dialog id="about" aria-labelledby="about-title">
+    <div class="dialog-top"><span class="eyebrow">ABOUT THE MODEL</span><button type="button" id="close-about" class="icon-button" aria-label="关闭模型说明" data-icon="close"></button></div>
+    <h2 id="about-title">模型与来源说明</h2>
+    <p>本模型沿用提供的校园轮廓和建筑估算高度。窗框、屋顶、入口及景观设施采用程序化示意细节，用于浏览校园空间，不代表建筑现状的测绘结果。</p>
+    <p>三维模型可离线浏览；卫星影像和校方照片需要网络连接。卫星底图来自 Esri World Imagery。</p>
+    <div class="source-links"><a href="https://jjc.henu.edu.cn/info/1004/1002.htm" target="_blank" rel="noopener">校方图书馆介绍 ↗</a><a href="https://zbcg.henu.edu.cn/xwtz/5707.chtml" target="_blank" rel="noopener">校方照片来源 ↗</a></div>
+  </dialog>
+  <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">
+    <div class="dialog-top"><h2 id="photo-title">校园实拍</h2><button type="button" id="close-photos" class="icon-button" aria-label="关闭照片" data-icon="close"></button></div>
+    <div class="photo-tabs" role="group" aria-label="选择照片"><button type="button" data-photo-tab aria-pressed="true">图书馆</button><button type="button" data-photo-tab aria-pressed="false">校园中轴</button><button type="button" data-photo-tab aria-pressed="false">圆形广场</button></div>
+    <div class="photo-area"><img id="campus-photo" alt="校园实拍" hidden><p id="photo-status" role="status">正在加载校方照片…</p></div>
+    <p class="photo-credit">照片来自校方网站 · <a href="https://zbcg.henu.edu.cn/xwtz/5707.chtml" target="_blank" rel="noopener">打开来源 ↗</a></p>
+  </dialog>
 </body>
 </html>

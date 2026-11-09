@@ -209,7 +209,7 @@ async function setMode(next){
     b.setAttribute('aria-pressed',String(b.dataset.mode===mode));
   });
   const [title,note]={
-    model:['三维校园','校园实地轮廓 · 建筑高度估算'],
+    model:['三维校园',stage.dataset.renderer==='canvas'?'兼容模式 · 基础模型':'精细化模型 · 建筑高度估算'],
     satellite:['卫星影像','Esri World Imagery · 实拍底图'],
     walk:['地面漫游','第一人称 · 模拟街景']
   }[mode];
@@ -314,6 +314,11 @@ try{
   campus=await response.json();
   model=createModel(stage,campus,(...args)=>{if(mode!=='satellite')updateLabels(...args);});
   model.setVisible(mode!=='satellite');
+  if(stage.dataset.renderer==='canvas')$('#mode-note').textContent='兼容模式 · 基础模型';
+  requestAnimationFrame(()=>{
+    stage.dataset.modelStats=JSON.stringify(model.getDiagnostics());
+    stage.dataset.ready='true';
+  });
   if(mode==='model')fallback.hidden=true;
 }catch(error){
   console.warn('Campus model failed',error);

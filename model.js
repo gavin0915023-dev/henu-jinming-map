@@ -2,16 +2,18 @@ import * as T from 'three';
 import { OrbitControls } from './assets/OrbitControls.js';
 import { softwareRenderer } from './software.js';
 import { libraryFacade } from './facade.js';
+import { addBuildingDetails } from './building-detail.js';
+import { addLandscapeDetails } from './landscape-detail.js';
 
 const ground = 0;
 const extent = 1400;
-const homeOffset = new T.Vector3(-425, 1450, 970);
+const homeOffset = new T.Vector3(-600, 1150, 1050);
 const palette = {
-  library: ['#c3ad85','#ead9b8'],
-  dorm: ['#a78d76','#c7b5a0'],
-  school: ['#a89b88','#d1c6ae'],
-  other: ['#89918a','#afb6a6'],
-  context: ['#677a70','#829185']
+  library: ['#c8bea7','#e5ddca'],
+  dorm: ['#bbab99','#d5cbb8'],
+  school: ['#c4bcaa','#e1dac7'],
+  other: ['#a6aea4','#c1c8ba'],
+  context: ['#8b998c','#a5b19f']
 };
 
 const closed = (points) => points[0][0] === points.at(-1)[0] && points[0][1] === points.at(-1)[1];
@@ -94,43 +96,6 @@ function terrainTexture() {
   tex.colorSpace = T.SRGBColorSpace;
   return tex;
 }
-function athletics(batch, points, type, sport) {
-  if (type === 'sports_centre') {
-    batch.surface(points,.24,'#4b6348');
-    return;
-  }
-  const [x,z,u,v] = bounds(points);
-  const width=u-x, height=v-z;
-  const ball = sport.includes('soccer') || sport.includes('football');
-  batch.surface(points, type === 'track' ? .48 : .6, type === 'track' ? '#975c49' : ball ? '#547544' : '#6b8054');
-  if (type === 'track') {
-    if (width < 35 || height < 45) return;
-    const cx=(x+u)/2, cz=(z+v)/2;
-    for (let k=1;k<=5;k++) {
-      const ring=[];
-      const r = Math.min(width,height)*.5-k*1.25;
-      const run=Math.max(0,Math.abs(height-width)*.5);
-      for(let a=0;a<=80;a++){
-        const q=a*Math.PI/40, s=Math.sin(q), c=Math.cos(q);
-        ring.push(height>width ? [cx+r*c,cz+r*s+Math.sign(s)*run] : [cx+r*c+Math.sign(c)*run,cz+r*s]);
-      }
-      batch.ribbon(ring,.42,.55,'#d5b394');
-    }
-    return;
-  }
-  if (!ball || width<15 || height<22) return;
-  const l=x+3, r=u-3, t=z+4, b=v-4, cx=(l+r)/2, cz=(t+b)/2;
-  const line = (p)=>batch.ribbon(p,.6,.68,'#c7d1a5');
-  line([[l,t],[r,t],[r,b],[l,b],[l,t]]);
-  line(height>=width ? [[l,cz],[r,cz]] : [[cx,t],[cx,b]]);
-  const ring=[];
-  for(let i=0;i<=30;i++){const a=i*Math.PI/15;ring.push([cx+8*Math.cos(a),cz+8*Math.sin(a)]);}
-  line(ring);
-  if(height>=width){
-    line([[cx-13,t],[cx-13,t+11],[cx+13,t+11],[cx+13,t]]);
-    line([[cx-13,b],[cx-13,b-11],[cx+13,b-11],[cx+13,b]]);
-  }
-}
 function treePositions(data) {
   const random=seeded();
   const blockers=[...data.building.map(([p])=>p),...data.water,...data.sport.map(([p])=>p),...data.plaza].map(p=>[bounds(p),p]);
@@ -162,38 +127,43 @@ function treePositions(data) {
 }
 function addTrees(scene,positions) {
   const random=seeded();
-  const stem=new T.InstancedMesh(new T.CylinderGeometry(.25,.4,3.8,5),new T.MeshStandardMaterial({color:'#66604b'}),positions.length);
-  const crown=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({roughness:1,flatShading:true}),positions.length);
-  const canopy=['#506b3e','#618350','#4c744d','#6a8650','#52734b'];
+  const stem=new T.InstancedMesh(new T.CylinderGeometry(.19,.35,3.8,7),new T.MeshStandardMaterial({color:'#786e55',roughness:1}),positions.length);
+  const crown=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({roughness:.96}),positions.length*4);
+  const canopy=['#5d7b49','#739052','#52774b','#84995b','#648351'];
   const helper=new T.Object3D();
   positions.forEach(([x,z,h],i)=>{
     helper.position.set(x,1.9,z);
     helper.scale.setScalar(1);
+    helper.rotation.set(0,0,0);
     helper.updateMatrix();
     stem.setMatrixAt(i,helper.matrix);
-    helper.position.y=h*.79+1.6;
-    helper.scale.set(h*.51,h*.68,h*.51);
-    helper.rotation.y=random()*Math.PI;
-    helper.updateMatrix();
-    crown.setMatrixAt(i,helper.matrix);
-    crown.setColorAt(i,new T.Color(canopy[i%canopy.length]));
+    const color=new T.Color(canopy[i%canopy.length]);
+    for(let lobe=0;lobe<4;lobe++){
+      const angle=lobe*Math.PI*2/3+random()*.5;
+      const spread=lobe===3?0:h*.21;
+      helper.position.set(x+Math.cos(angle)*spread,h*(lobe===3?1.05:.73)+1.3,z+Math.sin(angle)*spread);
+      helper.scale.set(h*.38,h*(lobe===3?.43:.45),h*.38);
+      helper.rotation.y=random()*Math.PI;
+      helper.updateMatrix();
+      crown.setMatrixAt(i*4+lobe,helper.matrix);
+      crown.setColorAt(i*4+lobe,color.clone().multiplyScalar(.92+random()*.15));
+    }
   });
+  stem.name='Tree trunks';crown.name='Layered tree canopies';
+  stem.castShadow=crown.castShadow=true;
+  stem.receiveShadow=crown.receiveShadow=true;
   scene.add(stem,crown);
 }
 function buildScene(scene, data, trees) {
   const base=new T.Mesh(new T.PlaneGeometry(5100,5100),new T.MeshStandardMaterial({color:'#718269',map:terrainTexture()}));
   base.rotation.x=-Math.PI/2;
   base.position.y=ground-.15;
+  base.receiveShadow=true;
   scene.add(base);
   const layers=new Batch(), buildings=new Batch();
   layers.surface(data.boundary,.06,'#687e56');
   for(const [ring,kind] of data.green) layers.surface(ring,.16,kind==='farmland'?'#777f58':'#61784e');
   for(const p of data.plaza) layers.surface(p,.45,'#969684');
-  for(const p of data.water) {
-    layers.surface(p,.3,'#396d6d');
-    layers.ribbon(p,1.4,.36,'#829784');
-  }
-  for(const [points,kind,sport] of data.sport.sort((a,b)=>+(b[1]==='sports_centre')-+(a[1]==='sports_centre'))) athletics(layers,points,kind,sport);
   for(const [p,w,,type,bridge] of data.road){
     const major=['primary','secondary','trunk','tertiary'].includes(type), y=bridge?1:.72;
     layers.ribbon(p,w+2,y,major?'#56625a':'#73836b');
@@ -202,20 +172,11 @@ function buildScene(scene, data, trees) {
   }
   layers.ribbon(data.boundary,1.7,1.03,'#a7be82');
   for(const [p,h,type,,,campus] of data.building) {
-    const colors = campus ? palette[type] : palette.context;
+    const colors = campus ? (palette[type]??palette.other) : palette.context;
     const model = new T.ExtrudeGeometry(shape(p),{depth:h,bevelEnabled:false});
     model.rotateX(-Math.PI/2);
     model.translate(0,.08,0);
     buildings.add(model,colors);
-    const [x,z,u,v]=bounds(p);
-    if(campus && h>12 && u-x>14 && v-z>14){
-      const detail=new T.BoxGeometry(Math.min(8,(u-x)*.16),.8,Math.min(6,(v-z)*.15));
-      const cx=(x+u)/2,cz=(z+v)/2;
-      if(contains(cx,cz,p)) {
-        detail.translate(cx,h+.48,cz);
-        buildings.add(detail,['#9a927e','#dbd0b8']);
-      }else detail.dispose();
-    }
   }
   const front=new Batch();
   for(const [[a,b,c,d],color] of libraryFacade){
@@ -224,8 +185,19 @@ function buildScene(scene, data, trees) {
     g.computeVertexNormals();
     front.add(g,color);
   }
-  scene.add(layers.mesh(),buildings.mesh(),front.mesh());
+  const landscape=layers.mesh(), architecture=buildings.mesh(), elevation=front.mesh();
+  landscape.name='Campus surfaces';architecture.name='Original building footprints';elevation.name='Library west elevation';
+  landscape.receiveShadow=architecture.receiveShadow=true;
+  // The layered reference elevation sits just ahead of the main shadow caster.
+  // It uses directional shading without resampling that nearly coincident wall.
+  elevation.receiveShadow=false;
+  architecture.castShadow=true;
+  scene.add(landscape,architecture,elevation);
+  const details={Batch,contains,bounds};
+  const buildingDetails=addBuildingDetails(scene,data,details);
+  const landscapeDetails=addLandscapeDetails(scene,data,details);
   addTrees(scene,trees);
+  return {buildingDetails,landscapeDetails};
 }
 
 export function createModel(stage,data,onFrame){
@@ -235,16 +207,32 @@ export function createModel(stage,data,onFrame){
   const camera = new T.PerspectiveCamera(46,1,.5,8000);
   const trees=treePositions(data);
   const canvas=document.createElement('canvas');
-  const context=canvas.getContext('webgl2',{antialias:true});
+  let context=null;
+  try { context=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'}); } catch { /* Canvas renderer supports devices without WebGL. */ }
   const renderer=context ? new T.WebGLRenderer({canvas,context,antialias:true}) : softwareRenderer(data,palette,trees);
-  renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));
+  renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
   renderer.outputColorSpace=T.SRGBColorSpace;
+  stage.dataset.renderer=context?'webgl':'canvas';
+  if(context){
+    renderer.toneMapping=T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure=1.12;
+    renderer.shadowMap.enabled=true;
+    renderer.shadowMap.type=T.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate=false;
+    renderer.shadowMap.needsUpdate=true;
+  }
   stage.append(renderer.domElement);
-  const ambient=new T.HemisphereLight('#eef6ef','#697b59',2.05);
-  const sun=new T.DirectionalLight('#ffe9c9',2.0);
-  sun.position.set(-470,690,-240);
-  scene.add(ambient,sun);
-  if(context)buildScene(scene,data,trees);
+  const ambient=new T.HemisphereLight('#eaf3fa','#778264',1.65);
+  const sun=new T.DirectionalLight('#fff0d7',2.5);
+  sun.position.set(-470,830,-380);
+  sun.target.position.set(0,0,60);
+  sun.castShadow=true;
+  sun.shadow.mapSize.setScalar(matchMedia('(max-width: 700px)').matches?2048:4096);
+  Object.assign(sun.shadow.camera,{left:-920,right:920,top:950,bottom:-950,near:10,far:2400});
+  sun.shadow.normalBias=.28;
+  sun.shadow.bias=-.00015;
+  scene.add(ambient,sun,sun.target);
+  const details=context?buildScene(scene,data,trees):null;
   const controls = new OrbitControls(camera,stage);
   controls.enableDamping=true;
   controls.dampingFactor=.12;
@@ -257,7 +245,7 @@ export function createModel(stage,data,onFrame){
   const direction=new T.Vector3(), projection=new T.Vector3();
   const walk={active:false,yaw:0,pitch:-.02,position:new T.Vector3(),fov:65};
   const keys=new Set();
-  let drag=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now();
+  let drag=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
   const footprints=data.building.map(([ring])=>[bounds(ring),ring]);
   const water=data.water.map(ring=>[bounds(ring),ring]);
   const obstructed=(x,z)=>[...footprints,...water].some(([[a,b,c,d],ring])=>x>a&&x<c&&z>b&&z<d&&contains(x,z,ring));
@@ -283,12 +271,12 @@ export function createModel(stage,data,onFrame){
   }
   function home(animate=true){
     const offset=homeOffset.clone().multiplyScalar(camera.aspect<.83?Math.min(1.65,.83/camera.aspect):1);
-    setOrbit(new T.Vector3(-10,0,145),offset,animate);
+    setOrbit(new T.Vector3(-10,0,100),offset,animate);
   }
   function focus(x,z){
     const offset=camera.position.clone().sub(controls.target);
     offset.y=Math.max(offset.y,120);
-    offset.setLength(300);
+    offset.setLength(240);
     setOrbit(new T.Vector3(x,4,z),offset);
   }
   function face(){
@@ -306,7 +294,7 @@ export function createModel(stage,data,onFrame){
     controls.enabled=false;
     tween=null;
     walk.active=true;
-    walk.position.set(x,1.73,z);
+    walk.position.set(x,2.45,z);
     walk.yaw=yaw;
     walk.pitch=.005;
     walk.fov=65;
@@ -395,6 +383,12 @@ export function createModel(stage,data,onFrame){
       }
       controls.update();
     }
+    // Give shallow facade and paving layers enough depth precision at campus scale.
+    const near=walk.active?.2:T.MathUtils.clamp(camera.position.distanceTo(controls.target)/30,.75,40);
+    if(Math.abs(camera.near-near)>.01){camera.near=near;camera.updateProjectionMatrix();}
+    const view=[camera.position.x,camera.position.y,camera.position.z,camera.quaternion.x,camera.quaternion.y,camera.quaternion.z,camera.quaternion.w,camera.fov,camera.near,size.w,size.h].map(value=>value.toFixed(5)).join(',');
+    if(view===lastView)return;
+    lastView=view;
     renderer.render(scene,camera);
     const bearing=walk.active?-walk.yaw:Math.atan2(camera.position.x-controls.target.x,camera.position.z-controls.target.z);
     const metersPerPixel=2*Math.tan(T.MathUtils.degToRad(camera.fov/2))*camera.position.distanceTo(controls.target)/size.h;
@@ -402,5 +396,19 @@ export function createModel(stage,data,onFrame){
   }
   home(false);
   renderer.setAnimationLoop(frame);
-  return {focus,home,zoom,north,enterWalk,exitWalk,step,setVisible(value){visible=value;if(value)resize();}};
+  return {focus,home,zoom,north,enterWalk,exitWalk,step,
+    getDiagnostics(){
+      let vertices=0,invalid=0;
+      scene.traverse(object=>{
+        const position=object.geometry?.attributes?.position;
+        if(!position)return;
+        vertices+=position.count;
+        for(const value of position.array)if(!Number.isFinite(value))invalid++;
+      });
+      return {renderer:stage.dataset.renderer,vertices,invalid,trees:trees.length,
+        buildings:details?.buildingDetails?.stats,landscape:details?.landscapeDetails?.stats,
+        drawCalls:renderer.info?.render.calls,triangles:renderer.info?.render.triangles};
+    },
+    setVisible(value){visible=value;keys.clear();if(value){lastView='';resize();}}
+  };
 }

@@ -1,0 +1,43 @@
+{
+  "checks": [
+    "WebGL model starts",
+    "All generated geometry is finite",
+    "Nine places load",
+    "Model error panel is hidden",
+    "Search filters places",
+    "Walk mode activates",
+    "Home exits walk mode",
+    "Mobile viewport uses device width",
+    "Mobile layout stays within viewport",
+    "Mobile canvas remains usable",
+    "Mobile view controls remain visible",
+    "Canvas fallback starts without WebGL",
+    "No uncaught browser exceptions"
+  ],
+  "stats": {
+    "renderer": "webgl",
+    "vertices": 1458632,
+    "invalid": 0,
+    "trees": 975,
+    "buildings": {
+      "buildings": 113,
+      "windows": 21898,
+      "entrances": 106,
+      "rooftopUnits": 133,
+      "triangles": 344240
+    },
+    "landscape": {
+      "courts": 95,
+      "goals": 12,
+      "hoops": 94,
+      "lamps": 135,
+      "benches": 43,
+      "bridges": 4,
+      "shores": 3,
+      "tracks": 2
+    },
+    "drawCalls": 14,
+    "triangles": 825416
+  },
+  "failures": []
+}
