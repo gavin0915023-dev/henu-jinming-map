@@ -164,24 +164,34 @@ function loadSatellite(){
   if(satelliteLoad)return satelliteLoad;
   satelliteLoad=new Promise((resolve,reject)=>{
     const L=window.L;
-    if(!L?.esri){reject(new Error('Satellite library unavailable'));return;}
+    if(!L){reject(new Error('Satellite library unavailable'));return;}
     const map=L.map(satelliteHost,{zoomControl:false,attributionControl:false,minZoom:12,maxZoom:20});
     map.setView(gps(0,45).reverse(),satelliteHost.clientWidth<540?15:16);
-    const layer=L.esri.tiledMapLayer({
-      url:'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
-      maxZoom:20,maxNativeZoom:19,noWrap:true
-    });
-    const timeout=setTimeout(()=>{
-      map.remove();
-      reject(new Error('Imagery timeout'));
-    },14000);
-    layer.once('tileload',()=>{
-      clearTimeout(timeout);
-      satellite=map;
-      map.on('move zoom resize',renderSatelliteLabels);
-      resolve(map);
-    });
-    layer.addTo(map);
+    // Standard XYZ tiles avoid a blocking service-metadata request.
+    const hosts=['services.arcgisonline.com','server.arcgisonline.com'];
+    let attempt=0,layer,timer,finished=false;
+    function start(){
+      const current=L.tileLayer(`https://${hosts[attempt]}/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`,{
+        maxZoom:20,maxNativeZoom:19,noWrap:true,crossOrigin:false
+      });
+      layer=current;
+      const retry=()=>{
+        if(finished||layer!==current)return;
+        clearTimeout(timer);current.off();map.removeLayer(current);
+        if(++attempt<hosts.length){start();return;}
+        finished=true;map.remove();reject(new Error('Imagery tiles unavailable on both hosts'));
+      };
+      current.once('tileload',()=>{
+        if(finished||layer!==current)return;
+        finished=true;clearTimeout(timer);satellite=map;
+        map.on('move zoom resize',renderSatelliteLabels);resolve(map);
+      });
+      // Individual missing tiles are tolerated; retry on a failed viewport.
+      current.once('load',()=>{if(!finished)retry();});
+      timer=setTimeout(retry,20000);
+      current.addTo(map);
+    }
+    start();
   }).catch(error=>{satelliteLoad=null;throw error;});
   return satelliteLoad;
 }

@@ -94,6 +94,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     const sign = area >= 0 ? 1 : -1;
     const isLibrary = type === 'library' || id === 'plan-library';
     const dorm = type === 'dorm';
+    const computerCollege = id === '712688906';
     const trim = isLibrary ? '#d8c59c' : dorm ? '#d2c5af' : '#d6d0ba';
     const shadow = dorm ? '#746859' : '#7e7c70';
     const floors = Math.max(1, Math.min(9, Math.round(height / (dorm ? 3.35 : 3.7))));
@@ -123,10 +124,14 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
         fittings.add(curb, trim);
       }
       if (preserveFacade || edge.length < 3.3) continue;
-      const bays = Math.floor((edge.length - 1.3) / (dorm ? 3.15 : isLibrary ? 4.1 : 3.8));
+      // Conservative spacing until each building has a surveyed elevation.
+      // Short return walls should not look like continuous curtain walls.
+      const endWall = type === 'school' && edge.length < 14;
+      const baySpacing = endWall ? edge.length : computerCollege ? 5.6 : dorm ? 3.15 : isLibrary ? 4.1 : type === 'school' ? 6.2 : 3.8;
+      const bays = endWall ? (edge.length >= 6 ? 1 : 0) : Math.floor((edge.length - 1.3) / baySpacing);
       if (bays < 1) continue;
       const pitch = (edge.length - 1.3) / bays;
-      const width = Math.min(dorm ? 1.62 : isLibrary ? 2.5 : 2.15, pitch * .61);
+      const width = endWall ? .65 : Math.min(dorm ? 1.62 : isLibrary ? 2.5 : computerCollege ? 2.7 : 2.15, pitch * .61);
       const windowHeight = Math.min(2.15, floorHeight * .55);
       for (let floor = 0; floor < floors; floor++) {
         const y = .08 + floor * floorHeight + floorHeight * .55;
@@ -154,11 +159,19 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     if (entrance && height > 7) {
       const e = entrance, angle = -Math.atan2(e.tz, e.tx);
       const x = e.ax + e.tx * e.length / 2, z = e.az + e.tz * e.length / 2;
-      const width = isLibrary ? 13.8 : Math.min(5.4, e.length * .48);
+      const width = isLibrary ? 13.8 : computerCollege ? Math.min(10.8,e.length*.6) : Math.min(5.4, e.length * .48);
       const doorWidth = isLibrary ? 7.4 : Math.min(3.2, width - .6);
       wall(masonry, e, e.length / 2, 1.55, doorWidth + .35, 2.95, .095, '#a59d85');
       wall(glass, e, e.length / 2, 1.55, doorWidth, 2.7, .11, '#344f57');
       wall(masonry, e, e.length / 2, 1.55, .1, 2.7, .13, '#bcc0b4');
+      if(computerCollege){
+        // Photo reference: a tall pale entrance frame surrounding dark glazing.
+        // Entrance location still follows the road-facing footprint heuristic.
+        const portalHeight=Math.min(8.5,height*.45);
+        wall(glass,e,e.length/2,portalHeight/2+.3,width-1.1,portalHeight,.15,'#40565a');
+        for(const side of [-1,1])wall(masonry,e,e.length/2+side*(width/2-.25),portalHeight/2+.3,.5,portalHeight,.32,'#dadbd0');
+        wall(masonry,e,e.length/2,portalHeight+.3,width,.55,.34,'#dadbd0');
+      }
       const depth = isLibrary ? 6.5 : 2.1, canopyY = isLibrary ? 4.45 : 3.5;
       box(x + e.nx * depth / 2, canopyY, z + e.nz * depth / 2, width, .22, depth, [shadow, trim], angle);
       for (const side of [-1, 1]) {

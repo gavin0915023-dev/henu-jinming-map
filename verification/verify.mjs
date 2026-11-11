@@ -98,6 +98,13 @@ try {
   await evaluate("document.querySelectorAll('#place-list .place')[3].click()");
   await capture('lake');
   await evaluate("document.querySelector('#home').click()");
+  if(process.env.CHECK_SATELLITE==='1'){
+    await evaluate("document.querySelector('[data-mode=satellite]').click()");
+    await until(()=>evaluate("document.querySelector('#fallback').hidden && !!document.querySelector('#satellite img.leaflet-tile-loaded')"),'Satellite imagery loads',50000);
+    check('Satellite imagery tiles load',true);
+    await capture('satellite');
+    await evaluate("document.querySelector('[data-mode=model]').click()");
+  }
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await evaluate("document.querySelector('#stage').dataset.ready='false'");
   await call('Page.navigate', { url });

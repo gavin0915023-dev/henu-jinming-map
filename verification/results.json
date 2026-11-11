@@ -7,6 +7,7 @@
     "Search filters places",
     "Walk mode activates",
     "Home exits walk mode",
+    "Satellite imagery tiles load",
     "Mobile viewport uses device width",
     "Mobile layout stays within viewport",
     "Mobile canvas remains usable",
@@ -16,15 +17,15 @@
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1894326,
+    "vertices": 1691454,
     "invalid": 0,
     "trees": 975,
     "buildings": {
       "buildings": 113,
-      "windows": 21898,
+      "windows": 16262,
       "entrances": 106,
       "rooftopUnits": 133,
-      "triangles": 344240
+      "triangles": 276616
     },
     "landscape": {
       "courts": 95,
@@ -37,7 +38,7 @@
       "tracks": 2
     },
     "drawCalls": 17,
-    "triangles": 997932
+    "triangles": 930308
   },
   "failures": []
 }
