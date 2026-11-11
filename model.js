@@ -125,10 +125,11 @@ function treePositions(data) {
   }
   return positions;
 }
-function addTrees(scene,positions) {
+function addTrees(scene,positions,data) {
   const random=seeded();
   const stem=new T.InstancedMesh(new T.CylinderGeometry(.19,.35,3.8,7),new T.MeshStandardMaterial({color:'#786e55',roughness:1}),positions.length);
   const crown=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({roughness:.96}),positions.length*4);
+  const whitewash=new T.InstancedMesh(new T.CylinderGeometry(.292,.36,1.3,7),new T.MeshStandardMaterial({color:'#e0dfce',roughness:1}),positions.length);
   const canopy=['#5d7b49','#739052','#52774b','#84995b','#648351'];
   const helper=new T.Object3D();
   positions.forEach(([x,z,h],i)=>{
@@ -137,6 +138,9 @@ function addTrees(scene,positions) {
     helper.rotation.set(0,0,0);
     helper.updateMatrix();
     stem.setMatrixAt(i,helper.matrix);
+    helper.position.y=.65;
+    helper.updateMatrix();
+    whitewash.setMatrixAt(i,helper.matrix);
     const color=new T.Color(canopy[i%canopy.length]);
     for(let lobe=0;lobe<4;lobe++){
       const angle=lobe*Math.PI*2/3+random()*.5;
@@ -152,7 +156,43 @@ function addTrees(scene,positions) {
   stem.name='Tree trunks';crown.name='Layered tree canopies';
   stem.castShadow=crown.castShadow=true;
   stem.receiveShadow=crown.receiveShadow=true;
-  scene.add(stem,crown);
+  whitewash.name='Street-view reference whitewashed tree bases';
+  whitewash.receiveShadow=true;
+  scene.add(stem,crown,whitewash);
+  // Baidu panorama 01027700001404011238110455G shows low clipped hedges
+  // and round shrubs beside internal roads. Placement below is schematic.
+  const planting=new Batch();
+  const blockers=[...data.building.map(([p])=>p),...data.water,...data.sport.map(([p])=>p)];
+  for(const [points,width,,kind] of data.road){
+    if(kind!=='service'||width<3||width>14)continue;
+    for(let i=1;i<points.length;i++){
+      const [ax,az]=points[i-1],[bx,bz]=points[i];
+      const length=Math.hypot(bx-ax,bz-az);
+      if(length<24)continue;
+      for(let distance=9;distance<length-6;distance+=6)for(const side of [-1,1]){
+        const x=ax+(bx-ax)*distance/length+(bz-az)*(width/2+1.8)*side/length;
+        const z=az+(bz-az)*distance/length-(bx-ax)*(width/2+1.8)*side/length;
+        if(!contains(x,z,data.boundary)||blockers.some(p=>contains(x,z,p)))continue;
+        // Avoid junctions and paths crossing the planted verge.
+        if(data.road.some(([p,w])=>p.slice(1).some(([u,v],j)=>{
+          const [a,b]=p[j],dx=u-a,dz=v-b,l=dx*dx+dz*dz;
+          const t=l?T.MathUtils.clamp(((x-a)*dx+(z-b)*dz)/l,0,1):0;
+          return Math.hypot(x-a-t*dx,z-b-t*dz)<w/2+1;
+        })))continue;
+        const hedge=new T.BoxGeometry(5.8,.65,1.15);
+        hedge.rotateY(-Math.atan2(bz-az,bx-ax));
+        hedge.translate(x,.52,z);planting.add(hedge,'#567747');
+        if(Math.round(distance/6)%3===0){
+          const shrub=new T.IcosahedronGeometry(1,1);
+          shrub.scale(1.15,1,1.15);shrub.translate(x,1.25,z);
+          planting.add(shrub,'#3e633d');
+        }
+      }
+    }
+  }
+  const shrubs=planting.mesh();
+  shrubs.name='Street-view inspired clipped roadside planting';
+  shrubs.castShadow=shrubs.receiveShadow=true;scene.add(shrubs);
 }
 function buildScene(scene, data, trees) {
   const base=new T.Mesh(new T.PlaneGeometry(5100,5100),new T.MeshStandardMaterial({color:'#718269',map:terrainTexture()}));
@@ -206,7 +246,7 @@ function buildScene(scene, data, trees) {
   const details={Batch,contains,bounds};
   const buildingDetails=addBuildingDetails(scene,data,details);
   const landscapeDetails=addLandscapeDetails(scene,data,details);
-  addTrees(scene,trees);
+  addTrees(scene,trees,data);
   return {buildingDetails,landscapeDetails};
 }
 

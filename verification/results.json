@@ -16,7 +16,7 @@
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1462448,
+    "vertices": 1894326,
     "invalid": 0,
     "trees": 975,
     "buildings": {
@@ -36,8 +36,8 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 15,
-    "triangles": 826688
+    "drawCalls": 17,
+    "triangles": 997932
   },
   "failures": []
 }
