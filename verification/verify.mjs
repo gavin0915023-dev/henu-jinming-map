@@ -100,7 +100,7 @@ try {
   await evaluate("document.querySelector('#home').click()");
   if(process.env.CHECK_SATELLITE==='1'){
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
-    await until(()=>evaluate("document.querySelector('#fallback').hidden && !!document.querySelector('#satellite img.leaflet-tile-loaded')"),'Satellite imagery loads',50000);
+    await until(()=>evaluate("document.querySelector('#fallback').hidden && (()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return tiles.length>=4 && tiles.every(t=>t.complete && t.naturalWidth>0)})()"),'Satellite imagery loads',50000);
     check('Satellite imagery tiles load',true);
     await capture('satellite');
     await evaluate("document.querySelector('[data-mode=model]').click()");
