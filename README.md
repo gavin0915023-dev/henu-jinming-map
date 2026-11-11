@@ -30,7 +30,12 @@ node server.mjs
 
 若将改动接入原页面，请同时引入两个新增 detail 模块，保持 `model.js` 与 `software.js`、`facade.js` 同级，并保留 `assets/OrbitControls.js` 和 `three` 的 import map。
 
-## 检查
+## 实拍参考细化
+
+图书馆西入口增加了分段弧形雨棚、细柱、台阶、门框、幕墙分格与屋顶挑檐，构件合批渲染。
+参考学校公开的[图书馆建设资料](https://jjc.henu.edu.cn/info/1004/1002.htm)和[校园照片](https://zbcg.henu.edu.cn/xwtz/5707.chtml)。尺寸与细节为照片辅助下的示意建模，未经实地测绘；尚未获得可核验的百度街景全景图，不能视为街景精确复原。
+
+## 检查命令
 
 ```powershell
 node verification/verify.mjs

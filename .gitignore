@@ -1,1 +1,3 @@
 verification/*.png
+verification/references/
+verification/research-browser.mjs

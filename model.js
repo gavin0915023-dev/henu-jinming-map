@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { OrbitControls } from './assets/OrbitControls.js';
 import { softwareRenderer } from './software.js';
-import { libraryFacade } from './facade.js';
+import { libraryFacade, libraryVolumes } from './facade.js';
 import { addBuildingDetails } from './building-detail.js';
 import { addLandscapeDetails } from './landscape-detail.js';
 
@@ -185,6 +185,16 @@ function buildScene(scene, data, trees) {
     g.computeVertexNormals();
     front.add(g,color);
   }
+  const landmark=new Batch();
+  for(const {x,y,z,w,h,d,color} of libraryVolumes){
+    const g=new T.BoxGeometry(w,h,d);
+    g.translate(x,y,z);
+    landmark.add(g,color);
+  }
+  const library=landmark.mesh({roughness:.78});
+  library.name='Photo-informed library entrance and roof';
+  library.castShadow=library.receiveShadow=true;
+  scene.add(library);
   const landscape=layers.mesh(), architecture=buildings.mesh(), elevation=front.mesh();
   landscape.name='Campus surfaces';architecture.name='Original building footprints';elevation.name='Library west elevation';
   landscape.receiveShadow=architecture.receiveShadow=true;
