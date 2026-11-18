@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '../server.mjs';
 
 const output = dirname(fileURLToPath(import.meta.url));
+const deployedSatellite = process.env.CHECK_SATELLITE === 'deployed';
+const satelliteUrl = 'https://gavin0915023-dev.github.io/henu-jinming-map/';
 const browsers = [process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].filter(Boolean);
 let browserPath;
 for (const candidate of browsers) {
@@ -41,6 +43,11 @@ try {
   await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
   let nextId = 0;
   const pending = new Map();
+  const imageryRequests = new Map();
+  const imageryHosts = ['services.arcgisonline.com','server.arcgisonline.com'];
+  let tileScenario = 'alternate';
+  const succeededHosts = new Set();
+  const transparentPng='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG1sAAAAASUVORK5CYII=';
   socket.addEventListener('message', event => {
     const message = JSON.parse(event.data);
     if (message.id) {
@@ -50,6 +57,25 @@ try {
       if (message.error) request.reject(Error(JSON.stringify(message.error))); else request.resolve(message.result);
     }
     if (message.method === 'Runtime.exceptionThrown') failures.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
+    if (message.method === 'Network.requestWillBeSent') {
+      const { requestId, request } = message.params;
+      const {hostname, pathname} = new URL(request.url);
+      if (imageryHosts.includes(hostname) && pathname.includes('/World_Imagery/MapServer/tile/')) imageryRequests.set(requestId,{host:hostname,result:'pending'});
+    }
+    if (message.method === 'Network.loadingFailed' || message.method === 'Network.responseReceived') {
+      const {requestId,errorText,response} = message.params;
+      const entry=imageryRequests.get(requestId);
+      if(entry)entry.result=errorText??response.status;
+    }
+    if(message.method==='Fetch.requestPaused'){
+      const {requestId,request}=message.params;
+      const {hostname,pathname}=new URL(request.url);
+      const x=Number(pathname.split('/').at(-1));
+      const pass=tileScenario==='healthy'||tileScenario==='alternate'&&hostname===imageryHosts[0]||tileScenario==='partial'&&x%2===0;
+      if(pass)succeededHosts.add(hostname);
+      const operation=pass?call('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'image/png'},{name:'Cache-Control',value:'no-store'}],body:transparentPng}):call('Fetch.failRequest',{requestId,errorReason:'ConnectionFailed'});
+      operation.catch(error=>failures.push(error.message));
+    }
   });
   function call(method, params = {}) {
     return new Promise((resolve, reject) => {
@@ -72,9 +98,24 @@ try {
   }
   await call('Page.enable');
   await call('Runtime.enable');
+  await call('Network.enable');
   await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-  await call('Page.navigate', { url });
+  await call('Page.navigate', { url: deployedSatellite ? satelliteUrl : url });
+  if(deployedSatellite){
+    const start=Date.now();
+    await until(()=>evaluate("document.querySelector('#place-list .place')!==null"),'Published viewer ready',45000);
+    await evaluate("document.querySelector('[data-mode=satellite]').click()");
+    const getTiles=()=>evaluate("(()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return {loaded:tiles.filter(t=>t.complete&&t.naturalWidth>0).length,total:tiles.length,message:document.querySelector('#fallback').hidden?'':document.querySelector('#fallback').innerText}})()");
+    try {
+      await until(async()=>{const s=await getTiles();return s.total>=4&&s.loaded===s.total;},'Published imagery viewport',45000);
+      await capture('satellite-online');
+    } finally {
+      const requests={};
+      for(const {host,result} of imageryRequests.values()){const key=`${host}: ${result}`;requests[key]=(requests[key]??0)+1;}
+      console.log(JSON.stringify({viewport:await getTiles(),elapsedSeconds:(Date.now()-start)/1000,requests,failures},null,2));
+    }
+  } else {
   await until(() => evaluate("document.querySelector('#stage')?.dataset.ready==='true'"), 'Model ready');
   const stats = await evaluate("JSON.parse(document.querySelector('#stage').dataset.modelStats)");
   check('WebGL model starts', stats.renderer === 'webgl');
@@ -105,6 +146,41 @@ try {
     await capture('satellite');
     await evaluate("document.querySelector('[data-mode=model]').click()");
   }
+  if(process.env.CHECK_SATELLITE==='faults'){
+    await call('Network.setCacheDisabled',{cacheDisabled:true});
+    await call('Fetch.enable',{patterns:imageryHosts.map(host=>({urlPattern:`https://${host}/*/World_Imagery/MapServer/tile/*`}))});
+    const waitState=async state=>{
+      try{await until(()=>evaluate(`document.querySelector('#imagery-status').dataset.state===${JSON.stringify(state)}`),`Satellite state: ${state}`,20000);}
+      catch(error){console.log(await evaluate("[document.querySelector('#imagery-status').dataset.state,[...document.querySelectorAll('#satellite img[data-imagery]')].reduce((a,t)=>(a[t.dataset.imagery]=(a[t.dataset.imagery]??0)+1,a),{})]"));throw error;}
+    };
+    await evaluate("document.querySelector('[data-mode=satellite]').click()");
+    await waitState('ready');
+    check('Tiles switch hosts when the first host fails',succeededHosts.size===1&&succeededHosts.has(imageryHosts[0]));
+    tileScenario='partial';
+    await evaluate("document.querySelector('#zoom-in').click()");
+    await waitState('partial');
+    check('Zoom reports missing tiles instead of treating one tile as success',await evaluate("!document.querySelector('#imagery-status').hidden && !document.querySelector('#imagery-actions').hidden"));
+    tileScenario='offline';
+    await evaluate("document.querySelectorAll('#place-list .place')[4].click()");
+    await waitState('unavailable');
+    await settle();
+    check('Campus outline and labels stay visible when both imagery hosts fail',await evaluate(`(()=>{
+      const canvas=document.querySelector('#satellite canvas');
+      if(!canvas||!document.querySelector('#labels .map-pin:not([hidden])')||document.querySelector('#mode-label').textContent!=='校园平面图')return false;
+      const {width,height}=canvas;
+      const rgba=canvas.getContext('2d').getImageData(0,0,width,height).data;
+      let painted=0;
+      for(let i=3;i<rgba.length;i+=4*97)if(rgba[i]>0)painted++;
+      return painted>width*height*.1/97;
+    })()`));
+    await capture('satellite-fallback');
+    tileScenario='healthy';
+    await evaluate("document.querySelector('#imagery-retry').click()");
+    await waitState('ready');
+    check('Retry restores imagery in place',await evaluate(`document.querySelector('#imagery-status').hidden && document.querySelector('#satellite img[data-zoom="18"][data-imagery=ready]')!==null`));
+    await evaluate("document.querySelector('[data-mode=model]').click()");
+    await call('Fetch.disable');
+  }
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await evaluate("document.querySelector('#stage').dataset.ready='false'");
   await call('Page.navigate', { url });
@@ -126,6 +202,7 @@ try {
   check('No uncaught browser exceptions', failures.length === 0);
   await writeFile(join(output, 'results.json'), JSON.stringify({ checks, stats, failures }, null, 2) + '\n');
   console.log(JSON.stringify({ checks: checks.length, stats }, null, 2));
+  }
 } finally {
   socket?.close();
   browser.kill();

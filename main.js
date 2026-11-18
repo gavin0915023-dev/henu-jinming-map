@@ -1,4 +1,5 @@
 import { createModel } from './model.js';
+import { imageryLayer, addCampusBasemap } from './satellite.js';
 
 const $=selector=>document.querySelector(selector);
 const icons={
@@ -54,7 +55,8 @@ satelliteHost.id='satellite';
 satelliteHost.hidden=true;
 stage.after(satelliteHost);
 const pinMap=new Map();
-let active=null, mode='model', model=null, satellite=null, satelliteLoad=null, campus=null;
+let active=null, mode='model', model=null, satellite=null, satelliteTiles=null, campus=null;
+let imageryFrame=0;
 let noticeTimer;
 
 function notice(message, duration=4500){
@@ -159,41 +161,46 @@ function displayError(message, link){
   fallback.hidden=false;
 }
 
+const imageryStatus=$('#imagery-status'), imageryMessage=$('#imagery-message');
+$('#imagery-external').href=viewer;
+$('#imagery-retry').onclick=()=>{satelliteTiles?.redraw();scheduleImageryStatus();};
+
+function scheduleImageryStatus(){
+  if(mode!=='satellite'||imageryFrame)return;
+  imageryFrame=requestAnimationFrame(()=>{
+    imageryFrame=0;
+    if(mode!=='satellite'||!satellite)return;
+    const view=satelliteHost.getBoundingClientRect();
+    const zoom=String(Math.min(satellite.getZoom(),19));
+    const tiles=[...satelliteHost.querySelectorAll('img[data-imagery]')].filter(tile=>{
+      if(tile.dataset.zoom!==zoom)return false;
+      const r=tile.getBoundingClientRect();
+      return r.right>view.left+.5&&r.left<view.right-.5&&r.bottom>view.top+.5&&r.top<view.bottom-.5;
+    });
+    const ready=tiles.filter(tile=>tile.dataset.imagery==='ready').length;
+    const loading=!tiles.length||tiles.some(tile=>tile.dataset.imagery==='pending');
+    const failed=tiles.some(tile=>tile.dataset.imagery==='failed');
+    imageryStatus.dataset.state=loading?'loading':failed?(ready?'partial':'unavailable'):'ready';
+    imageryStatus.hidden=!loading&&!failed;
+    $('#imagery-actions').hidden=loading||!failed;
+    $('#mode-label').textContent=ready||!campus?'卫星影像':'校园平面图';
+    $('#mode-note').textContent=ready?'Esri World Imagery · 实拍底图':campus?'校园轮廓 · 示意底图':'Esri World Imagery';
+    const message=loading?'正在加载卫星影像…':failed?(ready?'部分卫星影像未能加载。':campus?'卫星影像暂时无法加载，已显示校园示意图。':'卫星影像暂时无法加载。'):'';
+    if(imageryMessage.textContent!==message)imageryMessage.textContent=message;
+  });
+}
+
 function loadSatellite(){
-  if(satellite)return Promise.resolve(satellite);
-  if(satelliteLoad)return satelliteLoad;
-  satelliteLoad=new Promise((resolve,reject)=>{
-    const L=window.L;
-    if(!L){reject(new Error('Satellite library unavailable'));return;}
-    const map=L.map(satelliteHost,{zoomControl:false,attributionControl:false,minZoom:12,maxZoom:20});
-    map.setView(gps(0,45).reverse(),satelliteHost.clientWidth<540?15:16);
-    // Standard XYZ tiles avoid a blocking service-metadata request.
-    const hosts=['services.arcgisonline.com','server.arcgisonline.com'];
-    let attempt=0,layer,timer,finished=false;
-    function start(){
-      const current=L.tileLayer(`https://${hosts[attempt]}/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`,{
-        maxZoom:20,maxNativeZoom:19,noWrap:true,crossOrigin:false
-      });
-      layer=current;
-      const retry=()=>{
-        if(finished||layer!==current)return;
-        clearTimeout(timer);current.off();map.removeLayer(current);
-        if(++attempt<hosts.length){start();return;}
-        finished=true;map.remove();reject(new Error('Imagery tiles unavailable on both hosts'));
-      };
-      current.once('tileload',()=>{
-        if(finished||layer!==current)return;
-        finished=true;clearTimeout(timer);satellite=map;
-        map.on('move zoom resize',renderSatelliteLabels);resolve(map);
-      });
-      // Individual missing tiles are tolerated; retry on a failed viewport.
-      current.once('load',()=>{if(!finished)retry();});
-      timer=setTimeout(retry,20000);
-      current.addTo(map);
-    }
-    start();
-  }).catch(error=>{satelliteLoad=null;throw error;});
-  return satelliteLoad;
+  if(satellite)return;
+  const L=window.L;
+  if(!L)throw new Error('Satellite library unavailable');
+  satellite=L.map(satelliteHost,{zoomControl:false,attributionControl:false,zoomAnimation:false,minZoom:12,maxZoom:20});
+  satellite.on('move zoom resize',renderSatelliteLabels);
+  satellite.on('moveend zoomend resize',scheduleImageryStatus);
+  if(campus)addCampusBasemap(L,satellite,campus,(x,z)=>gps(x,z).reverse());
+  satelliteTiles=imageryLayer(L);
+  satelliteTiles.on('loading load tileload tileerror',scheduleImageryStatus);
+  satelliteTiles.addTo(satellite);
 }
 
 function renderSatelliteLabels(){
@@ -208,7 +215,7 @@ function renderSatelliteLabels(){
   updateLabels(project,0,mpp,{w:size.x,h:size.y});
 }
 
-async function setMode(next){
+function setMode(next){
   if(next==='walk'&&!model){
     notice('当前浏览器暂时无法进入三维地面漫游。');
     return;
@@ -226,6 +233,7 @@ async function setMode(next){
   $('#mode-label').textContent=title;
   $('#mode-note').textContent=note;
   $('#esri-credit').hidden=mode!=='satellite';
+  $('.orbit-help').textContent=mode==='satellite'?'拖动平移 · 滚轮缩放':'拖动旋转 · 右键平移 · 滚轮缩放';
   $('#street-help').hidden=mode!=='walk';
   $('#map-photos').hidden=mode!=='walk';
   $('#notice').hidden=true;
@@ -234,17 +242,16 @@ async function setMode(next){
   stage.hidden=mode==='satellite';
   model?.setVisible(mode!=='satellite');
   fallback.hidden=true;
+  imageryStatus.hidden=true;
   renderDetail();
   if(mode==='satellite'){
     model?.exitWalk();
-    if(!satellite)displayError('正在加载卫星影像…');
     try{
-      await loadSatellite();
-      if(mode!=='satellite')return;
-      fallback.hidden=true;
+      loadSatellite();
       satellite.invalidateSize();
       jumpSatellite(active);
       renderSatelliteLabels();
+      scheduleImageryStatus();
     }catch{
       if(mode==='satellite')displayError('当前网络未能加载卫星服务。',viewer);
     }
@@ -322,6 +329,7 @@ try{
   const response=await fetch('./assets/campus.json');
   if(!response.ok)throw new Error('Campus data missing');
   campus=await response.json();
+  if(satellite)addCampusBasemap(window.L,satellite,campus,(x,z)=>gps(x,z).reverse());
   model=createModel(stage,campus,(...args)=>{if(mode!=='satellite')updateLabels(...args);});
   model.setVisible(mode!=='satellite');
   if(stage.dataset.renderer==='canvas')$('#mode-note').textContent='兼容模式 · 基础模型';
