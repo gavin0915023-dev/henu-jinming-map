@@ -4,6 +4,7 @@ import { softwareRenderer } from './software.js';
 import { libraryFacade, libraryVolumes } from './facade.js';
 import { addBuildingDetails } from './building-detail.js';
 import { addLandscapeDetails } from './landscape-detail.js';
+import { addTreeModels } from './tree-model.js';
 
 const ground = 0;
 const extent = 1400;
@@ -100,65 +101,79 @@ function treePositions(data) {
   const random=seeded();
   const blockers=[...data.building.map(([p])=>p),...data.water,...data.sport.map(([p])=>p),...data.plaza].map(p=>[bounds(p),p]);
   const edges=data.road.flatMap(([p,w])=>p.slice(1).map(([x,z],i)=>[p[i][0],p[i][1],x,z,w/2+4]));
-  const positions=[];
-  function maybeAdd(x,z){
-    if (!contains(x,z,data.boundary) || blockers.some(([[a,b,c,d],p])=>x>a-4&&x<c+4&&z>b-4&&z<d+4&&contains(x,z,p))) return;
-    if(edges.some(([a,b,c,d,r])=>{
-      if(x<Math.min(a,c)-r||x>Math.max(a,c)+r||z<Math.min(b,d)-r||z>Math.max(b,d)+r)return false;
-      const l=(c-a)**2+(d-b)**2;
-      const t=l?T.MathUtils.clamp(((x-a)*(c-a)+(z-b)*(d-b))/l,0,1):0;
-      return Math.hypot(x-a-t*(c-a),z-b-t*(d-b))<r;
-    })) return;
-    positions.push([x,z,3.5+random()*4.5]);
+  const positions=[], occupied=new Map(),spacing=8;
+  function nearEdge(x,z,a,b,c,d,r){
+    if(x<Math.min(a,c)-r||x>Math.max(a,c)+r||z<Math.min(b,d)-r||z>Math.max(b,d)+r)return false;
+    const dx=c-a,dz=d-b,l=dx*dx+dz*dz;
+    const t=l?Math.max(0,Math.min(1,((x-a)*dx+(z-b)*dz)/l)):0;
+    return (x-a-t*dx)**2+(z-b-t*dz)**2<r*r;
   }
-  for(let i=0;i<1350;i++) maybeAdd(random()*1000-490,random()*1370-592);
+  function blocked(x,z,clearance){
+    return !contains(x,z,data.boundary)||blockers.some(([[a,b,c,d],p])=>{
+      if(x<a-clearance||x>c+clearance||z<b-clearance||z>d+clearance)return false;
+      return contains(x,z,p)||(clearance>0&&p.some(([u,v],i)=>{
+        const [e,f]=p[(i+1)%p.length];return nearEdge(x,z,u,v,e,f,clearance);
+      }));
+    })||edges.some(([a,b,c,d,r])=>nearEdge(x,z,a,b,c,d,r));
+  }
+  function maybeAdd(x,z,form,h,roadside){
+    const clearance=h*(form==='shade'?.32:form==='vase'?.25:.2);
+    if(blocked(x,z,clearance))return false;
+    const col=Math.floor(x/spacing), row=Math.floor(z/spacing);
+    for(let i=col-1;i<=col+1;i++)for(let j=row-1;j<=row+1;j++){
+      const nearby=occupied.get(i+','+j);
+      if(nearby?.some(([u,v])=>(u-x)**2+(v-z)**2<spacing*spacing))return true; // Already planted nearby.
+    }
+    const key=col+','+row;
+    if(!occupied.has(key))occupied.set(key,[]);
+    occupied.get(key).push([x,z]);
+    positions.push([x,z,h,form,roadside,random(),random()*2*Math.PI,.9+.2*random(),.9+.2*random()]);
+    return true;
+  }
+  // Reserve the regular roadside rows before filling the surrounding open ground.
   for(const [p,w,,type] of data.road){
     if(type!=='service'&&type!=='footway')continue;
+    const form=random()<(type==='service'?.72:.43)?'shade':'vase';
+    const nominal=(form==='shade'?9.4:8.2)+random()*2.4;
     for(let j=1;j<p.length;j++){
       const [a,b]=p[j-1],[c,d]=p[j], l=Math.hypot(c-a,d-b);
       if(l<24||l>750)continue;
       for(let k=14;k<l;k+=24){
         const offset=w/2+8;
-        maybeAdd(a+(c-a)*k/l+(d-b)*offset/l,b+(d-b)*k/l-(c-a)*offset/l);
+        maybeAdd(a+(c-a)*k/l+(d-b)*offset/l,b+(d-b)*k/l-(c-a)*offset/l,form,nominal+(random()-.5)*1.8,true);
       }
     }
+  }
+  // Replay the established planting plan independently of the trees' new appearance.
+  // Its seed advanced once more for height at each plantable point.
+  const sample=seeded();
+  for(let i=0;i<1350;i++){
+    const x=sample()*1000-490,z=sample()*1370-592;
+    if(blocked(x,z,0))continue;
+    const h=7+sample()*6;
+    const choice=random(),form=choice<.54?'shade':choice<.82?'vase':'spire';
+    if(maybeAdd(x,z,form,h,false))continue;
+    // A larger crown may touch a wall or water at an existing point. Try
+    // the nearby verge, never moving a tree across an entire path or plaza.
+    const angle=random()*2*Math.PI;
+    for(let j=0;j<8;j++){
+      const a=angle+j*Math.PI/4;
+      if(maybeAdd(x+4*Math.cos(a),z+4*Math.sin(a),form,h,false))break;
+    }
+  }
+  // Replace some of the crowded-out planting only within mapped parkland and lawns.
+  const greens=data.green.map(([p])=>[bounds(p),p]);
+  const [left,top,right,bottom]=bounds(data.boundary);
+  for(let i=0;i<520;i++){
+    const x=left+sample()*(right-left),z=top+sample()*(bottom-top);
+    if(!greens.some(([[a,b,c,d],p])=>x>=a&&x<=c&&z>=b&&z<=d&&contains(x,z,p)))continue;
+    const choice=random();
+    maybeAdd(x,z,choice<.54?'shade':choice<.82?'vase':'spire',7+random()*6,false);
   }
   return positions;
 }
 function addTrees(scene,positions,data) {
-  const random=seeded();
-  const stem=new T.InstancedMesh(new T.CylinderGeometry(.19,.35,3.8,7),new T.MeshStandardMaterial({color:'#786e55',roughness:1}),positions.length);
-  const crown=new T.InstancedMesh(new T.IcosahedronGeometry(1,1),new T.MeshStandardMaterial({roughness:.96}),positions.length*4);
-  const whitewash=new T.InstancedMesh(new T.CylinderGeometry(.292,.36,1.3,7),new T.MeshStandardMaterial({color:'#e0dfce',roughness:1}),positions.length);
-  const canopy=['#5d7b49','#739052','#52774b','#84995b','#648351'];
-  const helper=new T.Object3D();
-  positions.forEach(([x,z,h],i)=>{
-    helper.position.set(x,1.9,z);
-    helper.scale.setScalar(1);
-    helper.rotation.set(0,0,0);
-    helper.updateMatrix();
-    stem.setMatrixAt(i,helper.matrix);
-    helper.position.y=.65;
-    helper.updateMatrix();
-    whitewash.setMatrixAt(i,helper.matrix);
-    const color=new T.Color(canopy[i%canopy.length]);
-    for(let lobe=0;lobe<4;lobe++){
-      const angle=lobe*Math.PI*2/3+random()*.5;
-      const spread=lobe===3?0:h*.21;
-      helper.position.set(x+Math.cos(angle)*spread,h*(lobe===3?1.05:.73)+1.3,z+Math.sin(angle)*spread);
-      helper.scale.set(h*.38,h*(lobe===3?.43:.45),h*.38);
-      helper.rotation.y=random()*Math.PI;
-      helper.updateMatrix();
-      crown.setMatrixAt(i*4+lobe,helper.matrix);
-      crown.setColorAt(i*4+lobe,color.clone().multiplyScalar(.92+random()*.15));
-    }
-  });
-  stem.name='Tree trunks';crown.name='Layered tree canopies';
-  stem.castShadow=crown.castShadow=true;
-  stem.receiveShadow=crown.receiveShadow=true;
-  whitewash.name='Street-view reference whitewashed tree bases';
-  whitewash.receiveShadow=true;
-  scene.add(stem,crown,whitewash);
+  addTreeModels(scene,positions);
   // Baidu panorama 01027700001404011238110455G shows low clipped hedges
   // and round shrubs beside internal roads. Placement below is schematic.
   const planting=new Batch();
@@ -455,7 +470,9 @@ export function createModel(stage,data,onFrame){
         vertices+=position.count;
         for(const value of position.array)if(!Number.isFinite(value))invalid++;
       });
-      return {renderer:stage.dataset.renderer,vertices,invalid,trees:trees.length,
+      const treeForms={shade:0,vase:0,spire:0};
+      for(const entry of trees)treeForms[entry[3]]++;
+      return {renderer:stage.dataset.renderer,vertices,invalid,trees:trees.length,treeForms,
         buildings:details?.buildingDetails?.stats,landscape:details?.landscapeDetails?.stats,
         drawCalls:renderer.info?.render.calls,triangles:renderer.info?.render.triangles};
     },

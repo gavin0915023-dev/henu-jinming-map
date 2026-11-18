@@ -17,18 +17,20 @@ node server.mjs
 - 在左侧选择图书馆或教学楼，滚轮继续放大。
 - 按住鼠标左键旋转，右键平移；工具栏可回到全景。
 - 点击“地面漫游”，拖动视野，用 WASD / 方向键行走，也可使用屏幕前进、后退按钮。
+- 选“粹庭湖”可俯看绿化布局；在地面漫游中能看到分枝、叶簇和路边刷白的树干。也可单独打开[三种校园树形对照](https://gavin0915023-dev.github.io/henu-jinming-map/verification/tree-study.html)。树形和种植位置是示意，不是逐株测绘。
 - 不支持 WebGL 2 的设备会使用二维画布兼容渲染，仅显示基础体块和简化立面。
 
 ## 文件
 
-- `model.js`：原场景整合、树木、光照与阴影。
+- `model.js`：原场景整合、种植位置、光照与阴影。
+- `tree-model.js`：三类树形的分枝、树冠与本地生成的叶簇纹理，同形树共用几何。
 - `building-detail.js`：窗框、玻璃、窗台、层间带、女儿墙、屋顶与入口构件。
 - `landscape-detail.js`：运动场、道路设施、桥栏、湖岸与水面。
 - `facade.js` / `software.js`：配套的图书馆西立面与兼容渲染器。
 - `assets/`：原始校园 JSON、Three.js、OrbitControls 与地图依赖。
 - `index.html` / `viewer.css` / `main.js`：完整的本地查看界面。
 
-若将改动接入原页面，请同时引入两个新增 detail 模块，保持 `model.js` 与 `software.js`、`facade.js` 同级，并保留 `assets/OrbitControls.js` 和 `three` 的 import map。
+若将改动接入原页面，请将上述场景模块与 `model.js` 放在同一目录，并保留 `assets/OrbitControls.js` 和 `three` 的 import map。
 
 ## 实拍参考细化
 
@@ -51,4 +53,4 @@ node verification/verify.mjs
 
 浏览器自动检查需要 Node.js 22 或更新版本。只运行查看器可使用 Node.js 18 或更新版本。纯几何检查可单独执行 `node verification/geometry-check.mjs`。
 
-本次通过 13 项浏览器检查，覆盖 WebGL 启动、几何有效性、地点搜索、漫游、返回全景、手机画布与控件可见性，以及无 WebGL 时的兼容渲染。新增细节合批为 8 个网格；原始 `campus.json` 保持不变。
+浏览器检查覆盖 WebGL 启动、几何有效性、三种树形、地点搜索、漫游、返回全景、手机控件，以及无 WebGL 时的兼容渲染。可用 `$env:TREE_STUDY='1'; node verification/verify.mjs` 单独生成树形对照图。

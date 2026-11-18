@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>三种校园树形 · 金明校园</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#f3f3e9;color:#244237;font-family:"Microsoft YaHei",sans-serif}
+  main{width:min(1100px,100%);margin:5vh auto 0;padding:24px}
+  header,footer{padding:0 2%}small{color:#667950;letter-spacing:.16em}
+  h1{font-size:clamp(23px,3.3vw,42px);font-weight:600;letter-spacing:.05em;margin:.35em 0 0}
+  #stage{width:100%;aspect-ratio:2.95;position:relative;margin:2em 0 0}canvas{display:block;width:100%;height:100%}
+  .names{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}
+  b{display:block;font-size:clamp(13px,1.6vw,23px);font-weight:600}span{display:block;font-size:clamp(10px,1vw,15px);color:#667363;margin:.55em .35em}
+  footer{border-top:1px solid #c9ceba;color:#677565;margin:2.5em 2% 0;padding:1em 0;font-size:12px}
+</style>
+<script type="importmap">{"imports":{"three":"../assets/three.module.min.js"}}</script>
+<main>
+  <header><small>河南大学 · 金明校区</small><h1>校园里的三种树形</h1></header>
+  <div id="stage" aria-label="按同一高度并排呈现地图中的三种三维树形"></div>
+  <div class="names"><div><b>宽冠乔木</b><span>低处分枝，冠幅向两侧展开</span></div><div><b>杯形行道树</b><span>分枝上举，树下留出通行空间</span></div><div><b>塔形常绿树</b><span>下宽上窄，枝层间留有空隙</span></div></div>
+  <footer>三株示例使用在线地图的同一套模型，按相同树高展示。树形为示意。</footer>
+</main>
+<script type="module">
+  import * as T from 'three';
+  import {addTreeModels} from '../tree-model.js';
+  const area=document.querySelector('#stage'), scene=new T.Scene();
+  const renderer=new T.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(2,devicePixelRatio));renderer.toneMapping=T.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.12;area.append(renderer.domElement);
+  const camera=new T.OrthographicCamera(-18,18,6.1,-6.1,.1,100);
+  camera.position.set(0,6.35,30);camera.lookAt(0,5,0);
+  const sun=new T.DirectionalLight('#fff0d7',2.35);sun.position.set(-11,24,13);
+  scene.add(new T.HemisphereLight('#eaf3fa','#889478',1.8),sun);
+  addTreeModels(scene,[[-12,0,10,'shade',false,.27,.37,1,1],[0,0,10,'vase',true,.72,2,1,1],[12,0,10,'spire',false,.51,0,1,1]]);
+  function draw(){renderer.setSize(area.clientWidth,area.clientHeight,false);renderer.render(scene,camera);area.dataset.ready='true'}
+  new ResizeObserver(draw).observe(area);draw();
+</script></html>

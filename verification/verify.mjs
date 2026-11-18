@@ -96,13 +96,21 @@ try {
     const result = await call('Page.captureScreenshot', { format: 'png' });
     await writeFile(join(output, `${name}.png`), Buffer.from(result.data, 'base64'));
   }
+  async function treeStudy() {
+    await call('Emulation.setDeviceMetricsOverride', { width: 1100, height: 670, deviceScaleFactor: 1, mobile: false });
+    await call('Page.navigate', {url:url+'/verification/tree-study.html'});
+    await until(()=>evaluate("document.title.includes('三种校园树形') && document.querySelector('#stage')?.dataset.ready==='true'"),'Tree profiles rendered');
+    await capture('trees');
+  }
   await call('Page.enable');
   await call('Runtime.enable');
   await call('Network.enable');
   await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
-  await call('Page.navigate', { url: deployedSatellite ? satelliteUrl : url });
-  if(deployedSatellite){
+  if(process.env.TREE_STUDY==='1'){
+    await treeStudy();
+  }else if(deployedSatellite){
+    await call('Page.navigate',{url:satelliteUrl});
     const start=Date.now();
     await until(()=>evaluate("document.querySelector('#place-list .place')!==null"),'Published viewer ready',45000);
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
@@ -116,10 +124,13 @@ try {
       console.log(JSON.stringify({viewport:await getTiles(),elapsedSeconds:(Date.now()-start)/1000,requests,failures},null,2));
     }
   } else {
+  await call('Page.navigate',{url});
   await until(() => evaluate("document.querySelector('#stage')?.dataset.ready==='true'"), 'Model ready');
   const stats = await evaluate("JSON.parse(document.querySelector('#stage').dataset.modelStats)");
   check('WebGL model starts', stats.renderer === 'webgl');
   check('All generated geometry is finite', stats.invalid === 0 && stats.vertices > 10000);
+  check('All three tree forms populate the model', ['shade','vase','spire'].every(form=>stats.treeForms?.[form]>0) &&
+    Object.values(stats.treeForms).reduce((sum,n)=>sum+n,0)===stats.trees);
   check('Nine places load', await evaluate("document.querySelectorAll('#place-list .place').length===9"));
   check('Model error panel is hidden', await evaluate("document.querySelector('#fallback').hidden"));
   await capture('overview');
@@ -181,6 +192,7 @@ try {
     await evaluate("document.querySelector('[data-mode=model]').click()");
     await call('Fetch.disable');
   }
+  await treeStudy();
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await evaluate("document.querySelector('#stage').dataset.ready='false'");
   await call('Page.navigate', { url });

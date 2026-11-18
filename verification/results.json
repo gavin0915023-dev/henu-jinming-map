@@ -2,6 +2,7 @@
   "checks": [
     "WebGL model starts",
     "All generated geometry is finite",
+    "All three tree forms populate the model",
     "Nine places load",
     "Model error panel is hidden",
     "Search filters places",
@@ -20,9 +21,14 @@
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1691454,
+    "vertices": 1694194,
     "invalid": 0,
-    "trees": 975,
+    "trees": 861,
+    "treeForms": {
+      "shade": 517,
+      "vase": 234,
+      "spire": 110
+    },
     "buildings": {
       "buildings": 113,
       "windows": 16262,
@@ -40,8 +46,8 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 17,
-    "triangles": 930308
+    "drawCalls": 24,
+    "triangles": 927118
   },
   "failures": []
 }

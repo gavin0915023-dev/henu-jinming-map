@@ -80,7 +80,29 @@ export function softwareRenderer(data,palette,trees){
     shadows.push([p.map(([x,z])=>[x+height*.31,.07,z+height*.24]),'#27372d4a']);
     objects.push({center:c,top,roof,faces,height,windows:campus&&height>11,library:type==='library'});
   }
-  for(const [x,z,h] of trees)objects.push({center:[x,0,z],tree:h});
+  // Unit silhouettes can be reused at every zoom, even without WebGL.
+  const forms={
+    shade:{
+      shape:new Path2D('M-.94 .28 Q-1.1 -.05 -.87 -.26 Q-.94 -.65 -.55 -.72 Q-.35 -1.05 -.02 -.93 Q.32 -1.11 .55 -.75 Q.92 -.77 .89 -.34 Q1.12 -.1 .91 .32 Q.91 .65 .54 .79 Q.21 1 .01 .77 Q-.37 1.04 -.57 .76 Q-.91 .78 -.94 .28Z'),
+      light:new Path2D('M-.81 -.05 Q-.94 -.48 -.57 -.57 Q-.27 -1.04 .07 -.8 Q.33 -.88 .5 -.62 Q.37 -.34 .04 -.4 Q-.08 -.13 -.37 -.2 Q-.62 .02 -.81 -.05Z'),
+      tones:[['#526e49','#75915b'],['#617a4b','#839958'],['#4c6d50','#698861']], radius:.36, base:.34
+    },
+    vase:{
+      shape:new Path2D('M-.12 .91 Q-.51 .59 -.78 .22 Q-1.04 -.18 -.91 -.56 Q-.81 -.78 -.64 -.65 Q-.67 -.91 -.42 -.91 Q-.19 -1 -.04 -.72 Q.16 -1 .38 -.94 Q.66 -1 .72 -.65 Q.96 -.75 .98 -.42 Q1.03 -.03 .76 .36 Q.49 .68 .13 .91 Q0 1 -.12 .91Z'),
+      light:new Path2D('M-.76 -.31 Q-.91 -.71 -.65 -.6 Q-.63 -.88 -.43 -.81 Q-.24 -.97 -.07 -.63 Q-.13 -.27 -.01 -.03 Q-.32 -.17 -.43 -.44 Q-.57 -.33 -.53 -.12Z'),
+      tones:[['#69824f','#8f9e60'],['#58754a','#81915a'],['#708753','#96aa66']], radius:.27, base:.31
+    },
+    spire:{
+      shape:new Path2D('M.01 -1 L.38 -.41 L.24 -.45 L.7 .08 L.48 .02 L.98 .7 Q.65 .74 .44 .67 Q.37 .81 0 .9 Q-.54 .84 -.97 .69 L-.5 .04 L-.69 .12 L-.25 -.42 L-.38 -.37Z'),
+      light:new Path2D('M.01 -.96 L.09 -.39 L-.15 -.35 L.14 .02 L-.35 .12 L.09 .42 L-.6 .53 L-.29 .06 L-.5 .11 L-.17 -.39 L-.28 -.36Z'),
+      tones:[['#385e50','#547866'],['#466b56','#628470'],['#3f6257','#60816e']], radius:.22, base:.20
+    }
+  };
+  for(const [x,z,h,form,roadside,variant,yaw,scaleX,scaleZ] of trees){
+    const style=forms[form], i=Math.min(style.tones.length-1,Math.max(0,Math.floor(variant*style.tones.length)));
+    objects.push({center:[x,0,z],tree:{h,style,conifer:form==='spire',base:style.base+(roadside?.04:0),
+      colors:style.tones[i],mirror:Math.cos(yaw)>=0?1:-1,rx:scaleX,rz:scaleZ,cos:Math.cos(yaw),sin:Math.sin(yaw)}});
+  }
 
   let cam, m;
   function point([x,y,z]){
@@ -107,25 +129,35 @@ export function softwareRenderer(data,palette,trees){
     ctx.fillStyle=fill;ctx.fill();
     if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=.6;ctx.stroke();}
   }
-  function tree([x,,z],h,w){
+  function tree([x,,z],t,w){
     if(w<3)return;
-    const [a,b,d]=point([x,h*.9,z]);
-    if(d<=.65||Math.abs(a/d)>1.13||Math.abs(b/d)>1.13)return;
-    const sx=(.5+a/(2*d))*width,sy=(.5-b/(2*d))*height;
-    const r=Math.max(1.1,height*Math.abs(m[5])*h*.29/d);
-    if(cam.position.y<60&&d<130){
-      const p=point([x,0,z]);
-      if(p[2]>.65){
-        const bottom=(.5-p[1]/(2*p[2]))*height;
-        ctx.fillStyle='#686348';ctx.fillRect(sx-r*.09,sy,r*.18,Math.max(0,bottom-sy));
+    const {h,base,style}=t, cy=h*(1+base)*.5, d=w+m[7]*cy;
+    const topW=w+m[7]*h;
+    if(d<.65||topW<.65)return;
+    const a=m[0]*x+m[8]*z+m[12], b=m[1]*x+m[9]*z+m[13];
+    const sx=(.5+(a+m[4]*cy)/(2*d))*width, sy=(.5-(b+m[5]*cy)/(2*d))*height;
+    const p=cam.projectionMatrix.elements;
+    const rightX=m[0]/p[0],rightZ=m[8]/p[0];
+    const axisX=rightX*t.cos-rightZ*t.sin,axisZ=rightX*t.sin+rightZ*t.cos;
+    const r=Math.max(.65,height*p[5]*h*style.radius*Math.hypot(axisX*t.rx,axisZ*t.rz)/(2*d));
+    const top=(.5-(b+m[5]*h)/(2*topW))*height, foot=(.5-b/(2*w))*height;
+    const ry=Math.max(.65,Math.hypot(sy-top,r*m[7]));
+    if(sx+r<0||sx-r>width||Math.max(foot,sy+ry)<0||sy-ry>height)return;
+    if(r>2&&foot>sy+ry*.78){
+      ctx.strokeStyle='#70644e';ctx.lineWidth=Math.max(.7,r*.11);
+      ctx.beginPath();ctx.moveTo(sx,foot);ctx.lineTo(sx,sy+ry*.35);
+      if(!t.conifer&&r>6){
+        ctx.moveTo(sx,sy+ry*.97);ctx.lineTo(sx-r*.31*t.mirror,sy+ry*.51);
+        ctx.moveTo(sx,sy+ry*.83);ctx.lineTo(sx+r*.36*t.mirror,sy+ry*.42);
       }
+      ctx.stroke();
     }
-    ctx.fillStyle='#3c5637';
-    ctx.beginPath();ctx.ellipse(sx+r*.15,sy+r*.13,r*1.02,r*.87,0,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle=['#59754a','#688451','#50734d','#748955'][Math.abs(Math.floor(x+z))%4];
-    ctx.beginPath();ctx.ellipse(sx,sy,r,r*.85,0,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#a0ac633b';
-    ctx.beginPath();ctx.ellipse(sx-r*.23,sy-r*.19,r*.61,r*.49,0,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.translate(sx,sy);ctx.scale(t.mirror*r,ry);
+    // Steep views see the footprint of even a pointed evergreen.
+    const shape=t.conifer&&Math.abs(m[7])>.84?forms.shade:style;
+    ctx.fillStyle=t.colors[0];ctx.fill(shape.shape);
+    if(r>3.4){ctx.fillStyle=t.colors[1];ctx.fill(shape.light);}
+    ctx.restore();
   }
   function building(obj,distance){
     for(const face of obj.faces){
