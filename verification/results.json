@@ -16,12 +16,14 @@
     "Mobile layout stays within viewport",
     "Mobile canvas remains usable",
     "Mobile view controls remain visible",
+    "Mobile walking controls accept taps after choosing a place",
+    "Leaving walk mode restores the selected place",
     "Canvas fallback starts without WebGL",
     "No uncaught browser exceptions"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1694194,
+    "vertices": 1761732,
     "invalid": 0,
     "trees": 861,
     "treeForms": {
@@ -32,9 +34,9 @@
     "buildings": {
       "buildings": 113,
       "windows": 16262,
-      "entrances": 106,
+      "entrances": 105,
       "rooftopUnits": 133,
-      "triangles": 276616
+      "triangles": 427346
     },
     "landscape": {
       "courts": 95,
@@ -46,8 +48,8 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 24,
-    "triangles": 927118
+    "drawCalls": 27,
+    "triangles": 1078568
   },
   "failures": []
 }

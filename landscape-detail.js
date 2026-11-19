@@ -288,7 +288,7 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
           beam(details, [a[0] + nx * offset, a[1] + nz * offset], [b[0] + nx * offset, b[1] + nz * offset], .80, .30, .18, '#c4c2aa');
         }
         // Mark only wide campus carriageways; narrow service lanes stay unmarked.
-        if (width >= 7) for (let s = 6; s < length - 6; s += 12) {
+        if (width >= 7 && kind !== 'pedestrian') for (let s = 6; s < length - 6; s += 12) {
           details.ribbon([[a[0] + dx * s / length, a[1] + dz * s / length], [a[0] + dx * Math.min(s + 4, length) / length, a[1] + dz * Math.min(s + 4, length) / length]], .14, .82, '#d9d3aa');
         }
       }
@@ -315,7 +315,7 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
 
   // Subtle stone joints and reeds make the water edge readable at pedestrian height.
   for (const p of data.water) {
-    water.surface(p, .40, '#4b8987');
+    water.surface(p, .40, '#416d69');
     details.ribbon(closed(p), 2.2, .41, '#9ca68b');
     details.ribbon(closed(p), .65, .48, '#c6c7ad');
     stats.shores++;
@@ -334,14 +334,6 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
           g.setAttribute('position', new T.Float32BufferAttribute([rx - .10, .24, rz, rx + .10, .24, rz, rx + nx * .20, height, rz + nz * .20], 3));
           g.computeVertexNormals(); details.add(g, k % 2 ? '#7c8d54' : '#8c9a5b');
         }
-      }
-    }
-    // Broken highlights are clipped against the real shoreline, including narrow channels.
-    const [x, z, u, v] = bounds(p);
-    for (let zz = z + 5; zz < v; zz += 7.5) {
-      for (let xx = x + random() * 7; xx < u; xx += 19) {
-        const a = [xx, zz], b = [xx + 4 + random() * 7, zz + .35];
-        if ([a, b, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]].every(q => contains(q[0], q[1], p))) details.ribbon([a, b], .10, .415, '#72aaa1');
       }
     }
   }
@@ -365,7 +357,29 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
   add(surfaces, 'Sport surfaces', { roughness: .92 });
   add(details, 'Paving and markings', { roughness: .88 });
   add(metal, 'Campus furniture and sport equipment', { roughness: .68, metalness: .14 });
-  add(water, 'Lake water', { roughness: .27, metalness: .18 });
+  add(water, 'Lake water', { roughness: .20, metalness: .03 });
+  const lake=group.getObjectByName('Lake water');
+  if(lake){
+    // Periodic capillary waves tilt reflected daylight; mipmaps average the
+    // normals in distant views. The lake keeps its original shore geometry.
+    const size=128,pixels=new Uint8Array(size*size*4);
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+      const u=2*Math.PI*x/size,v=2*Math.PI*y/size;
+      const cross=.07*Math.cos(3*u-5*v+.6*Math.sin(v));
+      const nx=.065*Math.cos(2*u+7*v)+cross,ny=.19*Math.cos(2*u+7*v)-cross+.055*Math.cos(4*u+12*v);
+      const inv=1/Math.hypot(nx,ny,1),i=4*(y*size+x);
+      pixels[i]=Math.round(127.5*(1+nx*inv));pixels[i+1]=Math.round(127.5*(1+ny*inv));
+      pixels[i+2]=Math.round(127.5*(1+inv));pixels[i+3]=255;
+    }
+    const normals=new T.DataTexture(pixels,size,size);
+    normals.wrapS=normals.wrapT=T.RepeatWrapping;
+    normals.magFilter=T.LinearFilter;normals.minFilter=T.LinearMipmapLinearFilter;
+    normals.generateMipmaps=true;normals.needsUpdate=true;
+    const pos=lake.geometry.attributes.position,uv=new Float32Array(2*pos.count);
+    for(let i=0;i<pos.count;i++){uv[i*2]=pos.getX(i)/6;uv[i*2+1]=-pos.getZ(i)/6;}
+    lake.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
+    lake.material.normalMap=normals;
+  }
   add(light, 'Lamp diffusers', { emissive: '#f4dab0', emissiveIntensity: .25, roughness: .60 });
   scene.add(group);
   return { group, stats };

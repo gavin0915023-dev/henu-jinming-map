@@ -5,6 +5,8 @@ import { libraryFacade, libraryVolumes } from './facade.js';
 import { addBuildingDetails } from './building-detail.js';
 import { addLandscapeDetails } from './landscape-detail.js';
 import { addTreeModels } from './tree-model.js';
+import { campusSky, shadeGround } from './daylight.js';
+import { applyGroundSurfaceTextures } from './ground-surfaces.js';
 
 const ground = 0;
 const extent = 1400;
@@ -209,6 +211,21 @@ function addTrees(scene,positions,data) {
   shrubs.name='Street-view inspired clipped roadside planting';
   shrubs.castShadow=shrubs.receiveShadow=true;scene.add(shrubs);
 }
+// The university entrance photo shows three separate gold characters above the canopy.
+function librarySign() {
+  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
+  const c=canvas.getContext('2d');
+  c.font='bold 78px KaiTi, STKaiti, SimSun, serif';c.textAlign='center';c.textBaseline='middle';
+  const gold=c.createLinearGradient(0,10,0,84);
+  gold.addColorStop(0,'#ffebae');gold.addColorStop(.48,'#e3bc63');gold.addColorStop(1,'#ba8442');
+  for(const [i,ch] of [...'图书馆'].entries()){
+    const x=64+i*192;c.fillStyle='#70522f';c.fillText(ch,x+1,52);
+    c.fillStyle=gold;c.fillText(ch,x,49);
+  }
+  const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
+  const sign=new T.Mesh(new T.PlaneGeometry(13,2.45),new T.MeshStandardMaterial({map,alphaTest:.27,roughness:.56}));
+  sign.rotation.y=-Math.PI/2;sign.position.set(-183,9.55,-73);sign.name='Library entrance lettering';return sign;
+}
 function buildScene(scene, data, trees) {
   const base=new T.Mesh(new T.PlaneGeometry(5100,5100),new T.MeshStandardMaterial({color:'#718269',map:terrainTexture()}));
   base.rotation.x=-Math.PI/2;
@@ -218,11 +235,12 @@ function buildScene(scene, data, trees) {
   const layers=new Batch(), buildings=new Batch();
   layers.surface(data.boundary,.06,'#687e56');
   for(const [ring,kind] of data.green) layers.surface(ring,.16,kind==='farmland'?'#777f58':'#61784e');
-  for(const p of data.plaza) layers.surface(p,.45,'#969684');
+  for(const p of data.plaza) layers.surface(p,.45,'#a29990');
   for(const [p,w,,type,bridge] of data.road){
     const major=['primary','secondary','trunk','tertiary'].includes(type), y=bridge?1:.72;
-    layers.ribbon(p,w+2,y,major?'#56625a':'#73836b');
-    layers.ribbon(p,w,y+.03,major?'#8e9288':w>3?'#a5a58d':'#a4aa8b');
+    const pedestrian=['pedestrian','footway','path','steps'].includes(type);
+    layers.ribbon(p,w+(pedestrian?.55:2),y,pedestrian?'#948e80':major?'#56625a':'#73836b');
+    layers.ribbon(p,w,y+.03,pedestrian?(w>=5?'#b1a99b':'#a4aa8b'):major?'#777c7b':'#8a8c86');
     if(major)layers.ribbon(p,.48,y+.06,'#b8b6a0');
   }
   layers.ribbon(data.boundary,1.7,1.03,'#a7be82');
@@ -233,24 +251,30 @@ function buildScene(scene, data, trees) {
     model.translate(0,.08,0);
     buildings.add(model,colors);
   }
-  const front=new Batch();
-  for(const [[a,b,c,d],color] of libraryFacade){
+  const front=new Batch(), libraryGlass=new Batch();
+  for(const [[a,b,c,d],color,finish] of libraryFacade){
     const g=new T.BufferGeometry();
     g.setAttribute('position',new T.Float32BufferAttribute([...a,...b,...c,...a,...c,...d],3));
     g.computeVertexNormals();
-    front.add(g,color);
+    (finish==='glass'?libraryGlass:front).add(g,color);
   }
   const landmark=new Batch();
-  for(const {x,y,z,w,h,d,color} of libraryVolumes){
+  for(const {x,y,z,w,h,d,color,material} of libraryVolumes){
     const g=new T.BoxGeometry(w,h,d);
     g.translate(x,y,z);
-    landmark.add(g,color);
+    (material==='glass'?libraryGlass:landmark).add(g,color);
   }
   const library=landmark.mesh({roughness:.78});
   library.name='Photo-informed library entrance and roof';
   library.castShadow=library.receiveShadow=true;
-  scene.add(library);
+  scene.add(library,librarySign());
+  if(libraryGlass.positions.length){
+    const glass=libraryGlass.mesh({roughness:.26,metalness:0});
+    glass.name='Library curtain wall glass';scene.add(glass);
+  }
   const landscape=layers.mesh(), architecture=buildings.mesh(), elevation=front.mesh();
+  applyGroundSurfaceTextures(landscape);
+  shadeGround(landscape,data,trees);
   landscape.name='Campus surfaces';architecture.name='Original building footprints';elevation.name='Library west elevation';
   landscape.receiveShadow=architecture.receiveShadow=true;
   // The layered reference elevation sits just ahead of the main shadow caster.
@@ -261,14 +285,15 @@ function buildScene(scene, data, trees) {
   const details={Batch,contains,bounds};
   const buildingDetails=addBuildingDetails(scene,data,details);
   const landscapeDetails=addLandscapeDetails(scene,data,details);
+  applyGroundSurfaceTextures(landscapeDetails.group);
   addTrees(scene,trees,data);
   return {buildingDetails,landscapeDetails};
 }
 
 export function createModel(stage,data,onFrame){
-  const scene = new T.Scene(), sky = new T.Color('#b8c9c8');
-  scene.background = new T.Color('#53695d');
-  scene.fog = new T.FogExp2('#53695d',.00028);
+  const scene = new T.Scene();
+  const orbitMist=new T.FogExp2('#cad6d6',.00019), walkMist=new T.FogExp2('#dce4e4',.00082);
+  scene.fog=orbitMist;
   const camera = new T.PerspectiveCamera(46,1,.5,8000);
   const trees=treePositions(data);
   const canvas=document.createElement('canvas');
@@ -287,10 +312,14 @@ export function createModel(stage,data,onFrame){
     renderer.shadowMap.needsUpdate=true;
   }
   stage.append(renderer.domElement);
-  const ambient=new T.HemisphereLight('#eaf3fa','#778264',1.65);
-  const sun=new T.DirectionalLight('#fff0d7',2.5);
-  sun.position.set(-470,830,-380);
+  const ambient=new T.HemisphereLight('#e2efff','#a09c8d',1.28);
+  const sun=new T.DirectionalLight('#fff0dc',2.55);
+  sun.position.set(-530,750,-620);
   sun.target.position.set(0,0,60);
+  if(context){
+    scene.background=scene.environment=campusSky(sun.position.clone().sub(sun.target.position).normalize());
+    scene.environmentIntensity=.46;
+  }
   sun.castShadow=true;
   sun.shadow.mapSize.setScalar(matchMedia('(max-width: 700px)').matches?2048:4096);
   Object.assign(sun.shadow.camera,{left:-920,right:920,top:950,bottom:-950,near:10,far:2400});
@@ -365,8 +394,7 @@ export function createModel(stage,data,onFrame){
     walk.fov=65;
     camera.fov=walk.fov;
     camera.updateProjectionMatrix();
-    scene.background=sky;
-    scene.fog=new T.FogExp2(sky,.00105);
+    scene.fog=walkMist;
     face();
   }
   function exitWalk(){
@@ -376,8 +404,7 @@ export function createModel(stage,data,onFrame){
     controls.enabled=true;
     camera.fov=46;
     camera.updateProjectionMatrix();
-    scene.background=new T.Color('#53695d');
-    scene.fog=new T.FogExp2('#53695d',.00028);
+    scene.fog=orbitMist;
     home(false);
   }
   stage.addEventListener('pointerdown',event=>{

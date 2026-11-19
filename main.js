@@ -86,8 +86,8 @@ function renderPlaces(){
 }
 
 function renderDetail(){
-  detail.hidden=!active;
-  if(!active)return;
+  detail.hidden=!active||mode==='walk';
+  if(detail.hidden)return;
   const {name,type,desc,link,photo}=active;
   const walkButton=mode==='walk'?'':'<button class="detail-walk">'+icon('walk')+' 从这里漫游</button>';
   detail.innerHTML='<div class="detail-top"><b>'+type+'</b><button data-close aria-label="关闭地点详情">'+icon('close')+'</button></div><h2>'+name+'</h2><p>'+desc+'</p>'+walkButton+(photo!==undefined?'<button class="detail-walk" data-photo>实拍对照</button>':'')+(link?'<a href="'+link[0]+'" target="_blank" rel="noopener">'+link[1]+' ↗</a>':'');
@@ -233,7 +233,9 @@ function setMode(next){
   $('#mode-label').textContent=title;
   $('#mode-note').textContent=note;
   $('#esri-credit').hidden=mode!=='satellite';
+  $('.orbit-help').hidden=mode==='walk';
   $('.orbit-help').textContent=mode==='satellite'?'拖动平移 · 滚轮缩放':'拖动旋转 · 右键平移 · 滚轮缩放';
+  stage.setAttribute('aria-label',mode==='walk'?'校园地面漫游。拖动环顾，点前进或后退移动；也可用 W A S D 或方向键移动。':'三维校园，拖动旋转，双指或滚轮缩放。');
   $('#street-help').hidden=mode!=='walk';
   $('#map-photos').hidden=mode!=='walk';
   $('#notice').hidden=true;

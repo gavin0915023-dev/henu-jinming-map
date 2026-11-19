@@ -57,6 +57,10 @@ try {
       if (message.error) request.reject(Error(JSON.stringify(message.error))); else request.resolve(message.result);
     }
     if (message.method === 'Runtime.exceptionThrown') failures.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
+    if (message.method === 'Runtime.consoleAPICalled' && message.params.type==='error') {
+      const error=message.params.args.map(a=>a.value??a.description??'').join(' ');
+      if(/THREE\.WebGLProgram: Shader Error|VALIDATE_STATUS: false/.test(error))failures.push(error);
+    }
     if (message.method === 'Network.requestWillBeSent') {
       const { requestId, request } = message.params;
       const {hostname, pathname} = new URL(request.url);
@@ -205,6 +209,12 @@ try {
   const mobileLayout=await evaluate("Object.fromEntries(['.viewport','#stage','.mode-switch','#home'].map(selector=>{const r=document.querySelector(selector).getBoundingClientRect();return [selector,{left:r.left,right:r.right,top:r.top,bottom:r.bottom}]}))");
   console.log('Mobile layout',JSON.stringify(mobileLayout));
   check('Mobile view controls remain visible', await evaluate("[...document.querySelectorAll('.mode-switch,#home')].every(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=window.innerWidth&&r.top>=0&&r.bottom<=window.innerHeight})"));
+  await evaluate("document.querySelector('#place-list .place').click();document.querySelector('#detail .detail-walk').click()");
+  await settle();
+  check('Mobile walking controls accept taps after choosing a place',await evaluate(`document.querySelector('#detail').hidden &&
+    [...document.querySelectorAll('#street-help button')].every(b=>{const r=b.getBoundingClientRect();return r.height>=44 && b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})`));
+  await evaluate("document.querySelector('[data-mode=model]').click()");
+  check('Leaving walk mode restores the selected place',await evaluate("!document.querySelector('#detail').hidden && document.querySelector('#detail h2').textContent.includes('图书馆')"));
   await call('Page.addScriptToEvaluateOnNewDocument', { source: "const originalGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type==='webgl2'?null:originalGetContext.call(this,type,...args)}" });
   await evaluate("document.querySelector('#stage').dataset.ready='false'");
   await call('Page.navigate', { url });
