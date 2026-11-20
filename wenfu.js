@@ -2,6 +2,10 @@
 // two white wings. Its middle opening is visible through to daylight. Only
 // the front roofline is constrained by the street views; the deeper hall
 // retains the source footprint and estimated rear height.
+import { labId, coneId, physicsSolids } from './physics.js';
+import { teachingId, teachingSolids } from './east-campus.js';
+import { libraryId, librarySolids } from './central-axis.js';
+import { civilId, zengId, clinicId, facultySolids } from './faculty-sites.js';
 export const hallId='712688908',softwareId='712688905';
 export const passage={left:15.0,right:23.5,clear:4.85,front:-205.15,rear:-251,frontTop:12.5,setback:-231};
 export const softwareSign={x:55.0,z:-183.1,angle:-.98,width:1.04,height:3.16,base:.65};
@@ -24,6 +28,13 @@ function clip(poly,axis,limit,lower){
 export function* buildingSolids(records){
   for(const record of records){
     const [p,h,,,id]=record;
+    if(id===civilId||id===zengId||id===clinicId){yield* facultySolids(record);continue;}
+    if(id===libraryId){yield* librarySolids(record);continue;}
+    if(id===teachingId){yield* teachingSolids(record);continue;}
+    if(id===coneId||id===labId){
+      if(id===labId)yield {p,base:.08,top:h+.08,record};
+      yield* physicsSolids(record);continue;
+    }
     if(id!==hallId){yield {p,base:.08,top:h+.08,record};continue;}
     const {left,right,clear,setback,frontTop}=passage,ring=p.slice(0,-1);
     for(const [strip,base] of [[clip(ring,0,left,true),.08],

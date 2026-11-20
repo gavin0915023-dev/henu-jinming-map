@@ -1,5 +1,5 @@
 import { createModel } from './model.js';
-import { fieldViews, mountFieldViews, wenfuWalk } from './field-views.js';
+import { fieldViews, mountFieldViews, walks } from './field-views.js';
 import { imageryLayer, addCampusBasemap } from './satellite.js';
 
 const $=selector=>document.querySelector(selector);
@@ -44,13 +44,21 @@ const places=[
   {id:'west',name:'西大门',type:'校门',note:'金明大道',icon:'gate',color:'#c5f276',x:-459,z:-76,y:4,walk:[-485,-76,Math.PI/2],desc:'校名石墙朝西，两侧是入校通道。面向金字往东看，后方是明德广场和图书馆。',link:['https://ganbu.henu.edu.cn/info/1036/4225.htm','校方校门照片'],photo:1,main:true},
   {id:'marco',name:'马可广场',type:'广场',note:'校园中部',icon:'square',color:'#d7a9d0',x:16,z:-77,y:8,walk:[17,-68,-1.45],desc:'校园中部的圆形广场，位于图书馆以东、公共教学楼组团以西。',photo:2,main:true},
   {id:'lake',name:'粹庭湖',type:'水景',note:'教学区北侧',icon:'lake',color:'#9bdedb',x:136.3,z:-238.8,y:8,walk:[130,-176,0],desc:'校园东北部的湖泊之一，邻近经管教学楼。可从地面视角转向湖岸观察周边。',main:true},
-  {id:'stadium',name:'志义体育场',type:'体育场',note:'校园东侧',icon:'field',color:'#ebb28a',x:426,z:-220,y:8,walk:[390,-219,1.57],desc:'校园东侧的运动地标，设有田径场和足球场。',main:true},
+  {id:'stadium',name:'志义体育场',type:'体育场',note:'校园东侧 · 中州路',icon:'field',color:'#ebb28a',x:426,z:-220,y:8,walk:[318.7,-203,1.484,.076],desc:'西看台面向中州路，宽大的桁架顶棚和黑底红字馆名标出了主入口。',main:true},
   {id:'cs',name:'计算机与信息工程学院',type:'教学楼',note:'文甫路 · 马可广场以北',icon:'school',color:'#a9c5ec',x:-24,z:-196,y:21,walk:[10,-158,-.43,.19],desc:'文甫路一侧的入口在南翼东端，抬头可见竖排院名。沿外墙向西绕到雪垠路，可以看见长条玻璃和设备格栅。'},
   {id:'north',name:'北大门',type:'校门',note:'东京大道',icon:'gate',color:'#c5f276',x:21,z:-601,y:8,walk:[21,-596,3.14],desc:'校区北侧入口，面向东京大道。模型中的入口为近似定位。',main:true},
   {id:'autumn',name:'访秋湖',type:'水景',note:'公共教学楼以南',icon:'lake',color:'#9bdedb',x:91,z:62,y:8,walk:[75,26,3.14],desc:'位于公共教学楼南侧，是校方平面图标注的校园水系之一。',main:true},
   {id:'canteen',name:'北苑餐厅',type:'餐厅',note:'校园东北部',icon:'meal',color:'#e9ce7b',x:340,z:-434,y:12,walk:[326,-401,.35],desc:'校区东北部的餐厅，邻近生命科学学院与北侧教学区。'},
   {id:'hall',name:'计算机大楼报告厅',type:'报告厅',note:'文甫路 · 两栋教学楼之间',icon:'school',color:'#d6ad89',x:19.2,z:-207,y:12.5,walk:[19.2,-178.5,0,.10],desc:'从文甫路朝北看，暖色墙面和三组高窗连接两侧白色教学楼。中央通道可步行穿过。'},
-  {id:'software',name:'软件学院',type:'教学楼',note:'文甫路 · 报告厅以东',icon:'school',color:'#c6a78d',x:62,z:-197,y:21,walk:[48.3,-179.3,-.66,.21],desc:'门厅在南翼西端。文甫路边可以看见独立的红字院牌，沿雪垠路可看东北侧的窗带和设备格栅。'}
+  {id:'software',name:'软件学院',type:'教学楼',note:'文甫路 · 报告厅以东',icon:'school',color:'#c6a78d',x:62,z:-197,y:21,walk:[48.3,-179.3,-.66,.21],desc:'门厅在南翼西端。文甫路边可以看见独立的红字院牌，沿雪垠路可看东北侧的窗带和设备格栅。'},
+  {id:'physics',name:'物理实验楼（物理与电子学院 C 座）',type:'实验楼',note:'普通物理分中心 · 锥形报告厅旁',icon:'school',color:'#b57961',x:-112,z:222,y:21,walk:[-111.2,250.8,.07,.24],desc:'院内的红砖楼和锥形报告厅由低楼相连。绕到南侧看玻璃门厅，或沿院边到另一侧看砖墙和顶层敞廊。'},
+  {id:'teaching',name:'公共教学楼（综合教学楼）',type:'教学楼',note:'马可广场以东 · 4号教学楼一侧',icon:'school',color:'#b48e7c',x:122,z:-76,y:18,walk:[-63.8,-99,1.70,.03],desc:'广场一侧是两端红墙夹着的玻璃正面。绕到东侧，红砖楼梯塔的大开口和白色架空走廊都可以看到。'},
+  {id:'east',name:'东大门',type:'校门',note:'东门 · 夷山大街',icon:'gate',color:'#c5ab90',x:483,z:-77,y:5,walk:[509.5,-77.9,4.684,-.012],desc:'从夷山大街向西进入校园。砖墙上的圆洞、小门岗和中间的通道对应 2022 年的街景。'},
+  {id:'pharmacy',name:'药学院',type:'教学楼',note:'南侧院前广场',icon:'school',color:'#dbcb98',x:-142,z:-503,y:23,walk:[-166.2,-450.3,.026,.050],desc:'从带菱形石雕的花坛向北看，竖排院名在左，玻璃门厅和教学楼长翼依次向右展开。'},
+  {id:'civil',name:'土建学院（建筑工程学院）',type:'教学楼',note:'红砖双翼与圆廊',aliases:'土木建筑',icon:'school',color:'#c28a75',x:-138.7,z:280.6,y:16,walk:[-118.6,286.5,4.916,-.062],desc:'两栋红砖翼楼夹着白柱支起的圆廊。从圆廊下穿过，或后退几步看上层连桥。'},
+  {id:'zeng',name:'曾宪梓楼',type:'校园建筑',note:'研究生宿舍路口以北',icon:'school',color:'#d7a48b',x:-314,z:370,y:23,walk:[-358.2,419.9,6.244,.131],desc:'临广场的白色立面间隔布置橙红墙板和灰色窗带，底层局部架空。对照点可原地转身看 17 号宿舍。'},
+  {id:'dorm17',name:'17号研究生宿舍（学十七公寓）',type:'宿舍',note:'弯道路口西侧',aliases:'研究生公寓 十七号 17号楼',icon:'school',color:'#ced1b9',x:-414,z:419,y:20,walk:[-358.2,419.9,4.433,.140],desc:'从路口向西看，白色端墙的开口集中在几道竖列中；阳台的栏杆与侧面窗带做了区分。'},
+  {id:'clinic',name:'河大校医院',type:'校医院',note:'河南大学医院 · 西侧入口',icon:'pin',color:'#94b6ca',x:-449,z:604,y:18,walk:[-469.3,600.5,1.839,.045],desc:'西侧入口上有折面玻璃雨棚和连廊，左侧的蓝色玻璃上保留了街景中的竖排院名。'}
 ];
 
 const stage=$('#stage'), fallback=$('#fallback'), labelLayer=$('#labels'), search=$('#search'), detail=$('#detail');
@@ -71,7 +79,7 @@ function notice(message, duration=4500){
   if(duration) noticeTimer=setTimeout(()=>box.hidden=true,duration);
 }
 
-const placeMatches=(p,query)=>(p.name+p.type+p.note+p.id).toLowerCase().includes(query);
+const placeMatches=(p,query)=>(p.name+p.type+p.note+p.id+(p.aliases??'')).replace(/\s/g,'').toLowerCase().includes(query.replace(/\s/g,''));
 function renderPlaces(){
   const query=search.value.trim().toLowerCase();
   const matches=places.filter(p=>placeMatches(p,query));
@@ -115,11 +123,11 @@ function jumpSatellite(p,zoom){
 
 function markView(item){
   activeView=item;
-  const i=wenfuWalk.indexOf(item);
-  $('#wenfu-route').hidden=i<0;
+  const route=walks.find(r=>r.stops.includes(item)),i=route?route.stops.indexOf(item):-1;
+  $('#walk-route').hidden=i<0;
   if(i>=0){
-    $('#route-position').textContent='文甫路 '+(i+1)+' / '+wenfuWalk.length;
-    $('#route-prev').disabled=i===0;$('#route-next').disabled=i===wenfuWalk.length-1;
+    $('#route-position').textContent=route.label+' '+(i+1)+' / '+route.stops.length;
+    $('#route-prev').disabled=i===0;$('#route-next').disabled=i===route.stops.length-1;
   }
   const url=new URL(location.href),current=url.searchParams.get('view');
   if((item?.id??null)===current)return;
@@ -349,7 +357,8 @@ function visitView(item){
 }
 const openViews=mountFieldViews($('#field-dialog'),visitView);
 for(const [id,delta] of [['route-prev',-1],['route-next',1]])$('#'+id).onclick=()=>{
-  const i=wenfuWalk.indexOf(activeView),item=wenfuWalk[i+delta];if(i>=0&&item)visitView(item);
+  const route=walks.find(r=>r.stops.includes(activeView));if(!route)return;
+  const item=route.stops[route.stops.indexOf(activeView)+delta];if(item)visitView(item);
 };
 $('#field-views').onclick=()=>openViews(active?.id,activeView?.id);
 $('#map-photos').onclick=()=>!activeView&&active?.photo!==undefined?showPhotos(active.photo):openViews(active?.id,activeView?.id);

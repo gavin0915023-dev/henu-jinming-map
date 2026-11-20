@@ -1,9 +1,13 @@
 import { hallId, softwareId, passage } from './wenfu.js';
+import { labId, physicsCourt } from './physics.js';
+import { easternCourts, teachingId, standId, hasEastGate } from './east-campus.js';
+import { rearCourt, libraryId, teachingFrontId, plantSquare } from './central-axis.js';
+import { facultyGround } from './faculty-sites.js';
 
 // Local observations only: the entrance forecourt on Wenfu Road, the grove
 // on Fangqiu Lake's north side, and the tree-planted verge beside Jiuzhang Bridge.
 export function fieldGround(data,inside){
-  const trees=[],shrubs=[],surfaces=[],gateways=[];
+  const trees=[],shrubs=[],surfaces=[],gateways=[],forecourts=[];
   let seed=18273;
   const rnd=()=>((seed=(Math.imul(1664525,seed)+1013904223)>>>0)/4294967296);
   const streets=data.road.flatMap(([p,w])=>p.slice(1).map((b,i)=>[p[i],b,w/2]));
@@ -17,6 +21,32 @@ export function fieldGround(data,inside){
   const tree=(x,z,h,form,street,profile)=>{
     if(clear(x,z,.65))trees.push([x,z,h,form,street,rnd(),rnd()*6.28,.92+rnd()*.12,.90+rnd()*.14,profile]);
   };
+  if(data.building.some(b=>b[4]===labId)){
+    surfaces.push([physicsCourt,.94,'#c4b7a5']);forecourts.push(physicsCourt);
+    for(const [x,z,h] of [[-124,234,4.6],[-133,232,5.2],[-142,222,5.6],[-66,246,6.9],[-59,240,7.2]])
+      tree(x,z,h,'vase',false,'open');
+  }
+  [data.building.some(b=>b[4]===teachingId),data.building.some(b=>b[4]===standId),hasEastGate(data)].forEach((show,i)=>{
+    if(show){surfaces.push(easternCourts[i]);forecourts.push(easternCourts[i][0]);}
+  });
+  if(data.building.some(b=>b[4]===libraryId)){surfaces.push([rearCourt,.91,'#c8b9a7']);forecourts.push(rearCourt);}
+  if(data.building.some(b=>b[4]===teachingFrontId))plantSquare({surfaces,shrubs,forecourts},tree);
+  if(data.building.some(b=>b[4]===labId)){
+    surfaces.push([[[-161,194],[-85.8,207],[-83,208.7],[-85.2,214.1],[-162.8,201.6]],.84,'#bdb6a9']);
+    for(const [x,z] of [[-146,200],[-135,201.5],[-126,203.1],[-113,205.3],[-99.5,207.6],[-129.5,232.2],[-123.4,233],[-119,234.2]])
+      shrubs.push([x,z,1.25,1.0,.94,.38]);
+  }
+  if(data.building.some(b=>b[4]===standId)){
+    for(const z of [-224.8,-190.2])for(let x=324.4;x<337;x+=1.85)for(const dz of [-.75,.75])
+      shrubs.push([x,z+dz,1.15,.96,1.07,.5,'#875c50',.75]);
+  }
+  if(hasEastGate(data)){
+    for(const [x,z,h] of [[479,-103.2,8.5],[477.5,-52.4,8.2],[487,-108.5,7.7],[487,-45.8,7.8],[470,-88.8,8.6],[470,-64.2,8.0],[455,-89.8,9.3],[454,-64.8,9.0],[440,-89.2,9],[440,-64.4,8.5]])
+      tree(x,z,h,'vase',false,'open');
+  }
+  // Keep the established Wenfu/lakeside planting independent of the new courts.
+  facultyGround(data,{surfaces,forecourts,shrubs},tree);
+  seed=18273;
   if(data.building.some(b=>b[4]==='712688906')){
     const court=data.building.some(b=>b[4]===hallId)&&data.building.some(b=>b[4]===softwareId);
     surfaces.push([court?[[-15,-191.25],[1.8,-191.3],[1.8,-205.12],[40.65,-205.19],[40.65,-191.72],[56.9,-191.72],[56.9,-181.55],[-15,-181.50]]:
@@ -68,7 +98,7 @@ export function fieldGround(data,inside){
     const k=Math.sign(-dz*vx+dx*vz)*(w/2-.12)/len;
     return [a,b].map(([x,z])=>[x-dz*k,z+dx*k]);
   }):[];
-  return {trees,shrubs,surfaces,gateways,bridge:{spans,sides}};
+  return {trees,shrubs,surfaces,gateways,forecourts,bridge:{spans,sides}};
 }
 
 export function entryGap(ground,x,z,margin=0){
@@ -77,5 +107,6 @@ export function entryGap(ground,x,z,margin=0){
 
 export function putFieldTrees(planned,ground,inside){
   return [...planned.filter(([x,z])=>!ground.trees.some(t=>(t[0]-x)**2+(t[1]-z)**2<19) &&
+    !ground.forecourts.some(p=>inside(x,z,p)) &&
     !ground.surfaces.some(([p,,color])=>color==='#c4b9a6'&&inside(x,z,p))),...ground.trees];
 }

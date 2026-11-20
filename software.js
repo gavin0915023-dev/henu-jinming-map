@@ -2,6 +2,10 @@ import { Matrix4 } from 'three';
 import { libraryFacade } from './facade.js';
 import { observedTeachingFace, computingElevation, computingSignColumns } from './building-detail.js';
 import { buildingSolids, softwareSign, softwareId, hallId, reportFacade } from './wenfu.js';
+import { physicsModel, labId, labPlaque } from './physics.js';
+import { eastModels, protectedTeachingEdge, teachingId, isStandFront, stadiumSign, standId, boundaryLines } from './east-campus.js';
+import { centralModels, axisCustomEdge } from './central-axis.js';
+import { facultyModels, facultyColors, facultyEdge, siteLettering } from './faculty-sites.js';
 import { westGatePlacement } from './west-gate.js';
 import { avenueHedgeRuns } from './avenue.js';
 
@@ -84,7 +88,7 @@ export function softwareRenderer(data,palette,trees,inside){
     line(p,w,y+.03,road===data.avenue?.road?'#aaa092':major?'#9a9d8f':w>3?'#aaa995':'#a1a78b');
     if(major)line(p,.55,y+.05,'#c5c3ac');
   }
-  line(data.boundary,1.4,.63,'#a7be82');
+  for(const p of boundaryLines(data))line(p,1.4,.63,'#a7be82');
   const sides=data.field.bridge.sides;
   if(sides.length){
     const [[a,b],[c,d]]=sides;surface([a,b,d,c],1.055,'#b6afa4');
@@ -99,12 +103,12 @@ export function softwareRenderer(data,palette,trees,inside){
       }
     }
   }
-  for(const [x,z,rx,h,rz,tone] of data.field.shrubs){
+  for(const [x,z,rx,h,rz,tone,leaf,lift=0] of data.field.shrubs){
     const ring=Array.from({length:9},(_,i)=>[x+rx*Math.cos(i*Math.PI/4),z+rz*Math.sin(i*Math.PI/4)]);
-    const rim=poly(ring,h*.48),parts=[];
-    for(let i=0;i<8;i++)parts.push([[rim[i],rim[i+1],[x,h,z]],tint('#657c4b',.90+tone*.16)],
-      [[rim[i],rim[i+1],[ring[i+1][0],.20,ring[i+1][1]],[ring[i][0],.20,ring[i][1]]],'#566b45']);
-    objects.push({center:[x,h*.48,z],parts});
+    const rim=poly(ring,lift+h*.48),parts=[];
+    for(let i=0;i<8;i++)parts.push([[rim[i],rim[i+1],[x,h+lift,z]],tint(leaf??'#657c4b',.90+tone*.16)],
+      [[rim[i],rim[i+1],[ring[i+1][0],lift+.20,ring[i+1][1]],[ring[i][0],lift+.20,ring[i][1]]],leaf??'#566b45']);
+    objects.push({center:[x,lift+h*.48,z],parts});
   }
   for(const [a,b,z] of avenueHedgeRuns(data,inside)){
     for(let x=a;x<b;x+=9){
@@ -133,13 +137,32 @@ export function softwareRenderer(data,palette,trees,inside){
   }
   const hall=data.building.find(b=>b[4]===hallId);
   if(hall)for(const bay of reportFacade(hall[0]))objects.push({center:bay.center,parts:bay.parts,southFace:true});
-  for(const {p,base:floor,top:height,record} of buildingSolids(data.building)){
+  if(data.building.some(b=>b[2]==='library'))objects.push({center:[-181,16,-73],normal:[-1,0,0],parts:libraryFacade});
+  for(const g of [...physicsModel(data.building),...eastModels(data),...centralModels(data),...facultyModels(data)])objects.push(g);
+  for(const {id,text,point:[x,y,z],height,width,yaw,color} of siteLettering)if(data.building.some(r=>r[4]===id))
+    objects.push({center:[x,y,z],normal:[Math.sin(yaw),0,Math.cos(yaw)],parts:[],sign:()=>{
+      [...text].forEach((ch,i)=>glyph(ch,[x,y+height*(.5-(i+.5)/text.length),z],width*.83,color));
+    }});
+  if(data.building.some(b=>b[4]===standId)){
+    const {point:[x,y,z],text,width,color}=stadiumSign;
+    objects.push({center:[x,y,z],normal:[-1,0,0],parts:[],sign:()=>{
+      [...text].forEach((ch,i)=>glyph(ch,[x,y,z+width*((i+.5)/text.length-.5)],1.82,color));
+    }});
+  }
+  if(data.building.some(b=>b[4]===labId)){
+    const {point:[x,y,z],text,height,yaw}=labPlaque;
+    objects.push({center:[x,y,z],normal:[Math.sin(yaw),0,Math.cos(yaw)],parts:[],sign:()=>{
+      [...text].forEach((ch,i)=>glyph(ch,[x,y+height*(.43-i*.14),z],.28,'#343c36'));
+    }});
+  }
+  for(const {p,base:floor,top:height,record,custom} of buildingSolids(data.building)){
+    if(custom)continue;
     const [,,type,,id,campus]=record;
-    const [wall,roof]=id===hallId?['#b99880','#bfbaa9']:campus?palette[type]:palette.context;
+    const [wall,roof]=facultyColors[id]??(id===hallId?['#b99880','#bfbaa9']:id===teachingId||id===standId?['#d8d7ce','#c3c2b9']:campus?palette[type]:palette.context);
     const top=poly(p,height),base=poly(p,floor), c=center(base);
     const faces=[];
     const orientation=p.slice(1).reduce((s,[x,z],i)=>s+p[i][0]*z-x*p[i][1],0);
-    for(let i=1;i<p.length;i++){
+    for(let i=1;id!==labId&&i<p.length;i++){
       const [x,z]=p[i-1],[a,b]=p[i];
       const orientationSign=Math.sign(orientation)||1;
       const normal=[(b-z)*orientationSign,(x-a)*orientationSign];
@@ -149,10 +172,11 @@ export function softwareRenderer(data,palette,trees,inside){
       const edge={ax:x,az:z,nx:normal[0]/len,nz:normal[1]/len,tx:(a-x)/len,tz:(b-z)/len,length:len,sign:orientationSign};
       const obs=observedTeachingFace(id,edge);
       faces.push({normal,points:[base[i-1],base[i],top[i],top[i-1]],color:tint(wall,shade),len,
+        plain:facultyEdge(id,edge)||axisCustomEdge(id,edge)||isStandFront(id,edge)||id===teachingId&&protectedTeachingEdge(x,z,a,b),
         elevation:obs?flatElevation(obs.edge,record[1],obs.kind,obs.software):null,sign:id==='712688906'&&obs?.kind==='south'});
     }
     shadows.push([p.map(([x,z])=>[x+height*.31,.07,z+height*.24]),'#27372d4a']);
-    objects.push({center:c,top,roof,faces,height,soffit:floor>2?base:null,windows:id!==hallId&&campus&&height>11,library:type==='library'});
+    objects.push({center:c,top,roof:id===labId?'#b0aba0':roof,faces,height,soffit:floor>2?base:null,windows:id!==hallId&&campus&&height>11,library:type==='library'});
   }
   // Unit silhouettes can be reused at every zoom, even without WebGL.
   const forms={
@@ -250,10 +274,7 @@ export function softwareRenderer(data,palette,trees,inside){
       const [x,,z]=face.points[0], [nx,nz]=face.normal;
       if((cam.position.x-x)*nx+(cam.position.z-z)*nz<0)continue;
       path(face.points,face.color,'#4d554e53');
-      if(obj.library&&x===-176&&Math.abs(face.len-70)<1){
-        for(const [points,color] of libraryFacade)path(points,color);
-        continue;
-      }
+      if(obj.library&&nx/face.len<-.55)continue;
       if(face.elevation){
         if(distance<225){
           for(const [,points,color] of face.elevation)path(points,color);
@@ -262,7 +283,7 @@ export function softwareRenderer(data,palette,trees,inside){
         }
         continue;
       }
-      if(!obj.windows||distance>225||face.len<9)continue;
+      if(face.plain||!obj.windows||distance>225||face.len<9)continue;
       const [[a,,b],[c,,d]]=face.points, floors=Math.max(2,Math.round(obj.height/3.7));
       for(let row=1;row<=floors;row++){
         const y=(row-.55)*obj.height/floors;
@@ -305,7 +326,12 @@ export function softwareRenderer(data,palette,trees,inside){
       visible.sort((a,b)=>b[0]-a[0]);
       for(const [w,obj] of visible){
         if(obj.tree)tree(obj.center,obj.tree,w);
-        else if(obj.parts){if(obj.southFace&&cam.position.z<obj.center[2])continue;for(const [points,color] of obj.parts)path(points,color);obj.sign?.();}
+        else if(obj.parts){
+          if(obj.southFace&&cam.position.z<obj.center[2])continue;
+          if(obj.normal&&obj.normal[0]*(cam.position.x-obj.center[0])+obj.normal[1]*(cam.position.y-obj.center[1])+obj.normal[2]*(cam.position.z-obj.center[2])<0)continue;
+          for(const [points,color,material,detail] of obj.parts)if(!detail||w<160)path(points,material==='canopy'?color+'50':color);
+          obj.sign?.();
+        }
         else building(obj,w);
       }
     }

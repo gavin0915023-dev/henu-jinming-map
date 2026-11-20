@@ -3,12 +3,27 @@
     "WebGL model starts",
     "All generated geometry is finite",
     "All three tree forms populate the model",
-    "All eleven campus places load",
+    "All nineteen campus places load",
     "Model error panel is hidden",
     "Shared street link opens on Boxiang Road in walking mode",
     "Search finds the college and its neighboring report hall",
-    "Twelve viewpoints link to eleven distinct panoramas and the official gate photo",
+    "Twenty-seven viewpoints link to twenty-four distinct panoramas and the official gate photo",
     "Wenfu walk keeps geographic order, stops at each end and reverses",
+    "Walking viewpoint pharmacy",
+    "Walking viewpoint civil",
+    "Walking viewpoint zeng",
+    "Walking viewpoint dorm17",
+    "Walking viewpoint dorm17-end",
+    "Walking viewpoint clinic",
+    "Walking viewpoint physics-entry",
+    "Walking viewpoint physics-court",
+    "Walking viewpoint physics-cone",
+    "Walking viewpoint physics-north",
+    "Walking viewpoint east-gate",
+    "Walking viewpoint stadium-west",
+    "Walking viewpoint teaching-stair",
+    "Walking viewpoint library-rear",
+    "Walking viewpoint teaching-front",
     "Walking viewpoint cs-entry",
     "Walking viewpoint cs-south",
     "Walking viewpoint cs-northwest",
@@ -37,24 +52,27 @@
     "Canvas fallback starts without WebGL",
     "Canvas fallback opens the requested entrance",
     "Mobile Canvas walk reaches the passage and its reference",
+    "Mobile physics route reaches the cone in Canvas mode",
+    "The two faces of the square keep their own original reference",
+    "Turning at the dorm crossroads keeps its panorama and changes the bearing",
     "No uncaught browser exceptions"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1961132,
+    "vertices": 2191394,
     "invalid": 0,
-    "trees": 944,
+    "trees": 974,
     "treeForms": {
       "shade": 517,
-      "vase": 319,
-      "spire": 108
+      "vase": 350,
+      "spire": 107
     },
     "buildings": {
       "buildings": 113,
-      "windows": 16161,
-      "entrances": 104,
-      "rooftopUnits": 131,
-      "triangles": 429308
+      "windows": 13815,
+      "entrances": 96,
+      "rooftopUnits": 118,
+      "triangles": 430412
     },
     "landscape": {
       "courts": 95,
@@ -66,8 +84,8 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 33,
-    "triangles": 1229540
+    "drawCalls": 38,
+    "triangles": 1340378
   },
   "failures": []
 }

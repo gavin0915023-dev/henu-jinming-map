@@ -1,6 +1,6 @@
 # 校园精细化模型
 
-在所提供的校园数据和 Three.js 查看器基础上增加程序化建筑与景观细节。模型使用原有建筑轮廓和高度；窗格、屋顶设施、入口与环境小品为示意建模，不代表实测竣工信息。
+在原有校园数据上，根据公开街景和校方照片重建主要外立面、入口与步行空间。普通体量沿用原始轮廓和估高；有街景依据的局部（例如锥顶、架空层和图书馆后门）在显示模型中单独处理。原始数据未改动，尺寸不代表实测竣工信息。
 
 ## 运行
 
@@ -17,7 +17,7 @@ node server.mjs
 - 在左侧选择图书馆或教学楼，滚轮继续放大。
 - 按住鼠标左键旋转，右键平移；工具栏可回到全景。
 - 点击“地面漫游”，拖动视野，用 WASD / 方向键行走，也可使用屏幕前进、后退按钮。
-- 点击地图右侧的相机可选十二个“实景取景点”。每处都有模型视角和对应的百度全景或校方照片，也可以直接分享地址。文甫路的六站按由西向东排列：“上一站 / 下一站”切换实拍机位，“前进 / 后退”和拖动可在模型中自由走动、环顾。机位与实拍近似对齐。
+- 点击地图右侧的相机可选 27 个“实景取景点”，每处均能打开对应的百度全景或校方照片。文甫路六站、物理实验楼四站、广场两面和研究生宿舍路口可用“上一站 / 下一站”切换。在宿舍路口切换只转动视线，位置不变；也可以直接拖动画面环顾四周。
 - 在图书馆前可看两侧内收的玻璃幕墙、雨棚和上方的金色馆名，并与“实景参考”里的校方照片对照。明德广场中轴按原始道路数据作为步行铺地，不设机动车中心线。
 - 选“粹庭湖”可俯看绿化布局；在地面漫游中能看到分枝、叶簇和路边刷白的树干。也可单独打开[三种校园树形对照](https://gavin0915023-dev.github.io/henu-jinming-map/verification/tree-study.html)。树形和种植位置是示意，不是逐株测绘。
 - 不支持 WebGL 2 的设备会使用二维画布兼容渲染，仅显示基础体块和简化立面。
@@ -33,6 +33,9 @@ node server.mjs
 - `field-views.js`：实景取景点、步行相机和各自的外部图片来源。
 - `wenfu.js`：报告厅的可通行门洞、临街玻璃分组和软件学院独立院牌定位；几何体也供步行碰撞和兼容渲染使用。
 - `facade.js` / `software.js`：配套的图书馆西立面与兼容渲染器。
+- `physics.js`：物理楼 C 座窗墙、门厅、三层连接楼和锥形报告厅，含环廊、外梯和院内台阶。
+- `central-axis.js` / `east-campus.js`：图书馆后门、公共教学楼两面、东门与体育场入口。`survey-mesh.js` 将同一组表面供三维和兼容渲染器使用。
+- `faculty-sites.js`：药学院南面、土建学院双翼圆廊、曾宪梓楼、学十七公寓与医院西入口的立面、通路和院前种植。
 - `assets/`：原始校园 JSON、Three.js、OrbitControls 与地图依赖。
 - `index.html` / `viewer.css` / `main.js`：完整的本地查看界面。
 
@@ -45,6 +48,15 @@ node server.mjs
 
 | 模型取景点 | 实景支持的细节 |
 | --- | --- |
+| [药学院 · 院前广场](https://gavin0915023-dev.github.io/henu-jinming-map/?view=pharmacy) | 以竖排院名将药学院对到原本无名的建筑轮廓。院名在南立面西端的实墙上，右接玻璃门厅和带遮阳板的长窗带。花坛内的菱形石雕及屋顶开架也可在[斜向机位](https://map.baidu.com/#panoid=01027700001404011201055555G&panotype=street&heading=30&pitch=10)辨认。 |
+| [土建学院 · 圆廊](https://gavin0915023-dev.github.io/henu-jinming-map/?view=civil) | 用架空砖环、圆柱和弧形台阶替换了两翼之间的实心楼体。站在[斜侧](https://map.baidu.com/#panoid=01027700001404011303412815G&panotype=street&heading=292&pitch=10)能将圆廊和更高的玻璃连桥分开。 |
+| [曾宪梓楼](https://gavin0915023-dev.github.io/henu-jinming-map/?view=zeng) → [17 号研究生宿舍路口](https://gavin0915023-dev.github.io/henu-jinming-map/?view=dorm17) → [看宿舍端墙](https://gavin0915023-dev.github.io/henu-jinming-map/?view=dorm17-end) | 同一机位朝 357.77° 看曾宪梓楼的白框、橙红墙板与底层柱廊；转向 195.8° 看宿舍路口，再往右看学十七公寓的白墙、凹入阳台及栏杆。街道另一边的学十六公寓仍为独立建筑。 |
+| [河大校医院 · 西入口](https://gavin0915023-dev.github.io/henu-jinming-map/?view=clinic) | 按蓝玻璃上的“河南大学医院”红字、内退的门厅及其折面玻璃雨棚确定入口。两翼之间的高廊和门前雨棚是两个独立构件，可从[另一机位](https://map.baidu.com/#panoid=01027700001404011307265085G&panotype=street&heading=138&pitch=13)对照。 |
+| 物理实验楼：[C 座正门](https://gavin0915023-dev.github.io/henu-jinming-map/?view=physics-entry)、[院内转角](https://gavin0915023-dev.github.io/henu-jinming-map/?view=physics-court)、[锥形报告厅](https://gavin0915023-dev.github.io/henu-jinming-map/?view=physics-cone)、[背面](https://gavin0915023-dev.github.io/henu-jinming-map/?view=physics-north) | C 座门柱上的普通物理分中心挂牌、独立窗与门厅玻璃、低连楼、报告厅的锥顶和外梯，在不同机位可互相辨认。[校方活动手册](https://news.henu.edu.cn/__local/D/48/BE/63B6946DA67135F68A64AFB6FED_4101B645_8EFC4C.pdf)亦使用“物理楼 C 座”的位置名称。锥体位置据两个方向估算，未据此推定 A、B 座或室内布局。 |
+| [图书馆东侧后门](https://gavin0915023-dev.github.io/henu-jinming-map/?view=library-rear) | 正对和斜看均可见较低的入口、窄竖窗的弧形石墙、宽台阶以及与门厅分离的薄顶棚。西侧正门仍按校方照片单独建模。 |
+| 公共教学楼：[广场正面](https://gavin0915023-dev.github.io/henu-jinming-map/?view=teaching-front)、[东侧楼梯](https://gavin0915023-dev.github.io/henu-jinming-map/?view=teaching-stair) | 广场正面是横向玻璃和两端红墙；东侧楼梯塔的方孔和大开口、折返梯、架空柱、遮阳板分开建模。广场铺地和矮篱形状为近似。 |
+| [东大门](https://gavin0915023-dev.github.io/henu-jinming-map/?view=east-gate) | 夷山大街外向西看，圆洞砖墙、门房和中间的入口通道彼此分开。参考 **2022 年 6 月** 的正面与斜向街景，未推断后来的门禁布置。 |
+| [志义体育场西看台正门](https://gavin0915023-dev.github.io/henu-jinming-map/?view=stadium-west) | 正看与斜看均可辨认外露的三角桁架、正门上方的红字馆名与红砖铺地；未把当时的活动横幅做成固定构件。 |
 | [伯襄路](https://gavin0915023-dev.github.io/henu-jinming-map/?view=boxiang) | 用户分享的朝东视角。浅灰色路面没有中央隔离带，两侧是刷白的行道树和低篱；路缘在交叉口断开。 |
 | 计算机与信息工程学院：[文甫路入口](https://gavin0915023-dev.github.io/henu-jinming-map/?view=cs-entry)、[南翼中段](https://gavin0915023-dev.github.io/henu-jinming-map/?view=cs-south)、[雪垠路侧](https://gavin0915023-dev.github.io/henu-jinming-map/?view=cs-northwest) | 结合多个方向的百度街景和[金明校区平面图](https://www.henu.edu.cn/images/jmxq.jpg)，将入口定位到西侧楼体的南翼东端。入口上方有两列竖排金字，东端是转角敞廊；中段有两层高的柱，雪垠路一侧的底层实墙更多。 |
 | [访秋湖北侧路缘](https://gavin0915023-dev.github.io/henu-jinming-map/?view=autumn-bank) | 朝湖看时，近处是沿路树列和低篱。原取景点的水面被植被遮挡。 |
@@ -55,7 +67,7 @@ node server.mjs
 
 本次沿文甫路按百度相邻机位依次核对了 `01027700001404011205250795G`、`01027700001404011205270925G`、`01027700001404011205325675G`、`01027700001404011205370765G`、`01027700001404011205385585G`，另从雪垠路 `01027700001404011226210565G` 和 `01027700001404011226255645G` 回看东北侧。七处均为 2014 年 4 月的街景，模型中选取了其中五处作为可分享的取景点。
 
-部分百度街景拍于 2014 年 4 月。尺寸、窗扇数量、植株间距是根据照片与已有轮廓作的估计；没有足够依据的立面仍用简化模型。比如药学院的外观还未与原始建筑轮廓可靠对应，未套用到其他教学楼。模型不包含百度街景图片，原图经取景点的来源链接打开。
+本次五处院楼与宿舍取景采用 2014 年 4 月的街景；东大门采用 2022 年 6 月的街景。模型呈现相应拍摄时的可见外观，尺寸、窗扇数量与植株间距是根据照片和已有轮廓作的估计，未核实的背面保留简化外形。模型不包含百度街景图片，原图经取景点的来源链接打开。
 
 ## 检查命令
 

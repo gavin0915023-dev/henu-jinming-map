@@ -114,11 +114,17 @@ try {
   if(process.env.TREE_STUDY==='1'){
     await treeStudy();
   }else if(deployedSatellite){
-    await call('Page.navigate',{url:satelliteUrl+'?view=wenfu-hall'});
+    await call('Page.navigate',{url:satelliteUrl+'?view=library-rear'});
     const start=Date.now();
     await until(()=>evaluate("document.querySelector('#stage')?.dataset.ready==='true'"),'Published viewer ready',45000);
-    check('Published link opens the hall and the connected Wenfu walk',await evaluate("document.querySelector('#mode-note').textContent.includes('楼间通道') && !document.querySelector('#wenfu-route').hidden && document.querySelectorAll('#field-dialog [data-view]').length===12"));
-    await capture('published-wenfu-hall');
+    check('Published link opens the library rear and new panoramas',await evaluate("document.querySelector('#mode-note').textContent.includes('东侧后门') && !document.querySelector('#walk-route').hidden && document.querySelectorAll('#field-dialog [data-view]').length===27"));
+    await capture('published-library-rear');
+    await evaluate("document.querySelector('#route-next').click()");
+    check('Published route turns toward the teaching front',await evaluate("new URL(location.href).searchParams.get('view')==='teaching-front'"));
+    await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=zeng]').click();document.querySelector('#route-next').click()");
+    check('Published route turns from Zeng to dorm 17',await evaluate("new URL(location.href).searchParams.get('view')==='dorm17' && document.querySelector('#route-position').textContent.includes('2 / 3')"));
+    await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=pharmacy]').click()");
+    await capture('published-pharmacy');
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
     const getTiles=()=>evaluate("(()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return {loaded:tiles.filter(t=>t.complete&&t.naturalWidth>0).length,total:tiles.length,message:document.querySelector('#fallback').hidden?'':document.querySelector('#fallback').innerText}})()");
     try {
@@ -137,7 +143,7 @@ try {
   check('All generated geometry is finite', stats.invalid === 0 && stats.vertices > 10000);
   check('All three tree forms populate the model', ['shade','vase','spire'].every(form=>stats.treeForms?.[form]>0) &&
     Object.values(stats.treeForms).reduce((sum,n)=>sum+n,0)===stats.trees);
-  check('All eleven campus places load', await evaluate("document.querySelectorAll('#place-list .place').length===11"));
+  check('All nineteen campus places load', await evaluate("document.querySelectorAll('#place-list .place').length===19"));
   check('Model error panel is hidden', await evaluate("document.querySelector('#fallback').hidden"));
   check('Shared street link opens on Boxiang Road in walking mode',await evaluate("document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && document.querySelector('#mode-note').textContent.includes('伯襄路')"));
   await capture('field-boxiang');
@@ -148,10 +154,10 @@ try {
   await evaluate("document.querySelector('#place-list .place').click()");
   await capture('teaching-building');
   await evaluate("document.querySelector('#detail [data-field-reference]').click()");
-  check('Twelve viewpoints link to eleven distinct panoramas and the official gate photo',await evaluate(`(()=>{
+  check('Twenty-seven viewpoints link to twenty-four distinct panoramas and the official gate photo',await evaluate(`(()=>{
     const modal=document.querySelector('#field-dialog'),links=[...modal.querySelectorAll('.field-list a')].map(a=>new URL(a.href));
-    return modal.open && modal.querySelectorAll('[data-view]').length===12 &&
-      new Set(links.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size===11 &&
+    return modal.open && modal.querySelectorAll('[data-view]').length===27 &&
+      new Set(links.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size===24 &&
       links.some(l=>l.hostname==='ganbu.henu.edu.cn');
   })()`));
   await evaluate("document.querySelector('[data-view=cs-south]').click()");
@@ -163,7 +169,7 @@ try {
     return ids.join(',')==='cs-south,cs-entry,wenfu-hall,software-entry,software-south,software-return' && current()==='software-south' && document.querySelector('#route-position').textContent.includes('5 / 6');
   })()`));
   await evaluate("document.querySelector('#map-photos').click()");
-  for(const id of ['cs-entry','cs-south','cs-northwest','wenfu-hall','software-entry','software-south','software-return','software-xueyin','autumn-bank','jiuzhang','west-gate']){
+  for(const id of ['pharmacy','civil','zeng','dorm17','dorm17-end','clinic','physics-entry','physics-court','physics-cone','physics-north','east-gate','stadium-west','teaching-stair','library-rear','teaching-front','cs-entry','cs-south','cs-northwest','wenfu-hall','software-entry','software-south','software-return','software-xueyin','autumn-bank','jiuzhang','west-gate']){
     await evaluate(`document.querySelector('#field-dialog [data-view="${id}"]').click()`);
     check('Walking viewpoint '+id,await evaluate(`new URL(location.href).searchParams.get('view')==='${id}' && !document.querySelector('#field-dialog').open && document.querySelector('#mode-note').textContent===document.querySelector('#field-dialog [data-view="${id}"]').parentElement.querySelector('h3').textContent`));
     await capture('field-'+id);
@@ -258,8 +264,27 @@ try {
   check('Canvas fallback opens the requested entrance',await evaluate("document.querySelector('#mode-note').textContent.includes('文甫路入口') && document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true'"));
   await capture('field-fallback-entry');
   await evaluate("document.querySelector('#route-next').click()");
-  check('Mobile Canvas walk reaches the passage and its reference',await evaluate("!document.querySelector('#wenfu-route').hidden && document.querySelector('#mode-note').textContent.includes('楼间通道') && document.querySelector('#route-prev').getBoundingClientRect().height>=44"));
+  check('Mobile Canvas walk reaches the passage and its reference',await evaluate("!document.querySelector('#walk-route').hidden && document.querySelector('#mode-note').textContent.includes('楼间通道') && document.querySelector('#route-prev').getBoundingClientRect().height>=44"));
   await capture('field-fallback-hall');
+  await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=physics-entry]').click()");
+  await evaluate("document.querySelector('#route-next').click();document.querySelector('#route-next').click()");
+  check('Mobile physics route reaches the cone in Canvas mode',await evaluate("new URL(location.href).searchParams.get('view')==='physics-cone' && document.querySelector('#route-position').textContent.includes('3 / 4')"));
+  await capture('field-fallback-cone');
+  await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=library-rear]').click();document.querySelector('#route-next').click()");
+  check('The two faces of the square keep their own original reference',await evaluate(`(()=>{
+    document.querySelector('#map-photos').click();const row=document.querySelector('#field-dialog [data-current]');
+    return row.querySelector('[data-view]').dataset.view==='teaching-front' && new URL(row.querySelector('a').href).hash.includes('01027700001404011228370575G');
+  })()`));
+  await evaluate("document.querySelector('[data-view=zeng]').click();document.querySelector('#route-next').click();document.querySelector('#map-photos').click()");
+  check('Turning at the dorm crossroads keeps its panorama and changes the bearing',await evaluate(`(()=>{
+    const read=id=>new URLSearchParams(new URL(document.querySelector('[data-view='+id+']').parentElement.querySelector('a').href).hash.slice(1));
+    return document.querySelector('[data-current] [data-view]').dataset.view==='dorm17' && read('zeng').get('panoid')===read('dorm17').get('panoid') &&
+      read('zeng').get('heading')==='357.77' && read('dorm17').get('heading')==='195.8';
+  })()`));
+  await evaluate("document.querySelector('[data-view=civil]').click()");
+  await capture('field-fallback-civil');
+  await evaluate("document.querySelector('#map-photos').click()");
+  await evaluate("document.querySelector('#field-dialog [data-close]').click()");
   await evaluate("document.querySelector('#home').click()");
   await capture('fallback');
   check('No uncaught browser exceptions', failures.length === 0);

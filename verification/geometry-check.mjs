@@ -4,6 +4,10 @@ import * as T from '../assets/three.module.min.js';
 import { campusAvenueData, avenueHedgeRuns, avenueTrees } from '../avenue.js';
 import { fieldGround, entryGap, putFieldTrees } from '../field-ground.js';
 import { buildingSolids, hallId, passage, reportFacade } from '../wenfu.js';
+import { fieldViews } from '../field-views.js';
+import { eastGateBlockers, teachingId } from '../east-campus.js';
+import { libraryId } from '../central-axis.js';
+import { civilId, zengId, clinicId, facultyHeights } from '../faculty-sites.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -43,6 +47,26 @@ const {north,south}=rendered.avenue;
 const plantings=[...avenueTrees(rendered,[],toolkit.contains).map(t=>t[1]),...avenueHedgeRuns(rendered,toolkit.contains).map(r=>r[2])];
 assert(plantings.some(z=>z<north)&&plantings.some(z=>z>south)&&plantings.every(z=>z<north||z>south),'Planted rows must be outside both edges of the avenue');
 const details=rendered.field;
+const bodies3d=[...buildingSolids(data.building)];
+const solidAt=(x,y,z,id)=>bodies3d.some(s=>(!id||s.record[4]===id)&&s.base<y&&y<s.top&&toolkit.contains(x,z,s.p));
+for(const v of fieldViews.filter(v=>v.date)){
+  const [x,z]=v.camera;assert(!solidAt(x,2.45,z),v.id+': field camera starts inside a wall');
+}
+assert(!solidAt(181,2.45,-133,teachingId)&&solidAt(181,7,-133,teachingId),'White wing has an open ground floor');
+assert(!solidAt(-91,2.45,-73,libraryId)&&solidAt(-109,4,-73,libraryId)&&!solidAt(-109,24,-73,libraryId),'The low east lobby must be set back into the higher library wings');
+assert(eastGateBlockers().every(p=>!toolkit.contains(482.8,-77,p)),'The eastern entrance must stay open down the middle');
+const heightAt=facultyHeights(data);
+for(let offset=-8;offset<=8;offset+=2)
+  assert(!solidAt(-138.7+offset*.982,2.8,280.6+offset*.189,civilId),'Civil court should be traversable between the columns');
+assert(heightAt(-138.7,280.6)>1.5 && solidAt(-143.3,16,279.7,civilId),'Civil approach must rise under a separate high bridge');
+const zfront=(u,v)=>[-361.3+.807*u-.591*v,344.6+.591*u+.807*v];
+const [zx,zz]=zfront(59,-1.25);
+assert(!solidAt(zx,2.45,zz,zengId)&&solidAt(zx,7,zz,zengId),'Zeng forecourt has a recessed ground floor and an occupied upper storey');
+assert(!solidAt(-457,2.45,604,clinicId)&&solidAt(-451.7,5,604,clinicId)&&heightAt(-463,604)>1.4,'Hospital entrance must be recessed behind its front steps');
+const spin=['zeng','dorm17','dorm17-end'].map(id=>fieldViews.find(v=>v.id===id));
+assert(spin.every(v=>v.camera[0]===spin[0].camera[0]&&v.camera[1]===spin[0].camera[1]&&
+  new URLSearchParams(new URL(v.url).hash.slice(1)).get('panoid')==='01027700001404011311010335G'&&+new URLSearchParams(new URL(v.url).hash.slice(1)).get('heading')===v.camera[2])&&
+  spin[0].camera[2]===357.77&&spin[1].camera[2]===195.8,'Both user bearings must stay at one real station; the third looks directly at 17');
 const hall=data.building.find(b=>b[4]===hallId);
 const bodies=[...buildingSolids([hall])],cx=(passage.left+passage.right)/2;
 const occupied=(x,y,z)=>bodies.some(b=>y>=b.base&&y<=b.top&&toolkit.contains(x,z,b.p));

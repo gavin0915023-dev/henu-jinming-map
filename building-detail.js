@@ -1,5 +1,9 @@
 import * as T from 'three';
 import { hallId, softwareId, reportFacade } from './wenfu.js';
+import { physicsModel, labId, coneId } from './physics.js';
+import { eastModels, protectedTeachingEdge, isStandFront, teachingId, standId } from './east-campus.js';
+import { centralModels, axisCustomEdge, teachingFrontId } from './central-axis.js';
+import { facultyModels, facultyColors, facultyEdge, civilId } from './faculty-sites.js';
 
 // Architectural embellishments use the supplied footprints and heights. Window
 // spacing and rooftop fittings are procedural, rather than surveyed details.
@@ -228,7 +232,7 @@ export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,r
 export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   const group = new T.Group();
   group.name = 'campus-architectural-details';
-  const masonry = new FacadeBatch(), glass = new FacadeBatch(), fittings = new Batch();
+  const masonry = new FacadeBatch(), glass = new FacadeBatch(), brick = new FacadeBatch(), canopy=new FacadeBatch(), silhouettes=new FacadeBatch(), fittings = new Batch();
   const stats = { buildings: 0, windows: 0, entrances: 0, rooftopUnits: 0, triangles: 0 };
   // Closely related neutral tints avoid a checkerboard of randomly blue panes.
   // The static daylight environment supplies the angle-dependent reflection.
@@ -315,9 +319,18 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     return buildingRings.some(([b, ring]) => ring !== current && x > b[0] && x < b[2] && z > b[1] && z < b[3] && contains(x, z, ring));
   }
 
+  for(const g of [...physicsModel(data.building),...eastModels(data),...centralModels(data),...facultyModels(data)])for(const [points,color,material,fine] of g.parts){
+    (material==='brick'?brick:material==='glass'?glass:material==='canopy'?canopy:masonry).quad(...points,color);
+    // Only the broad new surfaces cast shadows: the canopy, curved hall and
+    // piers should shade the court without adding every window bar to its map.
+    if(material!=='brick'&&material!=='canopy'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
+      silhouettes.quad(...points,'#ffffff');
+  }
+
   for (const [ring, height, type, , id, campus] of data.building) {
     if (!campus || height < 4) continue;
     stats.buildings++;
+    if(id===labId||id===coneId||id===civilId){ stats.entrances++;continue; }
     if(id===hallId){
       for(const bay of reportFacade(ring))for(const [p,color,isGlass] of bay.parts)
         (isGlass?glass:masonry).quad(...p,color);
@@ -346,6 +359,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     }
 
     for (const edge of edges) {
+      if(facultyEdge(id,edge)||axisCustomEdge(id,edge)||isStandFront(id,edge)||id===teachingId&&protectedTeachingEdge(edge.ax,edge.az,edge.ax+edge.tx*edge.length,edge.az+edge.tz*edge.length))continue;
       const face=observedTeachingFace(id,edge);
       // A shared wall against the lower report hall still has an exposed roof
       // edge, but cannot carry ordinary windows at the join.
@@ -396,7 +410,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
 
     // Never superimpose a road-selected porch on either bespoke entrance.
     let entrance=null,entranceScore=Infinity;
-    if(!isLibrary && !computerCollege && id!==softwareId && height>7)for(const edge of edges){
+    if(!facultyColors[id] && !isLibrary && !computerCollege && id!==softwareId && id!==teachingId && id!==standId && id!==teachingFrontId && height>7)for(const edge of edges){
       if(edge.length<8)continue;
       const x=edge.ax+edge.tx*edge.length/2,z=edge.az+edge.tz*edge.length/2;
       if(otherBuildingAt(x+edge.nx*2,z+edge.nz*2,ring))continue;
@@ -427,10 +441,12 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     }
 
     const [left, top, right, bottom] = bounds(ring);
+    if(facultyColors[id])continue;
     let units = 0;
     for (const [u, v] of [[.36, .37], [.64, .63], [.5, .5], [.26, .7], [.73, .3]]) {
       if (units >= (isLibrary ? 3 : right - left > 35 && bottom - top > 20 ? 2 : 1)) break;
       const x = left + (right - left) * u, z = top + (bottom - top) * v;
+      if (isLibrary&&x>-144&&z>-96&&z<-49)continue;
       if (![[x - 2.2, z - 1.8], [x + 2.2, z - 1.8], [x + 2.2, z + 1.8], [x - 2.2, z + 1.8]].every(([a, b]) => contains(a, b, ring))) continue;
       if (edges.some(e => distanceToSegment(x, z, [e.ax, e.az], [e.ax + e.tx * e.length, e.az + e.tz * e.length]) < 2.9)) continue;
       box(x, height + .29, z, 4.2, .32, 3.35, '#827f72');
@@ -451,7 +467,38 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   walls.receiveShadow = windows.receiveShadow = equipment.receiveShadow = true;
   equipment.castShadow = true;
   group.add(walls, windows, equipment);
-  stats.triangles = [walls, windows, equipment].reduce((total, mesh) => {
+  if(canopy.positions.length){
+    const pane=canopy.mesh({physical:true,roughness:.17,transparent:true,opacity:.29,depthWrite:false,envMapIntensity:.66});
+    pane.name='Hospital glazed canopy';group.add(pane);
+  }
+  if(brick.positions.length){
+    const skin=brick.mesh({roughness:.95});
+    skin.name='Street-view brick exteriors';
+    skin.castShadow=skin.receiveShadow=true;
+    skin.material.onBeforeCompile=shader=>{
+      shader.vertexShader='varying vec3 brickPoint;varying vec3 brickNormal;\n'+shader.vertexShader
+        .replace('#include <begin_vertex>','#include <begin_vertex>\nbrickPoint=position;brickNormal=normal;');
+      shader.fragmentShader='varying vec3 brickPoint;varying vec3 brickNormal;\n'+shader.fragmentShader
+        .replace('#include <color_fragment>',`#include <color_fragment>
+        vec2 along=vec2(.987,.161), across=vec2(-.161,.987);
+        float u=abs(dot(brickNormal.xz,along))>.7?dot(brickPoint.xz,across):dot(brickPoint.xz,along);
+        vec2 tile=vec2(u/.255,brickPoint.y/.083);
+        tile.x+=.5*mod(floor(tile.y),2.);
+        vec2 edge=min(fract(tile),1.-fract(tile));
+        vec2 aa=max(vec2(.001),fwidth(vec2(u/.255,brickPoint.y/.083)));
+        vec2 joint=1.-smoothstep(vec2(.018,.033),vec2(.018,.033)+aa*.48,edge);
+        float visible=1.-smoothstep(.24,.98,max(aa.x,aa.y));
+        float shade=fract(sin(dot(floor(tile),vec2(17.123,41.577)))*4375.39);
+        if(abs(brickNormal.y)<.7)diffuseColor.rgb=mix(diffuseColor.rgb*(1.+(shade-.5)*.11*visible),
+          vec3(.34,.25,.195),max(joint.x,joint.y)*.58*visible);`);
+    };
+    group.add(skin);
+  }
+  if(silhouettes.positions.length){
+    const caster=silhouettes.mesh({colorWrite:false,depthWrite:false});
+    caster.name='Observed roof and facade shadows';caster.castShadow=true;group.add(caster);
+  }
+  stats.triangles = group.children.reduce((total, mesh) => {
     const geometry = mesh.geometry;
     return total + (geometry.getIndex()?.count ?? geometry.getAttribute('position').count) / 3;
   }, 0);
