@@ -1,3 +1,5 @@
+import { hallId, softwareId, passage } from './wenfu.js';
+
 // Local observations only: the entrance forecourt on Wenfu Road, the grove
 // on Fangqiu Lake's north side, and the tree-planted verge beside Jiuzhang Bridge.
 export function fieldGround(data,inside){
@@ -16,7 +18,15 @@ export function fieldGround(data,inside){
     if(clear(x,z,.65))trees.push([x,z,h,form,street,rnd(),rnd()*6.28,.92+rnd()*.12,.90+rnd()*.14,profile]);
   };
   if(data.building.some(b=>b[4]==='712688906')){
-    surfaces.push([[[-15,-191.25],[1.8,-191.3],[1.8,-202.35],[40.4,-202.5],[40.4,-181.55],[-15,-181.5]],.69,'#c4b9a6']);
+    const court=data.building.some(b=>b[4]===hallId)&&data.building.some(b=>b[4]===softwareId);
+    surfaces.push([court?[[-15,-191.25],[1.8,-191.3],[1.8,-205.12],[40.65,-205.19],[40.65,-191.72],[56.9,-191.72],[56.9,-181.55],[-15,-181.50]]:
+      [[-15,-191.25],[1.8,-191.3],[1.8,-202.35],[40.4,-202.5],[40.4,-181.55],[-15,-181.5]],.69,'#c4b9a6']);
+    if(court){
+      const {left,right,front,rear}=passage;
+      surfaces.push([[[left,front],[left,rear-.5],[right,rear-.5],[right,front]],.692,'#aca294']);
+      surfaces.push([[[57.1,-191.6],[84,-191.68],[84,-181.55],[57.1,-181.55]],.27,'#a99b7d']);
+      gateways.push([12,26.5,-181.6],[38,53.5,-181.6]);
+    }
     surfaces.push([[[-58,-190.95],[-15.1,-191.0],[-15.1,-181.6],[-58,-181.6]],.27,'#a99b7d']);
     gateways.push([-15,3,-181.6]);
     for(const [x,z,h] of [[-54,-185.6,5.7],[-43,-185,6.2],[-32,-184.9,5.3],[-21,-185,6.4],[6.8,-184.7,6.9]])
@@ -37,6 +47,17 @@ export function fieldGround(data,inside){
     for(let i=0;i<11;i++){
       const x=111.2+i*1.66,z=-255.5+i*1.56;
       if(clear(x,z,1.3))shrubs.push([x,z,1.8+rnd()*.8,1.35+rnd()*.65,1.4+rnd()*.7,rnd()]);
+    }
+  }
+  if(data.building.some(b=>b[4]===hallId))for(const x of [3,6.4,9.9,13.1,26.7,30.2,34,37.5]){
+    if(clear(x,-203.4,.3))shrubs.push([x,-203.4,1.5+rnd()*.28,1.8+rnd()*.38,1.12,rnd()]);
+  }
+  if(data.building.some(b=>b[4]===softwareId)){
+    for(const [x,h] of [[34,6.5],[59,5.3],[67,5.9],[76,6.3],[83,5.5]])tree(x,-184.8,h,'vase',false);
+    for(let q=7;q<62;q+=5.6){
+      const x=46.3+.808*q,z=-254+.590*q,d=2.7+rnd();
+      if(clear(x+.59*d,z-.808*d,.65))shrubs.push([x+.59*d,z-.808*d,1.04+rnd()*.4,1.1+rnd()*.55,.96,rnd()]);
+      if(Math.round((q-7)/5.6)%2===0)tree(x+6.8,z-9.2,9.5+rnd(),'vase',true,'open');
     }
   }
   const spans=data.road.filter(([p,,name,,bridge])=>bridge && name==='九章路' && p.length===2 &&

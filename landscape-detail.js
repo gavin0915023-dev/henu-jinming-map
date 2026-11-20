@@ -328,10 +328,15 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
         if(!isAvenue)for (const side of [-1, 1]) {
           const offset = side * (width / 2 + .22);
           const s=[a[0]+nx*offset,a[1]+nz*offset],t=[b[0]+nx*offset,b[1]+nz*offset];
-          const gap=name==='文甫路'&&data.field?.gateways.find(([lo,hi,z])=>Math.min(s[0],t[0])<lo&&Math.max(s[0],t[0])>hi&&Math.abs(s[1]-z)<.6&&Math.abs(t[1]-z)<.6);
-          if(gap){
-            const [lo,hi]=gap,at=x=>[x,s[1]+(t[1]-s[1])*(x-s[0])/(t[0]-s[0])],forward=s[0]<t[0];
-            beam(details,s,at(forward?lo:hi),.80,.30,.18,'#c4c2aa');beam(details,at(forward?hi:lo),t,.80,.30,.18,'#c4c2aa');
+          const lo=Math.min(s[0],t[0]),hi=Math.max(s[0],t[0]);
+          const gaps=name==='文甫路'&&data.field?.gateways.filter(([a,b,z])=>a<hi&&b>lo&&Math.abs(s[1]-z)<.6&&Math.abs(t[1]-z)<.6);
+          if(gaps?.length&&hi-lo>.1){
+            const at=x=>[x,s[1]+(t[1]-s[1])*(x-s[0])/(t[0]-s[0])];let x=lo;
+            for(const [a,b] of gaps.sort((u,v)=>u[0]-v[0])){
+              if(a>x+.05)beam(details,at(x),at(a),.80,.30,.18,'#c4c2aa');
+              x=Math.max(x,Math.min(b,hi));
+            }
+            if(hi>x+.05)beam(details,at(x),at(hi),.80,.30,.18,'#c4c2aa');
           }else beam(details,s,t,.80,.30,.18,'#c4c2aa');
         }
         // Mark only wide campus carriageways; narrow service lanes stay unmarked.

@@ -8,6 +8,7 @@ import { addTreeModels } from './tree-model.js';
 import { addWestGate } from './west-gate.js';
 import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
 import { fieldGround, entryGap, putFieldTrees } from './field-ground.js';
+import { buildingSolids, softwareSign, softwareId, hallId } from './wenfu.js';
 import { campusSky, shadeGround } from './daylight.js';
 import { applyGroundSurfaceTextures } from './ground-surfaces.js';
 
@@ -287,8 +288,23 @@ function librarySign() {
   const sign=new T.Mesh(new T.PlaneGeometry(13,2.45),new T.MeshStandardMaterial({map,alphaTest:.27,roughness:.56}));
   sign.rotation.y=-Math.PI/2;sign.position.set(-183,9.55,-73);sign.name='Library entrance lettering';return sign;
 }
+function addSoftwareSign(scene) {
+  const {x,z,width,height,base,angle}=softwareSign,group=new T.Group();
+  group.position.set(x,base,z);group.rotation.y=angle;group.name='软件学院 · 文甫路路牌';
+  const post=new T.Mesh(new T.BoxGeometry(width,height,.18),new T.MeshStandardMaterial({color:'#675d54',roughness:.88}));
+  post.position.y=height/2;post.castShadow=true;group.add(post);
+  const canvas=document.createElement('canvas');canvas.width=160;canvas.height=480;
+  const c=canvas.getContext('2d');c.fillStyle='#d3cab4';c.fillRect(0,0,160,480);
+  c.textAlign='center';c.textBaseline='middle';c.font='bold 94px KaiTi,STKaiti,SimSun,serif';c.fillStyle='#a4382d';
+  [...'软件学院'].forEach((ch,i)=>c.fillText(ch,80,67+105*i));
+  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+  const face=new T.PlaneGeometry(width-.10,height-.12),mat=new T.MeshStandardMaterial({map:texture,roughness:.91});
+  for(const side of [-1,1]){const plate=new T.Mesh(face,mat);plate.position.set(0,height/2,side*.094);plate.rotation.y=side>0?0:Math.PI;group.add(plate);}
+  scene.add(group);
+}
 function buildScene(scene, data, trees) {
   addWestGate(scene,data);
+  if(data.building.some(b=>b[4]===softwareId))addSoftwareSign(scene);
   const cs=data.building.find(b=>b[4]==='712688906');
   if(cs){
     // Two vertical lines of gold characters on the pale wall above the Wenfu Road entrance.
@@ -322,11 +338,12 @@ function buildScene(scene, data, trees) {
     if(major)layers.ribbon(p,.48,y+.06,'#b8b6a0');
   }
   layers.ribbon(data.boundary,1.7,1.03,'#a7be82');
-  for(const [p,h,type,,,campus] of data.building) {
-    const colors = campus ? (palette[type]??palette.other) : palette.context;
-    const model = new T.ExtrudeGeometry(shape(p),{depth:h,bevelEnabled:false});
+  for(const {p,base,top,record} of buildingSolids(data.building)) {
+    const [,,type,,id,campus]=record;
+    const colors=id===hallId?['#b99880','#bfbaa9']:campus?(palette[type]??palette.other):palette.context;
+    const model = new T.ExtrudeGeometry(shape(p),{depth:top-base,bevelEnabled:false});
     model.rotateX(-Math.PI/2);
-    model.translate(0,.08,0);
+    model.translate(0,base,0);
     buildings.add(model,colors);
   }
   const front=new Batch(), libraryGlass=new Batch();
@@ -420,7 +437,7 @@ export function createModel(stage,data,onFrame){
   const walk={active:false,yaw:0,pitch:-.02,position:new T.Vector3(),fov:65};
   const keys=new Set();
   let drag=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
-  const footprints=data.building.map(([ring])=>[bounds(ring),ring]);
+  const footprints=[...buildingSolids(data.building)].filter(s=>s.base<2.45).map(({p})=>[bounds(p),p]);
   const water=data.water.map(ring=>[bounds(ring),ring]);
   const obstructed=(x,z)=>[...footprints,...water].some(([[a,b,c,d],ring])=>x>a&&x<c&&z>b&&z<d&&contains(x,z,ring));
 

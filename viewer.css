@@ -15,6 +15,9 @@
 @media(max-width:600px){#imagery-status{top:60px}}
 
 .walk-touch-hint{display:none}
+#wenfu-route{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;border-top:1px solid #dce5d5;padding-top:5px}
+#wenfu-route span{font-size:11px;color:#42624f}#wenfu-route button{color:#325a44;background:transparent;border:0}
+#wenfu-route button:disabled{opacity:.35;cursor:default}
 #field-dialog{width:min(450px,calc(100vw - 28px));padding:22px;box-sizing:border-box}
 #field-dialog h2{margin:0}.field-intro{margin:9px 0 14px!important}
 .field-list{max-height:55dvh;overflow:auto;overscroll-behavior:contain}

@@ -1,6 +1,7 @@
 import { Matrix4 } from 'three';
 import { libraryFacade } from './facade.js';
-import { computingFace, computingElevation, computingSignColumns } from './building-detail.js';
+import { observedTeachingFace, computingElevation, computingSignColumns } from './building-detail.js';
+import { buildingSolids, softwareSign, softwareId, hallId, reportFacade } from './wenfu.js';
 import { westGatePlacement } from './west-gate.js';
 import { avenueHedgeRuns } from './avenue.js';
 
@@ -20,7 +21,7 @@ const ribbon = (p,w,y) => p.slice(1).flatMap(([x,z],i)=>{
 
 // Keep the same observed bays and entrance when WebGL is unavailable. Only the
 // flat face of each element is painted; fine louvers are omitted at this level.
-function flatElevation(e,h,kind){
+function flatElevation(e,h,kind,software){
   const parts=[],at=(u,y,o)=>[e.ax+e.tx*u+e.nx*o,y,e.az+e.tz*u+e.nz*o];
   function wall(_,edge,u,y,w,h,o,color){
     if(w<.11||h<.065)return;
@@ -30,7 +31,7 @@ function flatElevation(e,h,kind){
     box(x,y,z,w,h,d,color){wall(null,e,(x-e.ax)*e.tx+(z-e.az)*e.tz,y,w,h,(x-e.ax)*e.nx+(z-e.az)*e.nz+d/2,color);},
     ledge(edge,y,d,h,color,a=0,b=e.length){wall(null,e,(a+b)/2,y-h/2,b-a,h,d,color);},
     recessedOpening(edge,u,y,w,h,trim,shadow,color){wall(null,e,u,y,w,h,.10,color);}
-  });
+  },software);
   return parts.sort((a,b)=>a[0]-b[0]);
 }
 
@@ -124,9 +125,18 @@ export function softwareRenderer(data,palette,trees,inside){
       sign:()=>{if((cam.position.x-gx)*co+(cam.position.z-gz)*si<0)
         [...'河南大学'].forEach((ch,i)=>glyph(ch,at(-.56,2.31,(i-1.5)*5.5),1.98));}});
   }
-  for(const [p,height,type,,id,campus] of data.building){
-    const [wall,roof]=campus?palette[type]:palette.context;
-    const top=poly(p,height),base=poly(p,.08), c=center(base);
+  if(data.building.some(b=>b[4]===softwareId)){
+    const {x,z,width,height,base,angle}=softwareSign;
+    const at=(a,y)=>[x+a*Math.cos(angle),base+y,z-a*Math.sin(angle)];
+    objects.push({center:at(0,height/2),parts:[[[at(-width/2,0),at(width/2,0),at(width/2,height),at(-width/2,height)],'#c9bfa8']],
+      sign:()=>[...'软件学院'].forEach((ch,i)=>glyph(ch,at(0,height*(.84-.21*i)),.59,'#9e3f33'))});
+  }
+  const hall=data.building.find(b=>b[4]===hallId);
+  if(hall)for(const bay of reportFacade(hall[0]))objects.push({center:bay.center,parts:bay.parts,southFace:true});
+  for(const {p,base:floor,top:height,record} of buildingSolids(data.building)){
+    const [,,type,,id,campus]=record;
+    const [wall,roof]=id===hallId?['#b99880','#bfbaa9']:campus?palette[type]:palette.context;
+    const top=poly(p,height),base=poly(p,floor), c=center(base);
     const faces=[];
     const orientation=p.slice(1).reduce((s,[x,z],i)=>s+p[i][0]*z-x*p[i][1],0);
     for(let i=1;i<p.length;i++){
@@ -136,13 +146,13 @@ export function softwareRenderer(data,palette,trees,inside){
       const len=Math.hypot(...normal);
       if(len<.4)continue;
       const shade=.76+.23*(1+(-normal[0]-.6*normal[1])/len)/2;
-      const edge={ax:x,az:z,nx:normal[0]/len,nz:normal[1]/len,tx:(a-x)/len,tz:(b-z)/len,length:len};
-      const kind=id==='712688906'?computingFace(edge):null;
+      const edge={ax:x,az:z,nx:normal[0]/len,nz:normal[1]/len,tx:(a-x)/len,tz:(b-z)/len,length:len,sign:orientationSign};
+      const obs=observedTeachingFace(id,edge);
       faces.push({normal,points:[base[i-1],base[i],top[i],top[i-1]],color:tint(wall,shade),len,
-        elevation:kind?flatElevation(edge,height,kind):null,sign:kind==='south'});
+        elevation:obs?flatElevation(obs.edge,record[1],obs.kind,obs.software):null,sign:id==='712688906'&&obs?.kind==='south'});
     }
     shadows.push([p.map(([x,z])=>[x+height*.31,.07,z+height*.24]),'#27372d4a']);
-    objects.push({center:c,top,roof,faces,height,windows:campus&&height>11,library:type==='library'});
+    objects.push({center:c,top,roof,faces,height,soffit:floor>2?base:null,windows:id!==hallId&&campus&&height>11,library:type==='library'});
   }
   // Unit silhouettes can be reused at every zoom, even without WebGL.
   const forms={
@@ -227,13 +237,13 @@ export function softwareRenderer(data,palette,trees,inside){
     if(r>3.4){ctx.fillStyle=t.colors[1];ctx.fill(shape.light);}
     ctx.restore();
   }
-  function glyph(ch,world,size){
+  function glyph(ch,world,size,ink='#d1ab56'){
     const [x,y,w]=point(world);if(w<.65)return;
     const px=size*height*cam.projectionMatrix.elements[5]/(2*w);
     if(px<3||px>height*2)return;
     ctx.font='bold '+px+'px KaiTi,STKaiti,SimSun,serif';ctx.textAlign='center';ctx.textBaseline='middle';
     const sx=(.5+x/(2*w))*width,sy=(.5-y/(2*w))*height;
-    ctx.fillStyle='#785a32';ctx.fillText(ch,sx+.8,sy+.8);ctx.fillStyle='#d1ab56';ctx.fillText(ch,sx,sy);
+    ctx.fillStyle='#785a32';ctx.fillText(ch,sx+.8,sy+.8);ctx.fillStyle=ink;ctx.fillText(ch,sx,sy);
   }
   function building(obj,distance){
     for(const face of obj.faces){
@@ -265,6 +275,7 @@ export function softwareRenderer(data,palette,trees,inside){
       }
     }
     if(cam.position.y>obj.height)path(obj.top,obj.roof,'#7c806d80');
+    else if(obj.soffit&&cam.position.y<obj.soffit[0][1])path(obj.soffit,'#676057');
   }
   return {
     domElement:canvas,
@@ -294,7 +305,7 @@ export function softwareRenderer(data,palette,trees,inside){
       visible.sort((a,b)=>b[0]-a[0]);
       for(const [w,obj] of visible){
         if(obj.tree)tree(obj.center,obj.tree,w);
-        else if(obj.parts){for(const [points,color] of obj.parts)path(points,color);obj.sign?.();}
+        else if(obj.parts){if(obj.southFace&&cam.position.z<obj.center[2])continue;for(const [points,color] of obj.parts)path(points,color);obj.sign?.();}
         else building(obj,w);
       }
     }

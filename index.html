@@ -48,6 +48,7 @@
         <span class="walk-key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · 拖动环顾</span>
         <span class="walk-touch-hint">滑动环顾四周 · 点按前进或后退，每次 5 米</span>
         <div><button type="button" id="walk-back" aria-label="后退五米">后退</button><button type="button" id="walk-forward" aria-label="前进五米">前进</button><button type="button" id="map-photos">实景参考</button></div>
+        <nav id="wenfu-route" aria-label="沿文甫路换取景点" hidden><button type="button" id="route-prev">‹ 上一站</button><span id="route-position" aria-live="polite"></span><button type="button" id="route-next">下一站 ›</button></nav>
       </div>
       <div id="fallback" role="status">正在构建校园场景…</div>
       <div id="imagery-status" hidden><span id="imagery-message" role="status"></span><div id="imagery-actions" hidden><button type="button" id="imagery-retry">重试影像</button><a id="imagery-external" target="_blank" rel="noopener">在 ArcGIS 查看 ↗</a></div></div>

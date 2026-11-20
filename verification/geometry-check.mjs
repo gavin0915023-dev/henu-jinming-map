@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import * as T from '../assets/three.module.min.js';
 import { campusAvenueData, avenueHedgeRuns, avenueTrees } from '../avenue.js';
 import { fieldGround, entryGap, putFieldTrees } from '../field-ground.js';
+import { buildingSolids, hallId, passage, reportFacade } from '../wenfu.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -17,7 +18,8 @@ const vendorURL = new URL('assets/three.module.min.js', root).href;
 async function loadModule(name) {
   const source = await readFile(new URL(name, root), 'utf8');
   assert(source.includes("import * as T from 'three';"), `${name}: expected Three.js import`);
-  const transformed = source.replace("import * as T from 'three';", `import * as T from ${JSON.stringify(vendorURL)};`);
+  const transformed = source.replace("import * as T from 'three';", `import * as T from ${JSON.stringify(vendorURL)};`)
+    .replace(/from '(\.\/[^']+)'/g,(_,path)=>'from '+JSON.stringify(new URL(path,root).href));
   return import(`data:text/javascript;base64,${Buffer.from(transformed).toString('base64')}`);
 }
 function freeze(value) {
@@ -41,6 +43,13 @@ const {north,south}=rendered.avenue;
 const plantings=[...avenueTrees(rendered,[],toolkit.contains).map(t=>t[1]),...avenueHedgeRuns(rendered,toolkit.contains).map(r=>r[2])];
 assert(plantings.some(z=>z<north)&&plantings.some(z=>z>south)&&plantings.every(z=>z<north||z>south),'Planted rows must be outside both edges of the avenue');
 const details=rendered.field;
+const hall=data.building.find(b=>b[4]===hallId);
+const bodies=[...buildingSolids([hall])],cx=(passage.left+passage.right)/2;
+const occupied=(x,y,z)=>bodies.some(b=>y>=b.base&&y<=b.top&&toolkit.contains(x,z,b.p));
+for(let z=passage.rear+1;z<passage.front;z+=2.7){
+  assert(!occupied(cx,2.45,z)&&occupied(passage.left-.5,2.45,z)&&occupied(passage.right+.5,2.45,z)&&occupied(cx,6,z),'The passage must stay open below the hall and between its piers');
+}
+assert(!reportFacade(hall[0]).flatMap(b=>b.parts).some(([p])=>Math.min(...p.map(q=>q[0]))<cx&&Math.max(...p.map(q=>q[0]))>cx&&Math.min(...p.map(q=>q[1]))<passage.clear),'Finish panels must not close the opening');
 assert(details.bridge.sides.length===2 && details.bridge.spans.length===2,'One bridge deck requires two outer parapets');
 assert(entryGap(details,-7,-181.6)&&!entryGap(details,-28,-181.6),'The gateway must line up with the east-end doors');
 assert(putFieldTrees([[-7,-185,7]],details,toolkit.contains).every(([x,z])=>x!==-7||z!==-185),'Clear the path to the entrance');

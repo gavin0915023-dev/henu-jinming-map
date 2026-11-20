@@ -1,5 +1,5 @@
 import { createModel } from './model.js';
-import { fieldViews, mountFieldViews } from './field-views.js';
+import { fieldViews, mountFieldViews, wenfuWalk } from './field-views.js';
 import { imageryLayer, addCampusBasemap } from './satellite.js';
 
 const $=selector=>document.querySelector(selector);
@@ -48,7 +48,9 @@ const places=[
   {id:'cs',name:'计算机与信息工程学院',type:'教学楼',note:'文甫路 · 马可广场以北',icon:'school',color:'#a9c5ec',x:-24,z:-196,y:21,walk:[10,-158,-.43,.19],desc:'文甫路一侧的入口在南翼东端，抬头可见竖排院名。沿外墙向西绕到雪垠路，可以看见长条玻璃和设备格栅。'},
   {id:'north',name:'北大门',type:'校门',note:'东京大道',icon:'gate',color:'#c5f276',x:21,z:-601,y:8,walk:[21,-596,3.14],desc:'校区北侧入口，面向东京大道。模型中的入口为近似定位。',main:true},
   {id:'autumn',name:'访秋湖',type:'水景',note:'公共教学楼以南',icon:'lake',color:'#9bdedb',x:91,z:62,y:8,walk:[75,26,3.14],desc:'位于公共教学楼南侧，是校方平面图标注的校园水系之一。',main:true},
-  {id:'canteen',name:'北苑餐厅',type:'餐厅',note:'校园东北部',icon:'meal',color:'#e9ce7b',x:340,z:-434,y:12,walk:[326,-401,.35],desc:'校区东北部的餐厅，邻近生命科学学院与北侧教学区。'}
+  {id:'canteen',name:'北苑餐厅',type:'餐厅',note:'校园东北部',icon:'meal',color:'#e9ce7b',x:340,z:-434,y:12,walk:[326,-401,.35],desc:'校区东北部的餐厅，邻近生命科学学院与北侧教学区。'},
+  {id:'hall',name:'计算机大楼报告厅',type:'报告厅',note:'文甫路 · 两栋教学楼之间',icon:'school',color:'#d6ad89',x:19.2,z:-207,y:12.5,walk:[19.2,-178.5,0,.10],desc:'从文甫路朝北看，暖色墙面和三组高窗连接两侧白色教学楼。中央通道可步行穿过。'},
+  {id:'software',name:'软件学院',type:'教学楼',note:'文甫路 · 报告厅以东',icon:'school',color:'#c6a78d',x:62,z:-197,y:21,walk:[48.3,-179.3,-.66,.21],desc:'门厅在南翼西端。文甫路边可以看见独立的红字院牌，沿雪垠路可看东北侧的窗带和设备格栅。'}
 ];
 
 const stage=$('#stage'), fallback=$('#fallback'), labelLayer=$('#labels'), search=$('#search'), detail=$('#detail');
@@ -97,7 +99,7 @@ function renderDetail(){
   detail.querySelector('[data-close]').onclick=()=>{active=null;renderPlaces();renderDetail();};
   detail.querySelector('.detail-walk:not([data-photo])')?.addEventListener('click',()=>setMode('walk'));
   detail.querySelector('[data-photo]')?.addEventListener('click',()=>showPhotos(photo));
-  if(active.id==='cs'){const b=document.createElement('button');b.type='button';b.className='detail-walk';b.dataset.fieldReference='';b.textContent='街景对照';b.onclick=()=>openViews('cs');detail.append(b);}
+  if(fieldViews.some(v=>v.place===active.id)){const b=document.createElement('button');b.type='button';b.className='detail-walk';b.dataset.fieldReference='';b.textContent='街景对照';b.onclick=()=>openViews(active.id);detail.append(b);}
 }
 
 function gps(x,z){
@@ -113,6 +115,12 @@ function jumpSatellite(p,zoom){
 
 function markView(item){
   activeView=item;
+  const i=wenfuWalk.indexOf(item);
+  $('#wenfu-route').hidden=i<0;
+  if(i>=0){
+    $('#route-position').textContent='文甫路 '+(i+1)+' / '+wenfuWalk.length;
+    $('#route-prev').disabled=i===0;$('#route-next').disabled=i===wenfuWalk.length-1;
+  }
   const url=new URL(location.href),current=url.searchParams.get('view');
   if((item?.id??null)===current)return;
   if(item)url.searchParams.set('view',item.id);else url.searchParams.delete('view');
@@ -340,6 +348,9 @@ function visitView(item){
   $('#mode-note').textContent=item.title;
 }
 const openViews=mountFieldViews($('#field-dialog'),visitView);
+for(const [id,delta] of [['route-prev',-1],['route-next',1]])$('#'+id).onclick=()=>{
+  const i=wenfuWalk.indexOf(activeView),item=wenfuWalk[i+delta];if(i>=0&&item)visitView(item);
+};
 $('#field-views').onclick=()=>openViews(active?.id,activeView?.id);
 $('#map-photos').onclick=()=>!activeView&&active?.photo!==undefined?showPhotos(active.photo):openViews(active?.id,activeView?.id);
 $('#close-photos').onclick=()=>$('#photo-dialog').close();

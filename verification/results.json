@@ -3,14 +3,20 @@
     "WebGL model starts",
     "All generated geometry is finite",
     "All three tree forms populate the model",
-    "Nine places load",
+    "All eleven campus places load",
     "Model error panel is hidden",
     "Shared street link opens on Boxiang Road in walking mode",
-    "Search filters places",
-    "Seven viewpoints link to six distinct panoramas and the official gate photo",
+    "Search finds the college and its neighboring report hall",
+    "Twelve viewpoints link to eleven distinct panoramas and the official gate photo",
+    "Wenfu walk keeps geographic order, stops at each end and reverses",
     "Walking viewpoint cs-entry",
     "Walking viewpoint cs-south",
     "Walking viewpoint cs-northwest",
+    "Walking viewpoint wenfu-hall",
+    "Walking viewpoint software-entry",
+    "Walking viewpoint software-south",
+    "Walking viewpoint software-return",
+    "Walking viewpoint software-xueyin",
     "Walking viewpoint autumn-bank",
     "Walking viewpoint jiuzhang",
     "Walking viewpoint west-gate",
@@ -30,24 +36,25 @@
     "Leaving walk mode restores the selected place",
     "Canvas fallback starts without WebGL",
     "Canvas fallback opens the requested entrance",
+    "Mobile Canvas walk reaches the passage and its reference",
     "No uncaught browser exceptions"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1949350,
+    "vertices": 1961132,
     "invalid": 0,
-    "trees": 934,
+    "trees": 944,
     "treeForms": {
       "shade": 517,
-      "vase": 309,
+      "vase": 319,
       "spire": 108
     },
     "buildings": {
       "buildings": 113,
-      "windows": 16265,
-      "entrances": 105,
-      "rooftopUnits": 133,
-      "triangles": 429718
+      "windows": 16161,
+      "entrances": 104,
+      "rooftopUnits": 131,
+      "triangles": 429308
     },
     "landscape": {
       "courts": 95,
@@ -59,8 +66,8 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 30,
-    "triangles": 1218348
+    "drawCalls": 33,
+    "triangles": 1229540
   },
   "failures": []
 }

@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { hallId, softwareId, reportFacade } from './wenfu.js';
 
 // Architectural embellishments use the supplied footprints and heights. Window
 // spacing and rooftop fittings are procedural, rather than surveyed details.
@@ -52,12 +53,25 @@ class FacadeBatch {
 // west from the report-hall end; on the oblique north-west face it runs north-east.
 // The 2014 imagery supports the different facade zones; sizes/counts are estimates.
 export const computingSignColumns=[['计算机与',160,36],['信息工程学院',61,100]];
-export function computingFace(e) {
+function computingFace(e) {
   return e.nz>.98 && e.length>45?'south':
     e.nx<-.5 && e.nz<-.6 && e.length>70?'northwest':
     e.nx>.99 && e.ax>0 && e.length>8?'east':null;
 }
-export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,recessedOpening,stats}) {
+export function observedTeachingFace(id,e){
+  if(id==='712688906'){
+    const kind=computingFace(e);return kind?{edge:e,kind,software:false}:null;
+  }
+  if(id!==softwareId)return null;
+  // The software entrance is at the WEST end. Measure the west and south
+  // bays from the doorway; reverse the winding while keeping the outer normal.
+  const kind=e.nz>.99&&e.length>40?'south':e.nx<-.99&&e.ax<42&&e.length>10?'east':
+    e.nx>.55&&e.nz<-.72&&e.length>60?'northwest':null;
+  if(!kind)return null;
+  return {kind,software:true,edge:kind==='northwest'?e:{...e,ax:e.ax+e.tx*e.length,
+    az:e.az+e.tz*e.length,tx:-e.tx,tz:-e.tz,sign:-e.sign}};
+}
+export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,recessedOpening,stats},software=false) {
   const angle=-Math.atan2(e.tz,e.tx);
   const cream='#e2dccc', ashlar='#d6d0bd', frame='#acaeaa', shade='#626d70', blue='#627884';
   const rect=(batch,a,b,lo,hi,offset,color)=>wall(batch,e,(a+b)/2,(lo+hi)/2,b-a,hi-lo,offset,color);
@@ -93,7 +107,7 @@ export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,r
     stats.windows+=5;
     return;
   }
-  const bays=south?8:12,start=south?17.1:12.7,end=e.length-.45,pitch=(end-start)/bays;
+  const bays=software?(south?6:9):(south?8:12),start=south?17.1:12.7,end=e.length-.45,pitch=(end-start)/bays;
   rect(masonry,start,end,.12,lower,.008,ashlar);
   rect(masonry,start,end,.12,.77,.012,'#b5ac95');
   // The south ground and first floor share projecting piers; the north-west
@@ -105,12 +119,17 @@ export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,r
     const punchedFloors=south?2:1;
     for(let f=0;f<punchedFloors;f++){
       const y=(f+.57)*lower/punchedFloors;
-      if(south){
+      if(south||software){
         recessedOpening(e,u+pitch*.48,y,pitch*.44,1.87,ashlar,'#837f74','#59676a');
         stats.windows++;
       }
       recessedOpening(e,u+pitch*.84,y,.47,1.87,ashlar,'#837f74','#667475');
       stats.windows++;
+      if(software && (k+f)%3===1){
+        // Short equipment boxes sit below some of the windows on both roads.
+        solid(u+pitch*.42,u+pitch*.42+.72,y-1.48,y-.96,.34,.40,'#b1ada3');
+        rect(masonry,u+pitch*.45,u+pitch*.45+.48,y-1.39,y-1.02,.42,'#757c79');
+      }
     }
   }
   ledge(e,lower+.09,1.02,.34,cream,start,end);
@@ -183,6 +202,11 @@ export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,r
   solid(stoneA,stoneB,lower+.08,height,.8,.86,'#e3dfd2');
   for(let f=0;f<4;f++){
     const y=lower+f*fh;
+    if(software){
+      // The pale wall here has one slim inset opening on each level; the
+      // college name is on the freestanding sign, not lettered on the wall.
+      rect(glass,stoneB-1.52,stoneB-.85,y+.52,y+fh-.48,.90,'#72838a');
+    }
     rect(glass,.58,stoneA,y+.18,y+fh-.27,.06,'#52646b');
     rect(glass,stoneB,start,y+.30,y+fh-.24,.075,'#73848a');
     solid(.03,.56,y,y+fh,.84,.88,cream);
@@ -294,6 +318,11 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   for (const [ring, height, type, , id, campus] of data.building) {
     if (!campus || height < 4) continue;
     stats.buildings++;
+    if(id===hallId){
+      for(const bay of reportFacade(ring))for(const [p,color,isGlass] of bay.parts)
+        (isGlass?glass:masonry).quad(...p,color);
+      continue;
+    }
     const points = ring.slice(0, -1);
     const area = points.reduce((sum, a, i) => {
       const b = points[(i + 1) % points.length];
@@ -317,10 +346,10 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     }
 
     for (const edge of edges) {
-      const face=computerCollege?computingFace(edge):null;
+      const face=observedTeachingFace(id,edge);
       // A shared wall against the lower report hall still has an exposed roof
       // edge, but cannot carry ordinary windows at the join.
-      const sharedWall=computerCollege && [.1,.5,.9].every(t=>otherBuildingAt(
+      const sharedWall=(computerCollege||id===softwareId) && [.1,.5,.9].every(t=>otherBuildingAt(
         edge.ax+edge.tx*edge.length*t+edge.nx*.2,edge.az+edge.tz*edge.length*t+edge.nz*.2,ring));
       // The existing photo-derived west library facade remains unobscured.
       const preserveFacade = isLibrary && edge.nx < -.55;
@@ -340,7 +369,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
         fittings.add(curb, trim);
       }
       if(face){
-        computingElevation(edge,height,face,{masonry,glass,wall,ledge,box,recessedOpening,stats});
+        computingElevation(face.edge,height,face.kind,{masonry,glass,wall,ledge,box,recessedOpening,stats},face.software);
         continue;
       }
       if (preserveFacade || sharedWall || edge.length < 3.3) continue;
@@ -367,7 +396,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
 
     // Never superimpose a road-selected porch on either bespoke entrance.
     let entrance=null,entranceScore=Infinity;
-    if(!isLibrary && !computerCollege && height>7)for(const edge of edges){
+    if(!isLibrary && !computerCollege && id!==softwareId && height>7)for(const edge of edges){
       if(edge.length<8)continue;
       const x=edge.ax+edge.tx*edge.length/2,z=edge.az+edge.tz*edge.length/2;
       if(otherBuildingAt(x+edge.nx*2,z+edge.nz*2,ring))continue;
