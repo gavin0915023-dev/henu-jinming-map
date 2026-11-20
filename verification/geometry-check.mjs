@@ -8,6 +8,8 @@ import { fieldViews } from '../field-views.js';
 import { eastGateBlockers, teachingId } from '../east-campus.js';
 import { libraryId } from '../central-axis.js';
 import { civilId, zengId, clinicId, facultyHeights } from '../faculty-sites.js';
+import { eduId, beiId, courtSigns } from '../college-courts.js';
+import { orientedFrame } from '../survey-mesh.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -67,6 +69,16 @@ const spin=['zeng','dorm17','dorm17-end'].map(id=>fieldViews.find(v=>v.id===id))
 assert(spin.every(v=>v.camera[0]===spin[0].camera[0]&&v.camera[1]===spin[0].camera[1]&&
   new URLSearchParams(new URL(v.url).hash.slice(1)).get('panoid')==='01027700001404011311010335G'&&+new URLSearchParams(new URL(v.url).hash.slice(1)).get('heading')===v.camera[2])&&
   spin[0].camera[2]===357.77&&spin[1].camera[2]===195.8,'Both user bearings must stay at one real station; the third looks directly at 17');
+const education=orientedFrame(238.4,-288.5,-.965,-.262),beiyuan=orientedFrame(329.75,-409.15,-.612,.791);
+const occupiedLocal=(d,id,u,y,v)=>{const [x,z]=d.world([u,v]);return solidAt(x,y,z,id);};
+for(const u of [-9.0,10.7])for(let v=-26;v<2.6;v+=1.35){
+  const [x,z]=education.world([u,v]);assert(!solidAt(x,2.45,z),'Visitors must be able to cross on either side of the brick tower');}
+assert(!occupiedLocal(education,eduId,3.25,13.8,-11.9)&&occupiedLocal(education,eduId,-8.0,13.8,-11.9),'The roof must surround a real hole at its centre');
+assert(solidAt(231,34,-291.7,eduId)&&!solidAt(231,41,-291.7,eduId),'The brick clock tower is a separate taller solid');
+const atTread=(u,v)=>heightAt(...beiyuan.world([u,v]));
+assert(atTread(-21.9,2.0)>4.3&&atTread(-13.0,2.0)<1.1&&atTread(-23.1,2.0)===4.53,'The external Beiyuan stair must rise from the square into the western landing');
+assert(occupiedLocal(beiyuan,beiId,27,10.9,1)&&!occupiedLocal(beiyuan,beiId,13,10.9,-1),'Not every part of the dining hall has the height of its end pavilions');
+assert.equal(courtSigns.find(s=>s.id==='712735066').text,'河南大学民族餐厅','Keep the photographed sign distinct from the building name');
 const hall=data.building.find(b=>b[4]===hallId);
 const bodies=[...buildingSolids([hall])],cx=(passage.left+passage.right)/2;
 const occupied=(x,y,z)=>bodies.some(b=>y>=b.base&&y<=b.top&&toolkit.contains(x,z,b.p));

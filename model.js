@@ -308,11 +308,12 @@ function addSoftwareSign(scene) {
 }
 function buildScene(scene, data, trees) {
   addWestGate(scene,data);
-  for(const {id,text,width,height,point,yaw,color} of siteLettering){
+  for(const {id,text,width,height,point,yaw,color,horizontal} of siteLettering){
     if(!data.building.some(r=>r[4]===id))continue;
-    const cv=document.createElement('canvas');cv.width=120;cv.height=120*text.length;
+    const cv=document.createElement('canvas');cv.width=120*(horizontal?text.length:1);cv.height=120*(horizontal?1:text.length);
     const ctx=cv.getContext('2d');ctx.font='bold 92px KaiTi,STKaiti,SimSun,serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    [...text].forEach((ch,i)=>{const y=(i+.5)*120;ctx.fillStyle='#6a5b50';ctx.fillText(ch,62,y+2);ctx.fillStyle=color;ctx.fillText(ch,60,y);});
+    [...text].forEach((ch,i)=>{const x=horizontal?(i+.5)*120:60,y=horizontal?60:(i+.5)*120;
+      ctx.fillStyle='#6a5b50';ctx.fillText(ch,x+2,y+2);ctx.fillStyle=color;ctx.fillText(ch,x,y);});
     const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;
     const sign=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,alphaTest:.20,roughness:.76}));
     sign.position.set(...point);sign.rotation.y=yaw;sign.name=text;scene.add(sign);

@@ -17,7 +17,7 @@ node server.mjs
 - 在左侧选择图书馆或教学楼，滚轮继续放大。
 - 按住鼠标左键旋转，右键平移；工具栏可回到全景。
 - 点击“地面漫游”，拖动视野，用 WASD / 方向键行走，也可使用屏幕前进、后退按钮。
-- 点击地图右侧的相机可选 27 个“实景取景点”，每处均能打开对应的百度全景或校方照片。文甫路六站、物理实验楼四站、广场两面和研究生宿舍路口可用“上一站 / 下一站”切换。在宿舍路口切换只转动视线，位置不变；也可以直接拖动画面环顾四周。
+- 点击地图右侧的相机可选 37 个“实景取景点”，每处均能打开同方向的百度全景或校方照片。有多个角度的建筑可用“上一站 / 下一站”对照，如书院东西两院、两家餐厅和地理楼的南北面。在研究生宿舍路口切换只转动视线，位置不变；也可以直接拖动画面环顾四周。
 - 在图书馆前可看两侧内收的玻璃幕墙、雨棚和上方的金色馆名，并与“实景参考”里的校方照片对照。明德广场中轴按原始道路数据作为步行铺地，不设机动车中心线。
 - 选“粹庭湖”可俯看绿化布局；在地面漫游中能看到分枝、叶簇和路边刷白的树干。也可单独打开[三种校园树形对照](https://gavin0915023-dev.github.io/henu-jinming-map/verification/tree-study.html)。树形和种植位置是示意，不是逐株测绘。
 - 不支持 WebGL 2 的设备会使用二维画布兼容渲染，仅显示基础体块和简化立面。
@@ -36,6 +36,7 @@ node server.mjs
 - `physics.js`：物理楼 C 座窗墙、门厅、三层连接楼和锥形报告厅，含环廊、外梯和院内台阶。
 - `central-axis.js` / `east-campus.js`：图书馆后门、公共教学楼两面、东门与体育场入口。`survey-mesh.js` 将同一组表面供三维和兼容渲染器使用。
 - `faculty-sites.js`：药学院南面、土建学院双翼圆廊、曾宪梓楼、学十七公寓与医院西入口的立面、通路和院前种植。
+- `college-courts.js`：教苑餐厅、北苑餐厅、田家炳教育书院和地理楼。每处有独立的窗墙和体量设计；两家餐厅不共用一套立面，书院的通路和顶板开口在几何中实际留空。
 - `assets/`：原始校园 JSON、Three.js、OrbitControls 与地图依赖。
 - `index.html` / `viewer.css` / `main.js`：完整的本地查看界面。
 
@@ -46,8 +47,16 @@ node server.mjs
 图书馆西入口增加了分段弧形雨棚、细柱、台阶、门框、幕墙分格与屋顶挑檐，构件合批渲染。
 参考学校公开的[图书馆建设资料](https://jjc.henu.edu.cn/info/1004/1002.htm)和[校园照片](https://zbcg.henu.edu.cn/xwtz/5707.chtml)。尺寸与细节为照片辅助下的示意建模，未经实地测绘。
 
+下面四张都是模型在街景机位的截图。点表里的地点可自己走动，也可以打开相应的百度原始全景。
+
+![教苑餐厅、北苑餐厅、田家炳教育书院钟塔和地理楼西南弧窗的模型对照](verification/courts-preview.webp)
+
 | 模型取景点 | 实景支持的细节 |
 | --- | --- |
+| 教苑餐厅：[西侧入口](https://gavin0915023-dev.github.io/henu-jinming-map/?view=jiaoyuan-door) · [南侧窗墙](https://gavin0915023-dev.github.io/henu-jinming-map/?view=jiaoyuan-side) | 西侧近看才能辨认蓝牌写的是“河南大学民族餐厅”；以原地图楼名作为地点，以实拍文字作为 2014 年入口招牌。斜墙与西面连续折角，橙红窗下墙分三层，南侧部分底窗有竖栅。校方亦在[食堂名单](https://xyh.henu.edu.cn/news/zhkd/show-3458.html)中使用“教苑餐厅”。 |
+| 北苑餐厅：[前场](https://gavin0915023-dev.github.io/henu-jinming-map/?view=beiyuan-court) · [外梯一侧](https://gavin0915023-dev.github.io/henu-jinming-map/?view=beiyuan-stair) | 中段是遮阳肋、高窗和细柱门廊，另一翼是少量方窗；西侧露天阶梯逐级升到侧翼平台。前场保留导向入口的深色铺地条。街景为 2014 年，校方另有[后续整修记录](https://xyh.henu.edu.cn/news/zhkd/show-3204.html)，因此不把旧照当作现在的装修。 |
+| 田家炳教育书院：[西院](https://gavin0915023-dev.github.io/henu-jinming-map/?view=education-west) · [仰看钟塔](https://gavin0915023-dev.github.io/henu-jinming-map/?view=education-clock) · [东院回望](https://gavin0915023-dev.github.io/henu-jinming-map/?view=education-east) | 西侧仰视、从北侧靠近与东院远望，均可分清砖塔和较低的连廊。砖面上的钟由刻度和指针构成，窄面是深色玻璃。连廊保留底部通道、两层栏杆和顶板的天井；钟面表示固定时刻，塔高及孔径由多个角度估计。 |
+| 地理楼：[南侧林带](https://gavin0915023-dev.github.io/henu-jinming-map/?view=geography-south) · [西南弧窗](https://gavin0915023-dev.github.io/henu-jinming-map/?view=geography-curve) · [北侧砖窗](https://gavin0915023-dev.github.io/henu-jinming-map/?view=geography-north) | 南侧长墙后退处有弧形玻璃与白色挑台；北侧近照可辨认成对的独立窗、浅色短饰条和灰色基座。位置依据原始数据的“地理科学学院”轮廓，未把临路的每一栋红楼都标成同一学院。 |
 | [药学院 · 院前广场](https://gavin0915023-dev.github.io/henu-jinming-map/?view=pharmacy) | 以竖排院名将药学院对到原本无名的建筑轮廓。院名在南立面西端的实墙上，右接玻璃门厅和带遮阳板的长窗带。花坛内的菱形石雕及屋顶开架也可在[斜向机位](https://map.baidu.com/#panoid=01027700001404011201055555G&panotype=street&heading=30&pitch=10)辨认。 |
 | [土建学院 · 圆廊](https://gavin0915023-dev.github.io/henu-jinming-map/?view=civil) | 用架空砖环、圆柱和弧形台阶替换了两翼之间的实心楼体。站在[斜侧](https://map.baidu.com/#panoid=01027700001404011303412815G&panotype=street&heading=292&pitch=10)能将圆廊和更高的玻璃连桥分开。 |
 | [曾宪梓楼](https://gavin0915023-dev.github.io/henu-jinming-map/?view=zeng) → [17 号研究生宿舍路口](https://gavin0915023-dev.github.io/henu-jinming-map/?view=dorm17) → [看宿舍端墙](https://gavin0915023-dev.github.io/henu-jinming-map/?view=dorm17-end) | 同一机位朝 357.77° 看曾宪梓楼的白框、橙红墙板与底层柱廊；转向 195.8° 看宿舍路口，再往右看学十七公寓的白墙、凹入阳台及栏杆。街道另一边的学十六公寓仍为独立建筑。 |

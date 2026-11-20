@@ -139,9 +139,9 @@ export function softwareRenderer(data,palette,trees,inside){
   if(hall)for(const bay of reportFacade(hall[0]))objects.push({center:bay.center,parts:bay.parts,southFace:true});
   if(data.building.some(b=>b[2]==='library'))objects.push({center:[-181,16,-73],normal:[-1,0,0],parts:libraryFacade});
   for(const g of [...physicsModel(data.building),...eastModels(data),...centralModels(data),...facultyModels(data)])objects.push(g);
-  for(const {id,text,point:[x,y,z],height,width,yaw,color} of siteLettering)if(data.building.some(r=>r[4]===id))
+  for(const {id,text,point:[x,y,z],height,width,yaw,color,horizontal} of siteLettering)if(data.building.some(r=>r[4]===id))
     objects.push({center:[x,y,z],normal:[Math.sin(yaw),0,Math.cos(yaw)],parts:[],sign:()=>{
-      [...text].forEach((ch,i)=>glyph(ch,[x,y+height*(.5-(i+.5)/text.length),z],width*.83,color));
+      [...text].forEach((ch,i)=>{const t=(i+.5)/text.length-.5;glyph(ch,horizontal?[x+width*t*Math.cos(yaw),y,z-width*t*Math.sin(yaw)]:[x,y-height*t,z],(horizontal?height:width)*.83,color);});
     }});
   if(data.building.some(b=>b[4]===standId)){
     const {point:[x,y,z],text,width,color}=stadiumSign;

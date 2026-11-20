@@ -28,6 +28,16 @@ export const fieldViews=[
   {id:'dorm17',place:'dorm17',title:'17 号研究生宿舍 · 路口',caption:'从看曾宪梓楼的位置转向西南。17 号在道路右侧，左侧是相邻宿舍；继续向右转就能正看 17 号楼端墙。',camera:[-358.2,419.9,195.8,-1.08],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011311010335G',12725279.79,4114698.82,195.8,-1.08)},
   {id:'dorm17-end',place:'dorm17',title:'17 号研究生宿舍 · 白色端墙',caption:'同一机位再向右看，近处这栋是学十七公寓。白墙上只有几列开口，可以分清阳台栏杆和普通窗。',camera:[-358.2,419.9,254,8],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011311010335G',12725279.79,4114698.82,254,8)},
   {id:'clinic',place:'clinic',title:'河大校医院 · 西侧入口',caption:'蓝玻璃上是竖排的“河南大学医院”。门前有折面玻璃雨棚、细柱和宽台阶；上方的玻璃走廊连接两翼。',camera:[-469.3,600.5,105.35,2.55],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011307235135G',12725144.68,4114478.87,105.35,2.55)},
+  {id:'jiaoyuan-door',place:'jiaoyuan',title:'教苑餐厅 · 西侧转角入口',caption:'从小广场看过去，橙红色窗下墙沿楼角折过去，蓝牌和门却只在朝西的短墙上。2014 年的蓝牌写着“河南大学民族餐厅”。',camera:[-283.5,444.9,69,9],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011312000705G',12725370.81,4114669.20,69,9)},
+  {id:'jiaoyuan-side',place:'jiaoyuan',title:'教苑餐厅 · 南侧窗墙',caption:'绕到南侧近看，底层大窗前是金属竖栅，下面保留橙色墙板。这里没有西门的蓝牌或入口。',camera:[-239.4,455.0,5,7],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011314525685G',12725424.55,4114657.30,5,7)},
+  {id:'beiyuan-court',place:'beiyuan',title:'北苑餐厅 · 中州路前场',caption:'沿铺地的灰色条带望向浅色餐厅，中段是带细柱的门廊和两层高窗，右侧改成了间隔较大的方窗。',camera:[306,-396.1,40,7],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011207290685G',12726087.78,4115693.87,40,7)},
+  {id:'beiyuan-stair',place:'beiyuan',title:'北苑餐厅 · 西侧外梯',caption:'沿中州路再往西北看，常青树后可辨认独立的室外楼梯，向左上方的侧翼平台抬升。两端的屋顶比中段高。',camera:[294.8,-406.8,59,13],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011207330615G',12726074.12,4115706.7,59,13)},
+  {id:'education-west',place:'education',title:'田家炳教育书院 · 西院连廊',caption:'白色墙块下面是敞口；旁边两层有栏杆的连廊越过院子。可以走到红砖塔旁，从廊下望向另一面。',camera:[211.2,-302.7,100,11],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011219135535G',12725972.51,4115579.83,100,11)},
+  {id:'education-clock',place:'education',title:'田家炳教育书院 · 仰看钟塔',caption:'往后站、抬头看：塔的窄面是深色玻璃，红砖宽面在上部托着一圈单独的刻度和指针。',camera:[197.2,-298.5,92,32],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011219090605G',12725955.44,4115574.5,92,32)},
+  {id:'education-east',place:'education',title:'田家炳教育书院 · 东院回望',caption:'从中州路往西看，能同时看到两翼、灰白墙块上的两道窄窗，以及连廊顶板中央让天光落下的开口。',camera:[317.4,-290.7,270,8],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011207030625G',12726101.93,4115566.26,270,8)},
+  {id:'geography-south',place:'geography',title:'地理楼 · 南侧林带',caption:'行道树后是成对开窗的红砖长墙。左端能看到弧形玻璃和伸出墙面的白色平台，近处有一排低篱。',camera:[-81.5,363.7,15,10],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011235495215G',12725616.93,4114769.49,15,10)},
+  {id:'geography-curve',place:'geography',title:'地理楼 · 西南弧窗',caption:'沿南侧道路往西几步再抬头，楼角连续的玻璃和一层层白色挑台从红砖墙前凸出来。',camera:[-100,363.2,21,9],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011235540925G',12725594.31,4114769.86,21,9)},
+  {id:'geography-north',place:'geography',title:'地理楼 · 北侧砖窗',caption:'从北边小路近看，每一组窗之间留着红砖墙，短短的浅色横条和竖条相互断开，底部换成了灰色墙裙。',camera:[-68.4,299.8,175,12],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011302135825G',12725632.79,4114847.04,175,12)},
   {id:'autumn-bank',place:'autumn',title:'访秋湖 · 北侧路缘',caption:'实景从路上朝湖看：近处是树列与低篱，远处树丛遮住水面。',camera:[63,23,154,1],source:'百度街景',url:baidu('01027700001404011243330335G',12725792.37,4115183.62,154,1)},
   {id:'jiuzhang',place:'lake',title:'九章路 · 粹庭湖桥',caption:'从桥边向东北看，浅灰色镂空石栏和间隔的方柱勾出桥面边缘。',camera:[113.6,-229.4,38,0],source:'百度街景',url:baidu('01027700001404011226315395G',12725853.26,4115490.24,38,0)},
   {id:'west-gate',place:'west',title:'西大门 · 校名墙',caption:'面向校园中轴。金明西门是低矮的校名石墙，两侧留出通道。',camera:[-485,-76,90,0],source:'校方照片',url:uni}
@@ -39,7 +49,11 @@ export const walks=[
   ['文甫路',['cs-south','cs-entry','wenfu-hall','software-entry','software-south','software-return']],
   ['物理实验楼',['physics-entry','physics-court','physics-cone','physics-north']],
   ['广场两面',['library-rear','teaching-front']],
-  ['原地转身',['zeng','dorm17','dorm17-end']]
+  ['原地转身',['zeng','dorm17','dorm17-end']],
+  ['教苑餐厅',['jiaoyuan-door','jiaoyuan-side']],
+  ['北苑餐厅',['beiyuan-court','beiyuan-stair']],
+  ['书院两面',['education-west','education-clock','education-east']],
+  ['地理楼',['geography-south','geography-curve','geography-north']]
 ].map(([label,ids])=>({label,stops:ids.map(id=>fieldViews.find(v=>v.id===id))}));
 
 export function mountFieldViews(dialog,visit){

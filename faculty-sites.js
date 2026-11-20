@@ -1,18 +1,12 @@
-import {surfaceBuilder,clip,panel,panelWindow} from './survey-mesh.js';
+import {orientedFrame as frame,clip,panel,panelWindow} from './survey-mesh.js';
+import {courtColors,courtModels,courtSigns,courtGround,courtHeights,courtEdge} from './college-courts.js';
 
 // Ground coordinates follow the footprint data. In each survey frame u runs
 // horizontally to the viewer's right, and positive v points out of the facade.
-function frame(x,z,nx,nz){
-  const mag=Math.hypot(nx,nz);nx/=mag;nz/=mag;
-  const vector=([u,y,v])=>[nz*u+nx*v,y,-nx*u+nz*v];
-  const at=p=>{const [a,y,b]=vector(p);return [a+x,y,b+z];};
-  const local=([a,b])=>[(a-x)*nz-(b-z)*nx,(a-x)*nx+(b-z)*nz];
-  const world=([u,v])=>[x+nz*u+nx*v,z-nx*u+nz*v];
-  return {...surfaceBuilder(at,vector),at,local,world,nx,nz};
-}
 export const pharmacyId='716761664',civilId='712688937',zengId='712688948',dormId='712688830',clinicId='716822582';
 const wings=['712688938','712688939'],nextDorm='712735067';
 export const facultyColors={
+  ...courtColors,
   [pharmacyId]:['#d9d3bb','#b8b6a7'],[civilId]:['#ac6955','#b6ada0'],
   [wings[0]]:['#a05f50','#a99d92'],[wings[1]]:['#a2604d','#a99d92'],
   [zengId]:['#e0dfd2','#c8c7b9'],[dormId]:['#e1dfd3','#c3c2b4'],[nextDorm]:['#dcdcd3','#bfbfb3'],
@@ -21,6 +15,7 @@ export const facultyColors={
 const pharmacy=()=>frame(-178.2,-494.2,0,1),civil=()=>frame(-138.7,280.6,.982,.189);
 const zeng=()=>frame(-361.3,344.6,-.591,.807),clinic=()=>frame(-459.18,604,-1,0);
 export const siteLettering=[
+  ...courtSigns,
   {id:pharmacyId,text:'药学院',point:pharmacy().at([11.9,10.1,.22]),yaw:0,width:1.42,height:6.7,color:'#b18c44'},
   {id:clinicId,text:'河南大学医院',point:clinic().at([-8.8,10.8,1.68]),yaw:-Math.PI/2,width:1.04,height:8.5,color:'#b53231'}
 ];
@@ -54,6 +49,7 @@ function edgeFrame(e){
   return frame(e.ax+e.tx*e.length/2,e.az+e.tz*e.length/2,e.nx,e.nz);
 }
 export function facultyEdge(id,e){
+  if(courtColors[id])return courtEdge(id,e);
   if(id===pharmacyId)return e.nz>.98&&e.length>90;
   if(id===zengId)return e.nx*(-.591)+e.nz*.807>.94;
   if(id===clinicId)return e.nx<-.98&&e.length>20;
@@ -239,9 +235,9 @@ function clinicFront(){
 }
 
 export function facultyModels(data){
-  const all=[];
+  const all=courtModels(data);
   for(const [p,h,,,id] of data.building){
-    if(!facultyColors[id])continue;
+    if(!facultyColors[id]||courtColors[id])continue;
     if(id===pharmacyId)all.push(...pharmacyFront());
     else if(id===civilId)all.push(...civilCourt());
     else if(id===zengId)all.push(...zengFront());
@@ -272,6 +268,7 @@ export function* facultySolids(record){
   if(id===zengId)for(const u of zColumns)yield add(rect(u-.30,u+.30,-.42,.27),.44,4.31,true);
 }
 export function facultyGround(data,{surfaces,forecourts,shrubs},tree){
+  courtGround(data,{surfaces,forecourts,shrubs},tree);
   const has=id=>data.building.some(r=>r[4]===id);
   const court=(d,p,h,c)=>{const q=p.map(d.world);surfaces.push([q,h,c]);forecourts.push(q);};
   if(has(pharmacyId)){
@@ -316,7 +313,7 @@ export function facultyGround(data,{surfaces,forecourts,shrubs},tree){
 // Sample the same steps the visitor sees, without testing every campus feature
 // on every walking frame. The dimensions below match their drawn treads.
 export function facultyHeights(data){
-  const ids=new Set(data.building.map(r=>r[4])),c=civil(),h=clinic(),p=pharmacy();
+  const ids=new Set(data.building.map(r=>r[4])),c=civil(),h=clinic(),p=pharmacy(),courts=courtHeights(ids);
   return (x,z)=>{
     if(ids.has(civilId)&&x>-152&&x<-125&&z>268&&z<293){
       const [u,v]=c.local([x,z]);
@@ -330,6 +327,6 @@ export function facultyHeights(data){
       const [u,v]=p.local([x,z]);
       for(let i=2;i>=0;i--)if(u>=18.2+i*.12&&u<=30.2-i*.12&&v>=.4&&v<=2.65-i*.55)return 1.01+i*.15;
     }
-    return null;
+    return courts(x,z);
   };
 }

@@ -36,6 +36,24 @@ export const frame=({x,z,out})=>{
 };
 export const patch=(f,l,r,n,s)=>[[l,n],[r,n],[r,s],[l,s]].map(([u,v])=>[f.x+f.out*v,f.z-f.out*u]);
 
+// u runs right across a facade, v points out towards the camera.
+export function orientedFrame(x,z,nx,nz){
+  const mag=Math.hypot(nx,nz);nx/=mag;nz/=mag;
+  const vector=([u,y,v])=>[nz*u+nx*v,y,-nx*u+nz*v];
+  const at=p=>{const [a,y,b]=vector(p);return [a+x,y,b+z];};
+  const local=([a,b])=>[(a-x)*nz-(b-z)*nx,(a-x)*nx+(b-z)*nz];
+  const world=([u,v])=>[x+nz*u+nx*v,z-nx*u+nz*v];
+  return {...surfaceBuilder(at,vector),at,local,world,nx,nz};
+}
+export function streetEdges(ring){
+  const area=ring.slice(1).reduce((s,b,i)=>s+ring[i][0]*b[1]-b[0]*ring[i][1],0);
+  return ring.slice(1).flatMap((b,i)=>{
+    const [x,z]=ring[i],len=Math.hypot(b[0]-x,b[1]-z);if(len<.01)return [];
+    const nx=(b[1]-z)*Math.sign(area)/len,nz=(x-b[0])*Math.sign(area)/len;
+    return [{d:orientedFrame((x+b[0])/2,(z+b[1])/2,nx,nz),len}];
+  });
+}
+
 export function clip(p,axis,q,less){
   if(!p.length)return [];
   const out=[],sign=less?1:-1;let a=p.at(-1);

@@ -3,12 +3,22 @@
     "WebGL model starts",
     "All generated geometry is finite",
     "All three tree forms populate the model",
-    "All nineteen campus places load",
+    "All twenty-three campus places load",
     "Model error panel is hidden",
     "Shared street link opens on Boxiang Road in walking mode",
     "Search finds the college and its neighboring report hall",
-    "Twenty-seven viewpoints link to twenty-four distinct panoramas and the official gate photo",
+    "Thirty-seven viewpoints link to thirty-four distinct panoramas and the official gate photo",
     "Wenfu walk keeps geographic order, stops at each end and reverses",
+    "Walking viewpoint education-clock",
+    "Walking viewpoint education-west",
+    "Walking viewpoint education-east",
+    "Walking viewpoint jiaoyuan-door",
+    "Walking viewpoint jiaoyuan-side",
+    "Walking viewpoint beiyuan-court",
+    "Walking viewpoint beiyuan-stair",
+    "Walking viewpoint geography-south",
+    "Walking viewpoint geography-curve",
+    "Walking viewpoint geography-north",
     "Walking viewpoint pharmacy",
     "Walking viewpoint civil",
     "Walking viewpoint zeng",
@@ -55,24 +65,25 @@
     "Mobile physics route reaches the cone in Canvas mode",
     "The two faces of the square keep their own original reference",
     "Turning at the dorm crossroads keeps its panorama and changes the bearing",
+    "Mobile Canvas crosses to the opposite side of the education court",
     "No uncaught browser exceptions"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 2191394,
+    "vertices": 2305587,
     "invalid": 0,
-    "trees": 974,
+    "trees": 982,
     "treeForms": {
-      "shade": 517,
-      "vase": 350,
+      "shade": 512,
+      "vase": 363,
       "spire": 107
     },
     "buildings": {
       "buildings": 113,
-      "windows": 13815,
-      "entrances": 96,
-      "rooftopUnits": 118,
-      "triangles": 430412
+      "windows": 13282,
+      "entrances": 91,
+      "rooftopUnits": 105,
+      "triangles": 427138
     },
     "landscape": {
       "courts": 95,
@@ -85,7 +96,7 @@
       "tracks": 2
     },
     "drawCalls": 38,
-    "triangles": 1340378
+    "triangles": 1393538
   },
   "failures": []
 }
