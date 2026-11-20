@@ -40,6 +40,7 @@
         <button type="button" id="north" class="icon-button north-control" title="朝向正北" aria-label="朝向正北"><span data-icon="north"></span><small>N</small></button>
         <div class="control-pair"><button type="button" id="zoom-in" class="icon-button" title="放大" aria-label="放大" data-icon="plus"></button><button type="button" id="zoom-out" class="icon-button" title="缩小" aria-label="缩小" data-icon="minus"></button></div>
         <button type="button" id="home" class="icon-button" title="回到校园全景" aria-label="回到校园全景" data-icon="target"></button>
+        <button type="button" id="field-views" class="icon-button" title="实景取景点" aria-label="实景取景点" data-icon="camera"></button>
         <button type="button" id="fullscreen" class="icon-button" title="全屏" aria-label="切换全屏" data-icon="expand"></button>
       </div>
       <article id="detail" class="detail-card" aria-live="polite" hidden></article>
@@ -61,6 +62,11 @@
     <p>本模型沿用提供的校园轮廓和建筑估算高度。窗框、屋顶、入口及景观设施采用程序化示意细节，用于浏览校园空间，不代表建筑现状的测绘结果。</p>
     <p>卫星影像来自 Esri World Imagery，需要网络连接。影像未加载的区域使用随站点提供的校园平面示意图，仍可查找地点。</p>
     <div class="source-links"><a href="https://jjc.henu.edu.cn/info/1004/1002.htm" target="_blank" rel="noopener">校方图书馆介绍 ↗</a><a href="https://zbcg.henu.edu.cn/xwtz/5707.chtml" target="_blank" rel="noopener">校方照片来源 ↗</a></div>
+  </dialog>
+  <dialog id="field-dialog" aria-labelledby="field-title">
+    <div class="dialog-top"><h2 id="field-title">实景取景点</h2><button type="button" data-close class="icon-button" aria-label="关闭取景点" data-icon="close"></button></div>
+    <p class="field-intro">选位置看模型，或打开原始实拍对照。街景呈现的是拍摄时的校园。</p>
+    <div class="field-list"></div>
   </dialog>
   <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">
     <div class="dialog-top"><h2 id="photo-title">校园实拍</h2><button type="button" id="close-photos" class="icon-button" aria-label="关闭照片" data-icon="close"></button></div>

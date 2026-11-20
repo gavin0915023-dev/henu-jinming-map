@@ -48,6 +48,159 @@ class FacadeBatch {
   }
 }
 
+// Documented external faces of footprint 712688906. On the south front u runs
+// west from the report-hall end; on the oblique north-west face it runs north-east.
+// The 2014 imagery supports the different facade zones; sizes/counts are estimates.
+export const computingSignColumns=[['计算机与',160,36],['信息工程学院',61,100]];
+export function computingFace(e) {
+  return e.nz>.98 && e.length>45?'south':
+    e.nx<-.5 && e.nz<-.6 && e.length>70?'northwest':
+    e.nx>.99 && e.ax>0 && e.length>8?'east':null;
+}
+export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,recessedOpening,stats}) {
+  const angle=-Math.atan2(e.tz,e.tx);
+  const cream='#e2dccc', ashlar='#d6d0bd', frame='#acaeaa', shade='#626d70', blue='#627884';
+  const rect=(batch,a,b,lo,hi,offset,color)=>wall(batch,e,(a+b)/2,(lo+hi)/2,b-a,hi-lo,offset,color);
+  function solid(a,b,lo,hi,depth,front,color){
+    const u=(a+b)/2, offset=front-depth/2;
+    box(e.ax+e.tx*u+e.nx*offset,(lo+hi)/2,e.az+e.tz*u+e.nz*offset,b-a,hi-lo,depth,color,angle);
+  }
+  const south=face==='south',levels=south?4:5;
+  const lower=south?height/3:height/6,fh=(height-lower)/levels;
+  if(face==='east'){
+    // The southeast view shows the entrance glass and railings turning the
+    // corner; toward the back of the short wall the stone face is unpierced.
+    const split=e.length*.42;
+    rect(masonry,0,split,.1,height,.025,cream);
+    rect(glass,split,e.length-.5,.45,height-.2,.055,'#5b6c72');
+    for(let j=0;j<=5;j++){
+      const u=split+(e.length-split-.45)*j/5;
+      rect(masonry,u-.035,u+.035,.45,height-.2,.11,frame);
+    }
+    const base=height/3,step=(height-base)/4;
+    rect(masonry,split,e.length-.5,3.45,3.6,.16,frame);
+    for(let f=0;f<4;f++){
+      const y=base+f*step;
+      ledge(e,y+.08,.92,.26,cream,split,e.length);
+      rect(masonry,split,e.length,y+1.05,y+1.12,.78,'#8f9898');
+      for(let j=1;j<18;j++){
+        const u=split+(e.length-split)*j/18;
+        rect(masonry,u-.022,u+.022,y+.07,y+1.08,.77,'#9ba4a3');
+      }
+    }
+    solid(e.length-.5,e.length,.16,height,.87,.89,cream);
+    ledge(e,height+.11,.98,.22,cream);
+    stats.windows+=5;
+    return;
+  }
+  const bays=south?8:12,start=south?17.1:12.7,end=e.length-.45,pitch=(end-start)/bays;
+  rect(masonry,start,end,.12,lower,.008,ashlar);
+  rect(masonry,start,end,.12,.77,.012,'#b5ac95');
+  // The south ground and first floor share projecting piers; the north-west
+  // wing has just one solid base storey before the screened window bands.
+  for(let k=0;k<=bays;k++){
+    const u=start+k*pitch;
+    if(south)solid(u-.18,u+.18,.14,lower+.06,.86,.89,cream);
+    if(k===bays)break;
+    const punchedFloors=south?2:1;
+    for(let f=0;f<punchedFloors;f++){
+      const y=(f+.57)*lower/punchedFloors;
+      if(south){
+        recessedOpening(e,u+pitch*.48,y,pitch*.44,1.87,ashlar,'#837f74','#59676a');
+        stats.windows++;
+      }
+      recessedOpening(e,u+pitch*.84,y,.47,1.87,ashlar,'#837f74','#667475');
+      stats.windows++;
+    }
+  }
+  ledge(e,lower+.09,1.02,.34,cream,start,end);
+  for(let f=0;f<levels;f++){
+    const y=lower+f*fh;
+    for(let k=0;k<bays;k++){
+      const a=start+k*pitch,b=a+pitch;
+      // Glazing and pierced screens share the pale concrete bay frame. The
+      // small unscreened recess and occasional condenser break up the grille.
+      rect(glass,a+.13,b-.13,y+1.03,y+fh-.19,.42,blue);
+      for(let j=1;j<4;j++){
+        const u=a+pitch*j/4;
+        rect(masonry,u-.032,u+.032,y+1.03,y+fh-.19,.47,frame);
+      }
+      rect(masonry,a+.12,b-.12,y+.12,y+1.02,.41,shade);
+      const cutRight=(k+f)%3!==0;
+      const left=a+(cutRight?.17:1.12),right=b-(cutRight?1.12:.17);
+      rect(masonry,left,right,y+.13,y+.22,.62,cream);
+      rect(masonry,left,right,y+.85,y+.97,.62,cream);
+      for(let j=0;j<=12;j++){
+        const u=left+(right-left)*j/12;
+        rect(masonry,u-.039,u+.039,y+.21,y+.88,.63,'#c8c9c0');
+      }
+      if((k+2*f)%4===1){
+        const u=cutRight?b-.64:a+.64;
+        solid(u-.32,u+.32,y+.16,y+.67,.15,.64,'#bac0b7');
+        rect(masonry,u-.19,u+.19,y+.23,y+.56,.66,'#888e8a');
+      }
+      stats.windows++;
+    }
+    ledge(e,y+1.05,.74,.12,cream,start,end);
+    ledge(e,y+fh,.89,.20,cream,start,end);
+  }
+  for(let k=0;k<=bays;k++){
+    const u=start+k*pitch;
+    solid(u-.105,u+.105,lower,height,.42,.90,cream);
+  }
+  if(!south){
+    // The southwest end of the Xueyin Road frontage is visibly plain stone
+    // with short, low horizontal windows. No entrance is visible on this side.
+    rect(masonry,.02,start,.1,height,.024,'#dbd9d0');
+    for(let f=1;f<6;f++){
+      const y=(f+.51)*height/6;
+      for(const [a,b] of [[2.9,6.4],[7.2,10.8]]){
+        rect(glass,a,b,y-.37,y+.37,.052,'#5b7077');
+        rect(masonry,(a+b)/2-.04,(a+b)/2+.04,y-.37,y+.37,.09,frame);
+        stats.windows++;
+      }
+    }
+    ledge(e,height+.11,.98,.22,cream);
+    return;
+  }
+  // Entrance at the east of this south face. The glass stays behind the two
+  // piers and upper storeys; there is no second generic porch or centre door.
+  const da=1.1, db=12.7;
+  solid(.03,da,.12,lower+.12,.93,.95,cream);
+  solid(db,start,.12,lower+.12,.93,.95,ashlar);
+  rect(glass,da,db,1.25,lower-.18,.14,'#43545a');
+  for(let i=0;i<=8;i++){
+    const u=da+(db-da)*i/8;
+    rect(masonry,u-.047,u+.047,1.24,lower-.18,.22,frame);
+  }
+  rect(masonry,da,db,3.53,3.69,.27,frame);
+  rect(masonry,da,db,2.61,2.68,.25,'#879390');
+  for(let i=0;i<4;i++)solid(da-.05,db+.05,.68,.81+i*.15,2.65-i*.49,2.65-i*.49,'#b9b5a9');
+  ledge(e,lower+.16,.98,.43,cream,.03,start);
+  // Only the central part is stone (the vertical name is fitted separately).
+  // The east return has open balcony fronts and slender railings instead.
+  const stoneA=6.40,stoneB=13.25;
+  solid(stoneA,stoneB,lower+.08,height,.8,.86,'#e3dfd2');
+  for(let f=0;f<4;f++){
+    const y=lower+f*fh;
+    rect(glass,.58,stoneA,y+.18,y+fh-.27,.06,'#52646b');
+    rect(glass,stoneB,start,y+.30,y+fh-.24,.075,'#73848a');
+    solid(.03,.56,y,y+fh,.84,.88,cream);
+    solid(stoneB+.14,stoneB+.43,y,y+fh,.56,.61,cream);
+    ledge(e,y+fh,.96,.26,cream,.04,stoneA);
+    ledge(e,y+fh,.78,.32,cream,stoneB,start);
+    for(const railY of [y+.36,y+1.11])
+      rect(masonry,.55,stoneA,railY-.025,railY+.025,.79,'#8f9898');
+    for(let j=0;j<=18;j++){
+      const u=.59+(stoneA-.62)*j/18;
+      rect(masonry,u-.023,u+.023,y+.32,y+1.11,.78,'#9ba4a3');
+    }
+    stats.windows+=2;
+  }
+  ledge(e,height+.11,.98,.22,cream);
+  stats.entrances++;
+}
+
 export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   const group = new T.Group();
   group.name = 'campus-architectural-details';
@@ -164,12 +317,20 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     }
 
     for (const edge of edges) {
+      const face=computerCollege?computingFace(edge):null;
+      // A shared wall against the lower report hall still has an exposed roof
+      // edge, but cannot carry ordinary windows at the join.
+      const sharedWall=computerCollege && [.1,.5,.9].every(t=>otherBuildingAt(
+        edge.ax+edge.tx*edge.length*t+edge.nx*.2,edge.az+edge.tz*edge.length*t+edge.nz*.2,ring));
       // The existing photo-derived west library facade remains unobscured.
       const preserveFacade = isLibrary && edge.nx < -.55;
-      if (!preserveFacade) {
-        wall(masonry, edge, edge.length / 2, .72, edge.length, 1.28, .025, shadow);
+      if (!preserveFacade && !face) {
+        if(!sharedWall)wall(masonry, edge, edge.length / 2, .72, edge.length, 1.28, .025, shadow);
         ledge(edge, height + .11, .24, .3, trim);
-        for (let floor = 1; floor < floors; floor++) ledge(edge, .08 + floor * floorHeight, .19, .15, trim);
+        for (let floor = 1; floor < floors && !sharedWall; floor++) {
+          const y=.08+floor*floorHeight;
+          ledge(edge,y,.19,.15,trim);
+        }
       }
       // Roof curbs follow every bend instead of filling concave footprints.
       if (edge.length > .4) {
@@ -178,7 +339,11 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
         curb.translate(edge.ax + edge.tx * edge.length / 2 - edge.nx * .15, height + .34, edge.az + edge.tz * edge.length / 2 - edge.nz * .15);
         fittings.add(curb, trim);
       }
-      if (preserveFacade || edge.length < 3.3) continue;
+      if(face){
+        computingElevation(edge,height,face,{masonry,glass,wall,ledge,box,recessedOpening,stats});
+        continue;
+      }
+      if (preserveFacade || sharedWall || edge.length < 3.3) continue;
       // Conservative spacing until each building has a surveyed elevation.
       // Short return walls should not look like continuous curtain walls.
       const endWall = type === 'school' && edge.length < 14;
@@ -200,41 +365,32 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
       }
     }
 
-    let entrance = null, entranceScore = Infinity;
-    for (const edge of edges) {
-      if (edge.length < 8 || isLibrary && edge.nx > -.8) continue;
-      const x = edge.ax + edge.tx * edge.length / 2, z = edge.az + edge.tz * edge.length / 2;
-      if (otherBuildingAt(x + edge.nx * 2, z + edge.nz * 2, ring)) continue;
-      const score = isLibrary ? Math.abs(z + 73) - edge.length * .1 : Math.min(...roadSegments.map(([a, b]) => distanceToSegment(x, z, a, b))) - Math.min(edge.length, 40) * .05;
-      if (score < entranceScore) { entrance = edge; entranceScore = score; }
+    // Never superimpose a road-selected porch on either bespoke entrance.
+    let entrance=null,entranceScore=Infinity;
+    if(!isLibrary && !computerCollege && height>7)for(const edge of edges){
+      if(edge.length<8)continue;
+      const x=edge.ax+edge.tx*edge.length/2,z=edge.az+edge.tz*edge.length/2;
+      if(otherBuildingAt(x+edge.nx*2,z+edge.nz*2,ring))continue;
+      const score=Math.min(...roadSegments.map(([a,b])=>distanceToSegment(x,z,a,b)))-Math.min(edge.length,40)*.05;
+      if(score<entranceScore){entrance=edge;entranceScore=score;}
     }
-    // The library already has a reference-informed curved canopy and stair in
-    // facade.js; a second generic canopy intersected those existing elements.
-    if (entrance && height > 7 && !isLibrary) {
+    if (entrance) {
       const e = entrance, angle = -Math.atan2(e.tz, e.tx);
       const x = e.ax + e.tx * e.length / 2, z = e.az + e.tz * e.length / 2;
-      const width = isLibrary ? 13.8 : computerCollege ? Math.min(10.8,e.length*.6) : Math.min(5.4, e.length * .48);
-      const doorWidth = isLibrary ? 7.4 : Math.min(3.2, width - .6);
+      const width = Math.min(5.4,e.length*.48);
+      const doorWidth = Math.min(3.2, width - .6);
       recessedOpening(e, e.length / 2, 1.55, doorWidth, 2.7, '#c2c4b6', '#757c72', '#40575d', true);
       for (const side of [-1, 1]) {
         box(x + e.tx * side * .22 + e.nx * .13, 1.5, z + e.tz * side * .22 + e.nz * .13, .035, .42, .08, '#b4beba', angle);
       }
-      if(computerCollege){
-        // Photo reference: a tall pale entrance frame surrounding dark glazing.
-        // Entrance location still follows the road-facing footprint heuristic.
-        const portalHeight=Math.min(8.5,height*.45);
-        wall(glass,e,e.length/2,portalHeight/2+.3,width-1.1,portalHeight,.018,'#52666b');
-        for(const side of [-1,1])box(x+e.tx*side*(width/2-.25)+e.nx*.22,portalHeight/2+.3,z+e.tz*side*(width/2-.25)+e.nz*.22,.5,portalHeight,.5,'#dadbd0',angle);
-        box(x+e.nx*.22,portalHeight+.3,z+e.nz*.22,width,.55,.5,'#dadbd0',angle);
-      }
-      const depth = isLibrary ? 6.5 : 2.1, canopyY = isLibrary ? 4.45 : 3.5;
+      const depth = 2.1, canopyY = 3.5;
       box(x + e.nx * depth / 2, canopyY, z + e.nz * depth / 2, width, .22, depth, [shadow, trim], angle);
       for (const side of [-1, 1]) {
         const offset = width / 2 - .42;
-        box(x + e.nx * (depth - .4) + e.tx * offset * side, canopyY / 2, z + e.nz * (depth - .4) + e.tz * offset * side, isLibrary ? .5 : .16, canopyY - .12, isLibrary ? .5 : .16, trim, angle);
+        box(x + e.nx * (depth - .4) + e.tx * offset * side, canopyY / 2, z + e.nz * (depth - .4) + e.tz * offset * side, .16, canopyY - .12, .16, trim, angle);
       }
       for (let step = 0; step < 3; step++) {
-        const stepDepth = (isLibrary ? 3.3 : 1.55) - step * (isLibrary ? .65 : .3);
+        const stepDepth = 1.55 - step * .3;
         const stepHeight = .16 + step * .15;
         box(x + e.nx * stepDepth / 2, .4 + stepHeight / 2, z + e.nz * stepDepth / 2, width + .6, stepHeight, stepDepth, [shadow, trim], angle);
       }

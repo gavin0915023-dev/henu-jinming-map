@@ -275,7 +275,49 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     box(light, x - nx * 1.05, 5.39, z - nz * 1.05, .68, .04, .28, angle, '#f0dcad');
     stats.lamps++;
   }
-  for (const [p, width, , kind, bridge] of data.road) {
+  // The photo from the west bank of the Jiuzhang Road crossing shows stone
+  // panels pierced near their tops, with square piers instead of pipe rails.
+  function stoneParapet(a,b) {
+    const dx=b[0]-a[0], dz=b[1]-a[1], len=Math.hypot(dx,dz);
+    const tx=dx/len,tz=dz/len,angle=-Math.atan2(dz,dx);
+    const bays=Math.max(1,Math.round(len/1.9)), step=len/bays, deck=1.03;
+    const stone='#bbbbb2',cap='#cfcdc1';
+    beam(details,a,b,deck+.10,.29,.20,'#a9a89d');
+    for(let i=0;i<bays;i++){
+      const s=new T.Shape(),lo=.11,hi=step-.11;
+      s.moveTo(lo,.15);s.lineTo(hi,.15);s.lineTo(hi,.80);s.lineTo(lo,.80);s.closePath();
+      for(const f of [.29,.71]){
+        const x=lo+(hi-lo)*f,r=(hi-lo)*.135,h=new T.Path();
+        h.moveTo(x-r,.51);h.lineTo(x-r,.56);
+        h.quadraticCurveTo(x,.81,x+r,.56);h.lineTo(x+r,.51);h.closePath();s.holes.push(h);
+      }
+      const g=new T.ExtrudeGeometry(s,{depth:.18,bevelEnabled:false,curveSegments:4});
+      g.translate(0,0,-.09);g.rotateY(angle);g.translate(a[0]+i*step*tx,deck,a[1]+i*step*tz);
+      details.add(g,stone);
+    }
+    beam(details,a,b,deck+.82,.22,.06,cap);
+    for(let i=0;i<=bays;i++){
+      const x=a[0]+tx*step*i,z=a[1]+tz*step*i;
+      box(details,x,deck+.52,z,.24,1.04,.28,angle,stone);
+      box(details,x,deck+1.045,z,.28,.085,.32,angle,cap);
+    }
+  }
+  for(const [from,to,z] of data.avenue?.curbs??[]){
+    beam(details,[from,z],[to,z],.78,.27,.18,'#c4c2aa');
+  }
+  // The survey has one line per direction here. The photo shows a paved
+  // bridge across their entire width, with parapets on the two OUTER sides.
+  const {spans,sides}=data.field?.bridge??{spans:[],sides:[]};
+  if(sides.length){
+    const [[a,b],[c,d]]=sides;
+    details.surface([a,b,d,c],1.055,'#aaa092');
+    for(const [s,t] of [[a,b],[c,d]]){
+      beam(details,s,t,.86,.32,.39,'#99978b');stoneParapet(s,t);
+    }
+    for(const [s,t] of [[a,c],[b,d]])beam(details,s,t,.84,.32,.34,'#a3a092');
+  }
+  for (const road of data.road) {
+    const [p,width,name,kind,bridge]=road,isAvenue=road===data.avenue?.road;
     const insideRoad = ['service', 'unclassified', 'pedestrian'].includes(kind);
     for (let j = 1; j < p.length; j++) {
       const a = p[j - 1], b = p[j], dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz);
@@ -283,17 +325,23 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
       const nx = -dz / length, nz = dx / length;
       const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
       if (insideRoad && !bridge && contains(...mid, data.boundary)) {
-        for (const side of [-1, 1]) {
+        if(!isAvenue)for (const side of [-1, 1]) {
           const offset = side * (width / 2 + .22);
-          beam(details, [a[0] + nx * offset, a[1] + nz * offset], [b[0] + nx * offset, b[1] + nz * offset], .80, .30, .18, '#c4c2aa');
+          const s=[a[0]+nx*offset,a[1]+nz*offset],t=[b[0]+nx*offset,b[1]+nz*offset];
+          const gap=name==='文甫路'&&data.field?.gateways.find(([lo,hi,z])=>Math.min(s[0],t[0])<lo&&Math.max(s[0],t[0])>hi&&Math.abs(s[1]-z)<.6&&Math.abs(t[1]-z)<.6);
+          if(gap){
+            const [lo,hi]=gap,at=x=>[x,s[1]+(t[1]-s[1])*(x-s[0])/(t[0]-s[0])],forward=s[0]<t[0];
+            beam(details,s,at(forward?lo:hi),.80,.30,.18,'#c4c2aa');beam(details,at(forward?hi:lo),t,.80,.30,.18,'#c4c2aa');
+          }else beam(details,s,t,.80,.30,.18,'#c4c2aa');
         }
         // Mark only wide campus carriageways; narrow service lanes stay unmarked.
-        if (width >= 7 && kind !== 'pedestrian') for (let s = 6; s < length - 6; s += 12) {
+        if (!isAvenue && width >= 7 && kind !== 'pedestrian') for (let s = 6; s < length - 6; s += 12) {
           details.ribbon([[a[0] + dx * s / length, a[1] + dz * s / length], [a[0] + dx * Math.min(s + 4, length) / length, a[1] + dz * Math.min(s + 4, length) / length]], .14, .82, '#d9d3aa');
         }
       }
       if (bridge && contains(...mid, data.boundary)) {
         stats.bridges++;
+        if(sides.length&&spans.includes(road))continue;
         for (const side of [-1, 1]) {
           const offset = side * (width / 2 - .12), aa = [a[0] + nx * offset, a[1] + nz * offset], bb = [b[0] + nx * offset, b[1] + nz * offset];
           for (const y of [1.58, 2.16]) beam(metal, aa, bb, y, .09, .09, '#b1b6a5');
@@ -320,6 +368,29 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     details.ribbon(closed(p), .65, .48, '#c6c7ad');
     stats.shores++;
     const ring = open(p), sign = signedArea(p) > 0 ? 1 : -1;
+    // Only these two contiguous bank segments can be identified in the
+    // north-east view from panorama 01027700001404011226315395G.
+    const first=ring.findIndex(([x,z])=>Math.hypot(x-112.2,z+254.1)<.25);
+    if(first>=0 && ring[first+2] && Math.hypot(ring[first+2][0]-129.3,ring[first+2][1]+238.3)<.25){
+      const arc=ring.slice(first,first+3);
+      const vertices=[];
+      const rows=arc.map(([x,z],i)=>{
+        const a=arc[Math.max(0,i-1)],b=arc[Math.min(2,i+1)];
+        const dx=b[0]-a[0],dz=b[1]-a[1],l=Math.hypot(dx,dz),nx=sign*dz/l,nz=-sign*dx/l;
+        const v=(offset,y)=>[x+nx*offset,y,z+nz*offset];
+        return [v(-.50,.396),v(.35,1.34),v(.62,1.34),v(2.34,.161)];
+      });
+      // Upper shoulder slopes back to the existing lawn; no floating wall.
+      for(let strip=0;strip<3;strip++){
+        vertices.length=0;
+        for(let i=0;i<2;i++){
+          const a=rows[i][strip],b=rows[i+1][strip],c=rows[i+1][strip+1],d=rows[i][strip+1];
+          vertices.push(...a,...b,...c,...a,...c,...d);
+        }
+        const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.computeVertexNormals();
+        details.add(g,['#bdae8e','#b4ad95','#6c8056'][strip]);
+      }
+    }
     for (let i = 0; i < ring.length; i++) {
       const a = ring[i], b = ring[(i + 1) % ring.length], dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz);
       if (length < .1) continue;

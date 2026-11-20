@@ -1,5 +1,8 @@
 import { Matrix4 } from 'three';
 import { libraryFacade } from './facade.js';
+import { computingFace, computingElevation, computingSignColumns } from './building-detail.js';
+import { westGatePlacement } from './west-gate.js';
+import { avenueHedgeRuns } from './avenue.js';
 
 const tint = (hex, factor) => {
   const n=parseInt(hex.slice(1),16);
@@ -15,7 +18,23 @@ const ribbon = (p,w,y) => p.slice(1).flatMap(([x,z],i)=>{
   return [[[a+dx,y,b+dz],[a-dx,y,b-dz],[x-dx,y,z-dz],[x+dx,y,z+dz]]];
 });
 
-export function softwareRenderer(data,palette,trees){
+// Keep the same observed bays and entrance when WebGL is unavailable. Only the
+// flat face of each element is painted; fine louvers are omitted at this level.
+function flatElevation(e,h,kind){
+  const parts=[],at=(u,y,o)=>[e.ax+e.tx*u+e.nx*o,y,e.az+e.tz*u+e.nz*o];
+  function wall(_,edge,u,y,w,h,o,color){
+    if(w<.11||h<.065)return;
+    parts.push([o,[at(u-w/2,y-h/2,o),at(u+w/2,y-h/2,o),at(u+w/2,y+h/2,o),at(u-w/2,y+h/2,o)],color]);
+  }
+  computingElevation(e,h,kind,{wall,stats:{windows:0,entrances:0},
+    box(x,y,z,w,h,d,color){wall(null,e,(x-e.ax)*e.tx+(z-e.az)*e.tz,y,w,h,(x-e.ax)*e.nx+(z-e.az)*e.nz+d/2,color);},
+    ledge(edge,y,d,h,color,a=0,b=e.length){wall(null,e,(a+b)/2,y-h/2,b-a,h,d,color);},
+    recessedOpening(edge,u,y,w,h,trim,shadow,color){wall(null,e,u,y,w,h,.10,color);}
+  });
+  return parts.sort((a,b)=>a[0]-b[0]);
+}
+
+export function softwareRenderer(data,palette,trees,inside){
   const canvas=document.createElement('canvas'), ctx=canvas.getContext('2d',{alpha:false});
   const matrix=new Matrix4();
   const floor=[], shadows=[], objects=[];
@@ -26,6 +45,7 @@ export function softwareRenderer(data,palette,trees){
   surface(data.boundary,.07,'#748861');
   for(const [p,kind] of data.green)surface(p,.14,kind==='farmland'?'#7c835f':'#667d56');
   for(const p of data.plaza)surface(p,.22,'#a7a590');
+  for(const [p,y,color] of data.field.surfaces)surface(p,y,color);
   for(const p of data.water){
     surface(p,.25,'#417879');
     line(p,1.2,.28,'#99ae95');
@@ -56,14 +76,55 @@ export function softwareRenderer(data,palette,trees){
     line([[cx-12,d],[cx-12,d-11],[cx+12,d-11],[cx+12,d]],.65,.37,'#c9d3ad');
   }
   const roadTypes=['trunk','primary','secondary','tertiary'];
-  for(const [p,w,,type,bridge] of data.road){
+  for(const road of data.road){
+    const [p,w,,type,bridge]=road;
     const major=roadTypes.includes(type), y=bridge?.8:.55;
     line(p,w+1.7,y,major?'#57645d':'#7a876f');
-    line(p,w,y+.03,major?'#9a9d8f':w>3?'#aaa995':'#a1a78b');
+    line(p,w,y+.03,road===data.avenue?.road?'#aaa092':major?'#9a9d8f':w>3?'#aaa995':'#a1a78b');
     if(major)line(p,.55,y+.05,'#c5c3ac');
   }
   line(data.boundary,1.4,.63,'#a7be82');
-  for(const [p,height,type,,,campus] of data.building){
+  const sides=data.field.bridge.sides;
+  if(sides.length){
+    const [[a,b],[c,d]]=sides;surface([a,b,d,c],1.055,'#b6afa4');
+    for(const [s,t] of sides){
+      const length=Math.hypot(t[0]-s[0],t[1]-s[1]),bays=Math.max(1,Math.round(length/1.9));
+      const v=(f,y)=>[s[0]+(t[0]-s[0])*f,y,s[1]+(t[1]-s[1])*f];
+      for(let i=0;i<bays;i++){
+        const lo=i/bays,hi=(i+1)/bays;
+        const slab=(a,b,y,h)=>[v(a,y),v(b,y),v(b,h),v(a,h)];
+        objects.push({center:v((lo+hi)/2,1.5),parts:[[slab(lo,hi,.65,1.12),'#969687'],[slab(lo,hi,1.12,1.53),'#bebcb2'],
+          [slab(lo,hi,1.74,1.88),'#c9c7bb'],[slab(lo,lo+.11/length,1.1,2.06),'#c5c4b9'],[slab(hi-.11/length,hi,1.1,2.06),'#c5c4b9']]});
+      }
+    }
+  }
+  for(const [x,z,rx,h,rz,tone] of data.field.shrubs){
+    const ring=Array.from({length:9},(_,i)=>[x+rx*Math.cos(i*Math.PI/4),z+rz*Math.sin(i*Math.PI/4)]);
+    const rim=poly(ring,h*.48),parts=[];
+    for(let i=0;i<8;i++)parts.push([[rim[i],rim[i+1],[x,h,z]],tint('#657c4b',.90+tone*.16)],
+      [[rim[i],rim[i+1],[ring[i+1][0],.20,ring[i+1][1]],[ring[i][0],.20,ring[i][1]]],'#566b45']);
+    objects.push({center:[x,h*.48,z],parts});
+  }
+  for(const [a,b,z] of avenueHedgeRuns(data,inside)){
+    for(let x=a;x<b;x+=9){
+      const u=Math.min(x+9,b),top=poly([[x,z-.55],[u,z-.55],[u,z+.55],[x,z+.55]],1.07);
+      objects.push({center:[(x+u)/2,.64,z],parts:[[top,'#708654'],
+        [[top[0],top[1],[u,.26,z-.55],[x,.26,z-.55]],'#506c49'],
+        [[top[2],top[3],[x,.26,z+.55],[u,.26,z+.55]],'#56754d']]});
+    }
+  }
+  const gate=westGatePlacement(data);
+  if(gate){
+    const [gx,gz,angle]=gate,co=Math.cos(angle),si=Math.sin(angle);
+    const at=(x,y,z)=>[gx+x*co-z*si,y,gz+x*si+z*co];
+    const part=(x,bottom,top,from,to)=>[at(x,bottom,from),at(x,bottom,to),at(x,top,to),at(x,top,from)];
+    objects.push({center:at(0,2,0),parts:[[part(.5,.74,3.64,-13.1,13.1),'#c2a583'],
+      [[at(.5,3.64,-13.1),at(.5,3.64,13.1),at(-.52,3.64,13.1),at(-.52,3.64,-13.1)],'#d8bf99'],
+      [part(-.52,.74,3.59,-13.1,13.1),'#ccb08a'],[part(-1.2,.55,1.03,-13,13),'#79644e']],
+      sign:()=>{if((cam.position.x-gx)*co+(cam.position.z-gz)*si<0)
+        [...'河南大学'].forEach((ch,i)=>glyph(ch,at(-.56,2.31,(i-1.5)*5.5),1.98));}});
+  }
+  for(const [p,height,type,,id,campus] of data.building){
     const [wall,roof]=campus?palette[type]:palette.context;
     const top=poly(p,height),base=poly(p,.08), c=center(base);
     const faces=[];
@@ -75,7 +136,10 @@ export function softwareRenderer(data,palette,trees){
       const len=Math.hypot(...normal);
       if(len<.4)continue;
       const shade=.76+.23*(1+(-normal[0]-.6*normal[1])/len)/2;
-      faces.push({normal,points:[base[i-1],base[i],top[i],top[i-1]],color:tint(wall,shade),len});
+      const edge={ax:x,az:z,nx:normal[0]/len,nz:normal[1]/len,tx:(a-x)/len,tz:(b-z)/len,length:len};
+      const kind=id==='712688906'?computingFace(edge):null;
+      faces.push({normal,points:[base[i-1],base[i],top[i],top[i-1]],color:tint(wall,shade),len,
+        elevation:kind?flatElevation(edge,height,kind):null,sign:kind==='south'});
     }
     shadows.push([p.map(([x,z])=>[x+height*.31,.07,z+height*.24]),'#27372d4a']);
     objects.push({center:c,top,roof,faces,height,windows:campus&&height>11,library:type==='library'});
@@ -100,7 +164,7 @@ export function softwareRenderer(data,palette,trees){
   };
   for(const [x,z,h,form,roadside,variant,yaw,scaleX,scaleZ] of trees){
     const style=forms[form], i=Math.min(style.tones.length-1,Math.max(0,Math.floor(variant*style.tones.length)));
-    objects.push({center:[x,0,z],tree:{h,style,conifer:form==='spire',base:style.base+(roadside?.04:0),
+    objects.push({center:[x,0,z],tree:{h,style,roadside,conifer:form==='spire',base:style.base+(roadside?.04:0),
       colors:style.tones[i],mirror:Math.cos(yaw)>=0?1:-1,rx:scaleX,rz:scaleZ,cos:Math.cos(yaw),sin:Math.sin(yaw)}});
   }
 
@@ -151,6 +215,10 @@ export function softwareRenderer(data,palette,trees){
         ctx.moveTo(sx,sy+ry*.83);ctx.lineTo(sx+r*.36*t.mirror,sy+ry*.42);
       }
       ctx.stroke();
+      if(t.roadside){
+        const y=1.35,tip=(.5-(b+m[5]*y)/(2*(w+m[7]*y)))*height;
+        ctx.strokeStyle='#d6d8c8';ctx.beginPath();ctx.moveTo(sx,foot);ctx.lineTo(sx,tip);ctx.stroke();
+      }
     }
     ctx.save();ctx.translate(sx,sy);ctx.scale(t.mirror*r,ry);
     // Steep views see the footprint of even a pointed evergreen.
@@ -159,6 +227,14 @@ export function softwareRenderer(data,palette,trees){
     if(r>3.4){ctx.fillStyle=t.colors[1];ctx.fill(shape.light);}
     ctx.restore();
   }
+  function glyph(ch,world,size){
+    const [x,y,w]=point(world);if(w<.65)return;
+    const px=size*height*cam.projectionMatrix.elements[5]/(2*w);
+    if(px<3||px>height*2)return;
+    ctx.font='bold '+px+'px KaiTi,STKaiti,SimSun,serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    const sx=(.5+x/(2*w))*width,sy=(.5-y/(2*w))*height;
+    ctx.fillStyle='#785a32';ctx.fillText(ch,sx+.8,sy+.8);ctx.fillStyle='#d1ab56';ctx.fillText(ch,sx,sy);
+  }
   function building(obj,distance){
     for(const face of obj.faces){
       const [x,,z]=face.points[0], [nx,nz]=face.normal;
@@ -166,6 +242,14 @@ export function softwareRenderer(data,palette,trees){
       path(face.points,face.color,'#4d554e53');
       if(obj.library&&x===-176&&Math.abs(face.len-70)<1){
         for(const [points,color] of libraryFacade)path(points,color);
+        continue;
+      }
+      if(face.elevation){
+        if(distance<225){
+          for(const [,points,color] of face.elevation)path(points,color);
+          if(face.sign)for(const [word,x,top] of computingSignColumns)
+            [...word].forEach((ch,i)=>glyph(ch,[-8+(x/224-.5)*4.3,13.8+(.5-(top+i*72)/520)*11.5,-190.40],1.35));
+        }
         continue;
       }
       if(!obj.windows||distance>225||face.len<9)continue;
@@ -210,6 +294,7 @@ export function softwareRenderer(data,palette,trees){
       visible.sort((a,b)=>b[0]-a[0]);
       for(const [w,obj] of visible){
         if(obj.tree)tree(obj.center,obj.tree,w);
+        else if(obj.parts){for(const [points,color] of obj.parts)path(points,color);obj.sign?.();}
         else building(obj,w);
       }
     }

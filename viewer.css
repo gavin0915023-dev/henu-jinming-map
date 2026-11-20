@@ -15,6 +15,15 @@
 @media(max-width:600px){#imagery-status{top:60px}}
 
 .walk-touch-hint{display:none}
+#field-dialog{width:min(450px,calc(100vw - 28px));padding:22px;box-sizing:border-box}
+#field-dialog h2{margin:0}.field-intro{margin:9px 0 14px!important}
+.field-list{max-height:55dvh;overflow:auto;overscroll-behavior:contain}
+.field-list section{padding:13px 2px;border-top:1px solid #dce5dc}
+.field-list section[data-current] h3{color:#356647}
+.field-list h3{margin:0;font-size:15px}.field-list p{margin:6px 0 9px;line-height:1.5}
+.field-list button,.field-list a{font:inherit;font-size:12px}.field-list button{background:#edf3e8;border:1px solid #d7e2d4;border-radius:6px;padding:7px 10px;margin-right:14px}
+.field-list button,.field-list a{display:inline-flex;align-items:center;min-height:34px}
+@media(max-width:700px){.field-list button,.field-list a{min-height:44px}}
 @media(max-width:600px),(pointer:coarse){
   .walk-key-hint{display:none}
   .walk-touch-hint{display:inline}

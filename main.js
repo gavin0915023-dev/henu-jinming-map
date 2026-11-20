@@ -1,8 +1,10 @@
 import { createModel } from './model.js';
+import { fieldViews, mountFieldViews } from './field-views.js';
 import { imageryLayer, addCampusBasemap } from './satellite.js';
 
 const $=selector=>document.querySelector(selector);
 const icons={
+  camera:'<path d="M3 7h4l2-3h6l2 3h4v13H3Z"/><circle cx="12" cy="13" r="4"/>',
   brand:'<path d="m3 8 9-5 9 5-9 5-9-5Zm0 4 9 5 9-5M3 16l9 5 9-5"/>',
   pin:'<path d="M19 10c0 5-7 10-7 10s-7-5-7-10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.3"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
@@ -39,11 +41,11 @@ const photoItems=[
 const viewer='https://www.arcgis.com/apps/mapviewer/index.html?basemapUrl=https%3A%2F%2Fservices.arcgisonline.com%2FArcGIS%2Frest%2Fservices%2FWorld_Imagery%2FMapServer&center=114.30335,34.81805&level=16';
 const places=[
   {id:'library',name:'金明校区图书馆',type:'图书馆',note:'西侧中轴',icon:'book',color:'#dbbc80',x:-134,z:-73,y:36,walk:[-251,-72,1.57],desc:'校区标志性建筑之一。由西大门往东，经明德广场可抵达图书馆。',link:[library,'校方建筑介绍'],photo:0,main:true},
-  {id:'west',name:'西大门',type:'校门',note:'金明大道',icon:'gate',color:'#c5f276',x:-460,z:-70,y:8,walk:[-457,-70,1.57],desc:'校区西侧入口。沿中轴向东是明德广场和图书馆。模型中的入口为近似定位。',link:[photos,'校方照片来源'],photo:1,main:true},
+  {id:'west',name:'西大门',type:'校门',note:'金明大道',icon:'gate',color:'#c5f276',x:-459,z:-76,y:4,walk:[-485,-76,Math.PI/2],desc:'校名石墙朝西，两侧是入校通道。面向金字往东看，后方是明德广场和图书馆。',link:['https://ganbu.henu.edu.cn/info/1036/4225.htm','校方校门照片'],photo:1,main:true},
   {id:'marco',name:'马可广场',type:'广场',note:'校园中部',icon:'square',color:'#d7a9d0',x:16,z:-77,y:8,walk:[17,-68,-1.45],desc:'校园中部的圆形广场，位于图书馆以东、公共教学楼组团以西。',photo:2,main:true},
   {id:'lake',name:'粹庭湖',type:'水景',note:'教学区北侧',icon:'lake',color:'#9bdedb',x:136.3,z:-238.8,y:8,walk:[130,-176,0],desc:'校园东北部的湖泊之一，邻近经管教学楼。可从地面视角转向湖岸观察周边。',main:true},
   {id:'stadium',name:'志义体育场',type:'体育场',note:'校园东侧',icon:'field',color:'#ebb28a',x:426,z:-220,y:8,walk:[390,-219,1.57],desc:'校园东侧的运动地标，设有田径场和足球场。',main:true},
-  {id:'cs',name:'计算机与信息工程学院',type:'教学楼',note:'马可广场以北',icon:'school',color:'#a9c5ec',x:-43,z:-212,y:25,walk:[-39,-174,0],desc:'学院所在的建筑组团位于马可广场北面，靠近校园中部道路。'},
+  {id:'cs',name:'计算机与信息工程学院',type:'教学楼',note:'文甫路 · 马可广场以北',icon:'school',color:'#a9c5ec',x:-24,z:-196,y:21,walk:[10,-158,-.43,.19],desc:'文甫路一侧的入口在南翼东端，抬头可见竖排院名。沿外墙向西绕到雪垠路，可以看见长条玻璃和设备格栅。'},
   {id:'north',name:'北大门',type:'校门',note:'东京大道',icon:'gate',color:'#c5f276',x:21,z:-601,y:8,walk:[21,-596,3.14],desc:'校区北侧入口，面向东京大道。模型中的入口为近似定位。',main:true},
   {id:'autumn',name:'访秋湖',type:'水景',note:'公共教学楼以南',icon:'lake',color:'#9bdedb',x:91,z:62,y:8,walk:[75,26,3.14],desc:'位于公共教学楼南侧，是校方平面图标注的校园水系之一。',main:true},
   {id:'canteen',name:'北苑餐厅',type:'餐厅',note:'校园东北部',icon:'meal',color:'#e9ce7b',x:340,z:-434,y:12,walk:[326,-401,.35],desc:'校区东北部的餐厅，邻近生命科学学院与北侧教学区。'}
@@ -55,7 +57,7 @@ satelliteHost.id='satellite';
 satelliteHost.hidden=true;
 stage.after(satelliteHost);
 const pinMap=new Map();
-let active=null, mode='model', model=null, satellite=null, satelliteTiles=null, campus=null;
+let active=null, activeView=null, mode='model', model=null, satellite=null, satelliteTiles=null, campus=null;
 let imageryFrame=0;
 let noticeTimer;
 
@@ -67,9 +69,10 @@ function notice(message, duration=4500){
   if(duration) noticeTimer=setTimeout(()=>box.hidden=true,duration);
 }
 
+const placeMatches=(p,query)=>(p.name+p.type+p.note+p.id).toLowerCase().includes(query);
 function renderPlaces(){
   const query=search.value.trim().toLowerCase();
-  const matches=places.filter(p=>(p.name+p.type+p.note+p.id).toLowerCase().includes(query));
+  const matches=places.filter(p=>placeMatches(p,query));
   $('#place-count').textContent=matches.length+' 个地点';
   const list=$('#place-list');
   list.replaceChildren();
@@ -94,6 +97,7 @@ function renderDetail(){
   detail.querySelector('[data-close]').onclick=()=>{active=null;renderPlaces();renderDetail();};
   detail.querySelector('.detail-walk:not([data-photo])')?.addEventListener('click',()=>setMode('walk'));
   detail.querySelector('[data-photo]')?.addEventListener('click',()=>showPhotos(photo));
+  if(active.id==='cs'){const b=document.createElement('button');b.type='button';b.className='detail-walk';b.dataset.fieldReference='';b.textContent='街景对照';b.onclick=()=>openViews('cs');detail.append(b);}
 }
 
 function gps(x,z){
@@ -107,11 +111,18 @@ function jumpSatellite(p,zoom){
   satellite.setView((p?gps(p.x,p.z):gps(0,45)).reverse(),zoom??(p?18:satelliteHost.clientWidth<540?15:16),{animate:false});
 }
 
+function markView(item){
+  activeView=item;
+  const url=new URL(location.href),current=url.searchParams.get('view');
+  if((item?.id??null)===current)return;
+  if(item)url.searchParams.set('view',item.id);else url.searchParams.delete('view');
+  history.replaceState(null,'',url);
+}
 function select(p){
-  active=p;
+  active=p;markView(null);
   renderPlaces();
   renderDetail();
-  if(mode==='walk')model?.enterWalk(...p.walk);
+  if(mode==='walk'){model?.enterWalk(...p.walk);$('#mode-note').textContent=p.name;}
   else if(mode==='satellite')jumpSatellite(p);
   else if(model)model.focus(p.x,p.z);
   else notice('当前设备无法显示三维场景。可切换卫星影像查看该地点。');
@@ -215,12 +226,12 @@ function renderSatelliteLabels(){
   updateLabels(project,0,mpp,{w:size.x,h:size.y});
 }
 
-function setMode(next){
+function setMode(next,walkPose,item=null){
   if(next==='walk'&&!model){
     notice('当前浏览器暂时无法进入三维地面漫游。');
     return;
   }
-  mode=next;
+  mode=next;markView(item);
   document.querySelectorAll('[data-mode]').forEach(b=>{
     b.classList.toggle('active',b.dataset.mode===mode);
     b.setAttribute('aria-pressed',String(b.dataset.mode===mode));
@@ -260,7 +271,7 @@ function setMode(next){
     return;
   }
   if(mode==='walk'){
-    model.enterWalk(...(active??places[0]).walk);
+    model.enterWalk(...(walkPose??(active??places[0]).walk));
     stage.focus({preventScroll:true});
     return;
   }
@@ -319,7 +330,18 @@ function showPhotos(index=0){
   $('#photo-dialog').showModal();
   setPhoto(index);
 }
-$('#map-photos').onclick=()=>showPhotos(active?.photo??0);
+function visitView(item){
+  if(!model){notice('三维场景暂未就绪，可以先打开实拍。');return;}
+  active=places.find(p=>p.id===item.place)??null;
+  if(!active||!placeMatches(active,search.value.trim().toLowerCase()))search.value='';
+  renderPlaces();
+  const [x,z,bearing,pitch]=item.camera;
+  setMode('walk',[x,z,bearing*Math.PI/180,pitch*Math.PI/180,78],item);
+  $('#mode-note').textContent=item.title;
+}
+const openViews=mountFieldViews($('#field-dialog'),visitView);
+$('#field-views').onclick=()=>openViews(active?.id,activeView?.id);
+$('#map-photos').onclick=()=>!activeView&&active?.photo!==undefined?showPhotos(active.photo):openViews(active?.id,activeView?.id);
 $('#close-photos').onclick=()=>$('#photo-dialog').close();
 document.querySelectorAll('[data-photo-tab]').forEach((b,i)=>b.onclick=()=>setPhoto(i));
 $('#sources').onclick=()=>$('#about').showModal();
@@ -333,8 +355,10 @@ try{
   campus=await response.json();
   if(satellite)addCampusBasemap(window.L,satellite,campus,(x,z)=>gps(x,z).reverse());
   model=createModel(stage,campus,(...args)=>{if(mode!=='satellite')updateLabels(...args);});
+  const requested=fieldViews.find(v=>v.id===new URLSearchParams(location.search).get('view'));
+  if(requested)visitView(requested);
   model.setVisible(mode!=='satellite');
-  if(stage.dataset.renderer==='canvas')$('#mode-note').textContent='兼容模式 · 基础模型';
+  if(!requested&&mode==='model'&&stage.dataset.renderer==='canvas')$('#mode-note').textContent='兼容模式 · 基础模型';
   requestAnimationFrame(()=>{
     stage.dataset.modelStats=JSON.stringify(model.getDiagnostics());
     stage.dataset.ready='true';

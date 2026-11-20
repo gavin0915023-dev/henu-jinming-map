@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import * as T from '../assets/three.module.min.js';
+import { campusAvenueData, avenueHedgeRuns, avenueTrees } from '../avenue.js';
+import { fieldGround, entryGap, putFieldTrees } from '../field-ground.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -28,12 +30,27 @@ function freeze(value) {
 const data = JSON.parse(await readFile(new URL('assets/campus.json', root), 'utf8'));
 const before = JSON.stringify(data);
 freeze(data);
+const avenue=campusAvenueData(data);
+const rendered={...avenue,field:fieldGround(avenue,toolkit.contains)};
+const originalRoads=data.road.filter(r=>r[2]==='伯襄路'&&r[3]==='service'&&!r[4]);
+assert.equal(originalRoads.length,2);
+assert.equal(rendered.road.filter(r=>r[2]==='伯襄路'&&r[3]==='service'&&!r[4]).length,1);
+assert.equal(rendered.road.length,data.road.length-1);
+assert(Math.abs(rendered.avenue.road[1]-10.2)<.1,'Both surveyed road edges must be retained');
+const {north,south}=rendered.avenue;
+const plantings=[...avenueTrees(rendered,[],toolkit.contains).map(t=>t[1]),...avenueHedgeRuns(rendered,toolkit.contains).map(r=>r[2])];
+assert(plantings.some(z=>z<north)&&plantings.some(z=>z>south)&&plantings.every(z=>z<north||z>south),'Planted rows must be outside both edges of the avenue');
+const details=rendered.field;
+assert(details.bridge.sides.length===2 && details.bridge.spans.length===2,'One bridge deck requires two outer parapets');
+assert(entryGap(details,-7,-181.6)&&!entryGap(details,-28,-181.6),'The gateway must line up with the east-end doors');
+assert(putFieldTrees([[-7,-185,7]],details,toolkit.contains).every(([x,z])=>x!==-7||z!==-185),'Clear the path to the entrance');
+assert(details.shrubs.length>0 && details.shrubs.every(([x,z])=>!data.water.some(p=>toolkit.contains(x,z,p))),'Bank planting must stay on land');
 const building = await loadModule('building-detail.js');
 const landscape = await loadModule('landscape-detail.js');
 const scene = new T.Scene();
 const results = [
-  ['buildings', building.addBuildingDetails(scene, data, toolkit)],
-  ['landscape', landscape.addLandscapeDetails(scene, data, toolkit)]
+  ['buildings', building.addBuildingDetails(scene, rendered, toolkit)],
+  ['landscape', landscape.addLandscapeDetails(scene, rendered, toolkit)]
 ];
 const report = {};
 for (const [name, result] of results) {

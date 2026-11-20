@@ -2,9 +2,12 @@ import * as T from 'three';
 import { OrbitControls } from './assets/OrbitControls.js';
 import { softwareRenderer } from './software.js';
 import { libraryFacade, libraryVolumes } from './facade.js';
-import { addBuildingDetails } from './building-detail.js';
+import { addBuildingDetails, computingSignColumns } from './building-detail.js';
 import { addLandscapeDetails } from './landscape-detail.js';
 import { addTreeModels } from './tree-model.js';
+import { addWestGate } from './west-gate.js';
+import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
+import { fieldGround, entryGap, putFieldTrees } from './field-ground.js';
 import { campusSky, shadeGround } from './daylight.js';
 import { applyGroundSurfaceTextures } from './ground-surfaces.js';
 
@@ -36,11 +39,13 @@ class Batch {
   add(geometry, color) {
     const g = geometry.index ? geometry.toNonIndexed() : geometry;
     const p = g.attributes.position.array, n = g.attributes.normal.array;
+    const painted=!color&&g.getAttribute('color');
     const light = new T.Color();
     for (let i = 0; i < p.length; i += 3) {
       this.positions.push(p[i],p[i+1],p[i+2]);
       this.normals.push(n[i],n[i+1],n[i+2]);
-      if (Array.isArray(color)) light.set(n[i+1] > .7 ? color[1] : color[0]);
+      if (painted) light.fromBufferAttribute(painted,i/3);
+      else if (Array.isArray(color)) light.set(n[i+1] > .7 ? color[1] : color[0]);
       else light.set(color);
       this.colors.push(light.r,light.g,light.b);
     }
@@ -102,7 +107,10 @@ function terrainTexture() {
 function treePositions(data) {
   const random=seeded();
   const blockers=[...data.building.map(([p])=>p),...data.water,...data.sport.map(([p])=>p),...data.plaza].map(p=>[bounds(p),p]);
-  const edges=data.road.flatMap(([p,w])=>p.slice(1).map(([x,z],i)=>[p[i][0],p[i][1],x,z,w/2+4]));
+  // Replay the established plan first, to avoid shifting distant plantings
+  // when the two survey lines become a single rendered avenue.
+  const planningRoads=data.avenue?.originalRoad??data.road;
+  const edges=planningRoads.flatMap(([p,w])=>p.slice(1).map(([x,z],i)=>[p[i][0],p[i][1],x,z,w/2+4]));
   const positions=[], occupied=new Map(),spacing=8;
   function nearEdge(x,z,a,b,c,d,r){
     if(x<Math.min(a,c)-r||x>Math.max(a,c)+r||z<Math.min(b,d)-r||z>Math.max(b,d)+r)return false;
@@ -133,7 +141,7 @@ function treePositions(data) {
     return true;
   }
   // Reserve the regular roadside rows before filling the surrounding open ground.
-  for(const [p,w,,type] of data.road){
+  for(const [p,w,,type] of planningRoads){
     if(type!=='service'&&type!=='footway')continue;
     const form=random()<(type==='service'?.72:.43)?'shade':'vase';
     const nominal=(form==='shade'?9.4:8.2)+random()*2.4;
@@ -172,15 +180,65 @@ function treePositions(data) {
     const choice=random();
     maybeAdd(x,z,choice<.54?'shade':choice<.82?'vase':'spire',7+random()*6,false);
   }
-  return positions;
+  return putFieldTrees(avenueTrees(data,positions,contains),data.field,contains);
+}
+function finishShrubs(material){
+  // Project one small locally drawn leaf pattern in world metres. The mipmaps
+  // average it to a neutral shade in distant views; no external images needed.
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
+  const c=canvas.getContext('2d'),rnd=seeded();
+  c.fillStyle='#8f9388';c.fillRect(0,0,256,256);
+  for(let i=0;i<3000;i++){
+    const x=rnd()*256,y=rnd()*256,a=rnd()*Math.PI,r=1.3+2.7*rnd(),v=Math.round(72+160*rnd());
+    c.fillStyle='rgb('+v+','+v+','+Math.round(v*.94)+')';
+    for(const dx of (x<5?[0,256]:x>251?[0,-256]:[0]))for(const dy of (y<5?[0,256]:y>251?[0,-256]:[0])){
+      c.beginPath();c.ellipse(x+dx,y+dy,r,r*.48,a,0,Math.PI*2);c.fill();
+    }
+  }
+  const tex=new T.CanvasTexture(canvas);tex.wrapS=tex.wrapT=T.RepeatWrapping;
+  material.onBeforeCompile=shader=>{
+    shader.uniforms.leafTone={value:tex};
+    shader.vertexShader='varying vec3 shrubPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nshrubPoint=position;');
+    shader.fragmentShader='uniform sampler2D leafTone;\nvarying vec3 shrubPoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',
+      '#include <color_fragment>\nvec2 p=(shrubPoint.xz+vec2(.53,.91)*shrubPoint.y)/1.45; diffuseColor.rgb*=.29+texture2D(leafTone,p).rgb*1.16;');
+  };
 }
 function addTrees(scene,positions,data) {
   addTreeModels(scene,positions);
   // Baidu panorama 01027700001404011238110455G shows low clipped hedges
   // and round shrubs beside internal roads. Placement below is schematic.
-  const planting=new Batch();
+  const planting=new Batch(),rnd=seeded();
+  function bush(x,z,rx,h,rz,tone){
+    const g=new T.IcosahedronGeometry(1,1),p=g.attributes.position,n=g.attributes.normal,c=[];
+    const col=new T.Color();
+    for(let i=0;i<p.count;i++){
+      const a=p.getX(i),b=p.getY(i),d=p.getZ(i);
+      const noise=Math.sin(a*12.2+d*9.11+b*18.1+tone*12)*Math.cos(d*11+b*7.9);
+      const f=1+.11*noise;
+      const round=v=>h>1.2?v:Math.sign(v)*Math.pow(Math.abs(v),.58);
+      p.setXYZ(i,x+round(a)*rx*f,.17+(round(b)*f+1)*h*.50,z+round(d)*rz*f);
+      n.setXYZ(i,a,b,d);
+      col.setRGB(.071+tone*.029,.123+tone*.055,.043+tone*.023).multiplyScalar(1+b*.17+noise*.19);
+      c.push(col.r,col.g,col.b);
+    }
+    g.setAttribute('color',new T.Float32BufferAttribute(c,3));planting.add(g,null);
+  }
+  for(const [x,z,rx,h,rz,t] of data.field.shrubs){
+    bush(x,z,rx*.82,h,rz*.80,t);bush(x-rx*.43,z+.27,rx*.68,h*.77,rz*.72,1-t);
+    bush(x+rx*.47,z-.35,rx*.66,h*.86,rz*.79,t*.72);
+  }
+  for(const [from,to,z] of avenueHedgeRuns(data,contains)){
+    // Closely clipped growth still has a changing leaf surface and a few
+    // visible stems at its base, rather than a straight opaque green wall.
+    const count=Math.ceil((to-from)/1.12),step=(to-from)/count;
+    for(let i=0;i<count;i++){
+      const x=from+(i+.5)*step;
+      bush(x,z+(rnd()-.5)*.12,step*.78,.83+rnd()*.24,.55+rnd()*.10,.24+rnd()*.72);
+    }
+  }
   const blockers=[...data.building.map(([p])=>p),...data.water,...data.sport.map(([p])=>p)];
-  for(const [points,width,,kind] of data.road){
+  for(const road of data.road){
+    const [points,width,,kind]=road;
     if(kind!=='service'||width<3||width>14)continue;
     for(let i=1;i<points.length;i++){
       const [ax,az]=points[i-1],[bx,bz]=points[i];
@@ -189,6 +247,8 @@ function addTrees(scene,positions,data) {
       for(let distance=9;distance<length-6;distance+=6)for(const side of [-1,1]){
         const x=ax+(bx-ax)*distance/length+(bz-az)*(width/2+1.8)*side/length;
         const z=az+(bz-az)*distance/length-(bx-ax)*(width/2+1.8)*side/length;
+        if(entryGap(data.field,x,z,2.9) || Math.hypot(x-116.5,z+231)<6.5)continue;
+        if(road===data.avenue?.road && x>=data.avenue.start-3 && x<=data.avenue.end+3)continue;
         if(!contains(x,z,data.boundary)||blockers.some(p=>contains(x,z,p)))continue;
         // Avoid junctions and paths crossing the planted verge.
         if(data.road.some(([p,w])=>p.slice(1).some(([u,v],j)=>{
@@ -208,6 +268,7 @@ function addTrees(scene,positions,data) {
     }
   }
   const shrubs=planting.mesh();
+  finishShrubs(shrubs.material);
   shrubs.name='Street-view inspired clipped roadside planting';
   shrubs.castShadow=shrubs.receiveShadow=true;scene.add(shrubs);
 }
@@ -227,6 +288,21 @@ function librarySign() {
   sign.rotation.y=-Math.PI/2;sign.position.set(-183,9.55,-73);sign.name='Library entrance lettering';return sign;
 }
 function buildScene(scene, data, trees) {
+  addWestGate(scene,data);
+  const cs=data.building.find(b=>b[4]==='712688906');
+  if(cs){
+    // Two vertical lines of gold characters on the pale wall above the Wenfu Road entrance.
+    const canvas=document.createElement('canvas');canvas.width=224;canvas.height=520;
+    const c=canvas.getContext('2d');c.textAlign='center';c.textBaseline='middle';
+    c.font='bold 66px KaiTi,STKaiti,SimSun,serif';
+    for(const [word,x,top] of computingSignColumns){
+      for(const [i,ch] of [...word].entries()){const y=top+i*72;
+        c.fillStyle='#685136';c.fillText(ch,x+1.5,y+2);c.fillStyle='#ca9e48';c.fillText(ch,x,y);}
+    }
+    const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
+    const letters=new T.Mesh(new T.PlaneGeometry(4.3,11.5),new T.MeshStandardMaterial({map,alphaTest:.25,roughness:.63}));
+    letters.position.set(-8,13.8,-190.40);letters.name='Computer college entrance lettering';scene.add(letters);
+  }
   const base=new T.Mesh(new T.PlaneGeometry(5100,5100),new T.MeshStandardMaterial({color:'#718269',map:terrainTexture()}));
   base.rotation.x=-Math.PI/2;
   base.position.y=ground-.15;
@@ -236,11 +312,13 @@ function buildScene(scene, data, trees) {
   layers.surface(data.boundary,.06,'#687e56');
   for(const [ring,kind] of data.green) layers.surface(ring,.16,kind==='farmland'?'#777f58':'#61784e');
   for(const p of data.plaza) layers.surface(p,.45,'#a29990');
-  for(const [p,w,,type,bridge] of data.road){
+  for(const [p,y,color] of data.field.surfaces)layers.surface(p,y,color);
+  for(const road of data.road){
+    const [p,w,,type,bridge]=road;
     const major=['primary','secondary','trunk','tertiary'].includes(type), y=bridge?1:.72;
     const pedestrian=['pedestrian','footway','path','steps'].includes(type);
     layers.ribbon(p,w+(pedestrian?.55:2),y,pedestrian?'#948e80':major?'#56625a':'#73836b');
-    layers.ribbon(p,w,y+.03,pedestrian?(w>=5?'#b1a99b':'#a4aa8b'):major?'#777c7b':'#8a8c86');
+    layers.ribbon(p,w,y+.03,road===data.avenue?.road?'#aaa092':pedestrian?(w>=5?'#b1a99b':'#a4aa8b'):major?'#777c7b':'#8a8c86');
     if(major)layers.ribbon(p,.48,y+.06,'#b8b6a0');
   }
   layers.ribbon(data.boundary,1.7,1.03,'#a7be82');
@@ -291,6 +369,8 @@ function buildScene(scene, data, trees) {
 }
 
 export function createModel(stage,data,onFrame){
+  data=campusAvenueData(data);
+  data={...data,field:fieldGround(data,contains)};
   const scene = new T.Scene();
   const orbitMist=new T.FogExp2('#cad6d6',.00019), walkMist=new T.FogExp2('#dce4e4',.00082);
   scene.fog=orbitMist;
@@ -299,7 +379,7 @@ export function createModel(stage,data,onFrame){
   const canvas=document.createElement('canvas');
   let context=null;
   try { context=canvas.getContext('webgl2',{antialias:true,alpha:false,powerPreference:'high-performance'}); } catch { /* Canvas renderer supports devices without WebGL. */ }
-  const renderer=context ? new T.WebGLRenderer({canvas,context,antialias:true}) : softwareRenderer(data,palette,trees);
+  const renderer=context ? new T.WebGLRenderer({canvas,context,antialias:true}) : softwareRenderer(data,palette,trees,contains);
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
   renderer.outputColorSpace=T.SRGBColorSpace;
   stage.dataset.renderer=context?'webgl':'canvas';
@@ -384,14 +464,14 @@ export function createModel(stage,data,onFrame){
     const x=T.MathUtils.clamp(walk.position.x+dx,-extent,extent), z=T.MathUtils.clamp(walk.position.z+dz,-extent,extent);
     if(!obstructed(x,z)){ walk.position.x=x;walk.position.z=z; }
   }
-  function enterWalk(x,z,yaw){
+  function enterWalk(x,z,yaw,pitch=.005,fov=65){
     controls.enabled=false;
     tween=null;
     walk.active=true;
     walk.position.set(x,2.45,z);
     walk.yaw=yaw;
-    walk.pitch=.005;
-    walk.fov=65;
+    walk.pitch=pitch;
+    walk.fov=fov;
     camera.fov=walk.fov;
     camera.updateProjectionMatrix();
     scene.fog=walkMist;

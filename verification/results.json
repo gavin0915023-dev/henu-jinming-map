@@ -5,7 +5,16 @@
     "All three tree forms populate the model",
     "Nine places load",
     "Model error panel is hidden",
+    "Shared street link opens on Boxiang Road in walking mode",
     "Search filters places",
+    "Seven viewpoints link to six distinct panoramas and the official gate photo",
+    "Walking viewpoint cs-entry",
+    "Walking viewpoint cs-south",
+    "Walking viewpoint cs-northwest",
+    "Walking viewpoint autumn-bank",
+    "Walking viewpoint jiuzhang",
+    "Walking viewpoint west-gate",
+    "Reference panel selects the photo for the current viewpoint",
     "Walk mode activates",
     "Home exits walk mode",
     "Tiles switch hosts when the first host fails",
@@ -15,28 +24,30 @@
     "Mobile viewport uses device width",
     "Mobile layout stays within viewport",
     "Mobile canvas remains usable",
+    "Mobile reference panel fits the screen and has a usable view selector",
     "Mobile view controls remain visible",
     "Mobile walking controls accept taps after choosing a place",
     "Leaving walk mode restores the selected place",
     "Canvas fallback starts without WebGL",
+    "Canvas fallback opens the requested entrance",
     "No uncaught browser exceptions"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1761732,
+    "vertices": 1949350,
     "invalid": 0,
-    "trees": 861,
+    "trees": 934,
     "treeForms": {
       "shade": 517,
-      "vase": 234,
-      "spire": 110
+      "vase": 309,
+      "spire": 108
     },
     "buildings": {
       "buildings": 113,
-      "windows": 16262,
+      "windows": 16265,
       "entrances": 105,
       "rooftopUnits": 133,
-      "triangles": 427346
+      "triangles": 429718
     },
     "landscape": {
       "courts": 95,
@@ -48,8 +59,8 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 27,
-    "triangles": 1078568
+    "drawCalls": 30,
+    "triangles": 1218348
   },
   "failures": []
 }

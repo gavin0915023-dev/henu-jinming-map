@@ -114,9 +114,11 @@ try {
   if(process.env.TREE_STUDY==='1'){
     await treeStudy();
   }else if(deployedSatellite){
-    await call('Page.navigate',{url:satelliteUrl});
+    await call('Page.navigate',{url:satelliteUrl+'?view=cs-entry'});
     const start=Date.now();
-    await until(()=>evaluate("document.querySelector('#place-list .place')!==null"),'Published viewer ready',45000);
+    await until(()=>evaluate("document.querySelector('#stage')?.dataset.ready==='true'"),'Published viewer ready',45000);
+    check('Published link loads the observed college entrance',await evaluate("document.querySelector('#mode-note').textContent.includes('文甫路入口') && document.querySelectorAll('#field-dialog [data-view]').length===7"));
+    await capture('published-cs-entry');
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
     const getTiles=()=>evaluate("(()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return {loaded:tiles.filter(t=>t.complete&&t.naturalWidth>0).length,total:tiles.length,message:document.querySelector('#fallback').hidden?'':document.querySelector('#fallback').innerText}})()");
     try {
@@ -128,7 +130,7 @@ try {
       console.log(JSON.stringify({viewport:await getTiles(),elapsedSeconds:(Date.now()-start)/1000,requests,failures},null,2));
     }
   } else {
-  await call('Page.navigate',{url});
+  await call('Page.navigate',{url:url+'/?view=boxiang'});
   await until(() => evaluate("document.querySelector('#stage')?.dataset.ready==='true'"), 'Model ready');
   const stats = await evaluate("JSON.parse(document.querySelector('#stage').dataset.modelStats)");
   check('WebGL model starts', stats.renderer === 'webgl');
@@ -137,11 +139,29 @@ try {
     Object.values(stats.treeForms).reduce((sum,n)=>sum+n,0)===stats.trees);
   check('Nine places load', await evaluate("document.querySelectorAll('#place-list .place').length===9"));
   check('Model error panel is hidden', await evaluate("document.querySelector('#fallback').hidden"));
+  check('Shared street link opens on Boxiang Road in walking mode',await evaluate("document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && document.querySelector('#mode-note').textContent.includes('伯襄路')"));
+  await capture('field-boxiang');
+  await evaluate("document.querySelector('#home').click()");
   await capture('overview');
   await evaluate("document.querySelector('#search').value='计算机';document.querySelector('#search').dispatchEvent(new Event('input'))");
   check('Search filters places', await evaluate("document.querySelectorAll('#place-list .place').length===1"));
   await evaluate("document.querySelector('#place-list .place').click()");
   await capture('teaching-building');
+  await evaluate("document.querySelector('#detail [data-field-reference]').click()");
+  check('Seven viewpoints link to six distinct panoramas and the official gate photo',await evaluate(`(()=>{
+    const modal=document.querySelector('#field-dialog'),links=[...modal.querySelectorAll('.field-list a')].map(a=>new URL(a.href));
+    return modal.open && modal.querySelectorAll('[data-view]').length===7 &&
+      new Set(links.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size===6 &&
+      links.some(l=>l.hostname==='ganbu.henu.edu.cn');
+  })()`));
+  for(const id of ['cs-entry','cs-south','cs-northwest','autumn-bank','jiuzhang','west-gate']){
+    await evaluate(`document.querySelector('#field-dialog [data-view="${id}"]').click()`);
+    check('Walking viewpoint '+id,await evaluate(`new URL(location.href).searchParams.get('view')==='${id}' && !document.querySelector('#field-dialog').open && document.querySelector('#mode-note').textContent===document.querySelector('#field-dialog [data-view="${id}"]').parentElement.querySelector('h3').textContent`));
+    await capture('field-'+id);
+    await evaluate("document.querySelector('#map-photos').click()");
+  }
+  check('Reference panel selects the photo for the current viewpoint',await evaluate("document.querySelector('#field-dialog section[data-current] [data-view]').dataset.view==='west-gate'"));
+  await evaluate("document.querySelector('#field-dialog [data-close]').click();document.querySelector('#home').click()");
   await evaluate("document.querySelector('#search').value='';document.querySelector('#search').dispatchEvent(new Event('input'));document.querySelector('#place-list .place').click()");
   await capture('library');
   await evaluate("document.querySelector('[data-mode=walk]').click()");
@@ -206,6 +226,12 @@ try {
   check('Mobile layout stays within viewport', await evaluate('document.documentElement.scrollWidth<=window.innerWidth'));
   check('Mobile canvas remains usable', await evaluate("document.querySelector('#stage').clientWidth>200&&document.querySelector('#stage').clientHeight>250"));
   await capture('mobile');
+  await evaluate("document.querySelector('#field-views').click()");
+  check('Mobile reference panel fits the screen and has a usable view selector',await evaluate(`(()=>{
+    const dialog=document.querySelector('#field-dialog'),r=dialog.getBoundingClientRect(),b=dialog.querySelector('[data-view]').getBoundingClientRect();
+    return dialog.open && r.left>=0 && r.right<=innerWidth && r.bottom<=innerHeight && b.height>=32 && dialog.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));
+  })()`));
+  await evaluate("document.querySelector('#field-dialog [data-close]').click()");
   const mobileLayout=await evaluate("Object.fromEntries(['.viewport','#stage','.mode-switch','#home'].map(selector=>{const r=document.querySelector(selector).getBoundingClientRect();return [selector,{left:r.left,right:r.right,top:r.top,bottom:r.bottom}]}))");
   console.log('Mobile layout',JSON.stringify(mobileLayout));
   check('Mobile view controls remain visible', await evaluate("[...document.querySelectorAll('.mode-switch,#home')].every(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=window.innerWidth&&r.top>=0&&r.bottom<=window.innerHeight})"));
@@ -217,9 +243,12 @@ try {
   check('Leaving walk mode restores the selected place',await evaluate("!document.querySelector('#detail').hidden && document.querySelector('#detail h2').textContent.includes('图书馆')"));
   await call('Page.addScriptToEvaluateOnNewDocument', { source: "const originalGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type==='webgl2'?null:originalGetContext.call(this,type,...args)}" });
   await evaluate("document.querySelector('#stage').dataset.ready='false'");
-  await call('Page.navigate', { url });
+  await call('Page.navigate', { url:url+'/?view=cs-entry' });
   await until(() => evaluate("document.querySelector('#stage')?.dataset.ready==='true'"), 'Canvas fallback ready');
   check('Canvas fallback starts without WebGL', await evaluate("document.querySelector('#stage').dataset.renderer==='canvas' && document.querySelector('#fallback').hidden"));
+  check('Canvas fallback opens the requested entrance',await evaluate("document.querySelector('#mode-note').textContent.includes('文甫路入口') && document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true'"));
+  await capture('field-fallback-entry');
+  await evaluate("document.querySelector('#home').click()");
   await capture('fallback');
   check('No uncaught browser exceptions', failures.length === 0);
   await writeFile(join(output, 'results.json'), JSON.stringify({ checks, stats, failures }, null, 2) + '\n');

@@ -2,7 +2,7 @@ import * as T from 'three';
 
 // World units are metres. These finishes decorate the existing triangles rather
 // than adding a second plane, so road/plaza heights and depth ordering stay intact.
-const finishNames = ['untreated', 'stone', 'pavers', 'asphalt', 'sport', 'grass', 'concrete'];
+const finishNames = ['untreated', 'stone', 'pavers', 'asphalt', 'sport', 'grass', 'concrete', 'roadSlabs'];
 const palette = new Map();
 const colorKey = (r, g, b) => Math.round(r * 65535) * 4294967296 + Math.round(g * 65535) * 65536 + Math.round(b * 65535);
 function register(kind, colors) {
@@ -11,12 +11,13 @@ function register(kind, colors) {
     palette.set(colorKey(c.r, c.g, c.b), kind);
   }
 }
-register(1, ['#a29990','#b1a99b']); // Plazas and broad pedestrian promenades.
+register(1, ['#a29990','#b1a99b','#c4b9a6']); // Plazas, forecourt and broad pedestrian promenades.
 register(2, ['#a4aa8b']); // Pedestrian paths.
 register(3, ['#777c7b', '#8a8c86']); // Arterial and internal carriageways.
 register(4, ['#a96754', '#6b9176', '#b1846d', '#7d9277', '#548183', '#85a29a', '#4e7c84', '#608676', '#b58a67']);
 register(5, ['#687e56', '#61784e', '#777f58', '#66875c', '#66895a', '#668c5c', '#719965']);
 register(6, ['#c4c2aa']); // Raised concrete kerbs, only their horizontal faces.
+register(7, ['#aaa092']); // Broad warm-grey surface on Boxiang Road.
 
 const applied = new WeakMap();
 const vertexDeclarations = /* glsl */ `
@@ -64,13 +65,13 @@ vec3 campusGroundFinish(vec2 p, float kind) {
   float footprint = max(length(dx), length(dy));
   if (kind < .5) return vec3(1.0, 0.0, 0.0);
 
-  if (kind < 2.5) {
-    // Large 600 mm stone slabs on plazas; 300 x 150 mm staggered path pavers.
-    vec2 tile = kind < 1.5 ? vec2(.60) : vec2(.30, .15);
-    float jointWidth = kind < 1.5 ? .006 : .004;
+  if (kind < 2.5 || kind > 6.5) {
+    bool road = kind > 6.5;
+    vec2 tile = road ? vec2(4.6, 3.4) : kind < 1.5 ? vec2(.60) : vec2(.30, .15);
+    float jointWidth = road ? .009 : kind < 1.5 ? .006 : .004;
     vec2 q = p / tile;
     float row = floor(q.y);
-    if (kind > 1.5) q.x += mod(row, 2.0) * .5;
+    if (kind > 1.5 && !road) q.x += mod(row, 2.0) * .5;
     vec2 unit = fract(q);
     vec2 distanceToJoint = min(unit, 1.0 - unit) * tile;
     vec2 joint = 1.0 - smoothstep(vec2(jointWidth * .35) - edgeAA * .5,
@@ -80,7 +81,7 @@ vec3 campusGroundFinish(vec2 p, float kind) {
     float seam = max(joint.x, joint.y) * visible;
     float slabTone = (campusGroundHash(floor(q)) - .5) * visible;
     float pores = campusGroundGrain(p + 17.0, 115.0, footprint);
-    return vec3(1.0 + slabTone * .13 - seam * .28 + pores * .060,
+    return vec3(1.0 + slabTone * (road ? .035 : .13) - seam * .28 + pores * .060,
                 -seam * .0009 + pores * .00020, seam * .025 + pores * .025);
   }
   if (kind < 3.5) {
