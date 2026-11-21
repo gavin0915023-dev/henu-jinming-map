@@ -7,10 +7,11 @@ import { addLandscapeDetails } from './landscape-detail.js';
 import { addTreeModels } from './tree-model.js';
 import { addWestGate } from './west-gate.js';
 import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
-import { fieldGround, entryGap, putFieldTrees } from './field-ground.js';
+import { fieldGround, entryGap, putFieldTrees, walkingWater } from './field-ground.js';
 import { buildingSolids, softwareSign, softwareId, hallId } from './wenfu.js';
 import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.js';
-import { facultyColors, siteLettering, facultyHeights } from './faculty-sites.js';
+import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
+import { publicBlockers,hasMarco,isMarcoRing,marcoHole } from './campus-commons.js';
 import { stadiumSign, standId, teachingId, eastGateBlockers, hasEastGate, boundaryLines } from './east-campus.js';
 import { campusSky, shadeGround } from './daylight.js';
 import { applyGroundSurfaceTextures } from './ground-surfaces.js';
@@ -37,6 +38,10 @@ const contains = (x, z, ring) => {
 };
 const bounds = (points) => points.reduce(([a,b,c,d],[x,z]) => [Math.min(a,x),Math.min(b,z),Math.max(c,x),Math.max(d,z)],[Infinity,Infinity,-Infinity,-Infinity]);
 const shape = (points) => new T.Shape(points.slice(0, closed(points) ? -1 : undefined).map(([x,z]) => new T.Vector2(x, -z)));
+function groundShape(points,holes=[]){
+  const s=shape(points);for(const h of holes)s.holes.push(shape(h));
+  return new T.ShapeGeometry(s);
+}
 
 class Batch {
   constructor() { this.positions = []; this.colors = []; this.normals = []; }
@@ -56,8 +61,8 @@ class Batch {
     if (g !== geometry) g.dispose();
     geometry.dispose();
   }
-  surface(points, y, color) {
-    const g = new T.ShapeGeometry(shape(points));
+  surface(points, y, color,holes=[]) {
+    const g = groundShape(points,holes);
     g.rotateX(-Math.PI / 2);
     g.translate(0,y,0);
     this.add(g,color);
@@ -308,8 +313,7 @@ function addSoftwareSign(scene) {
 }
 function buildScene(scene, data, trees) {
   addWestGate(scene,data);
-  for(const {id,text,width,height,point,yaw,color,horizontal} of siteLettering){
-    if(!data.building.some(r=>r[4]===id))continue;
+  for(const {text,width,height,point,yaw,color,horizontal} of visibleSigns(data)){
     const cv=document.createElement('canvas');cv.width=120*(horizontal?text.length:1);cv.height=120*(horizontal?1:text.length);
     const ctx=cv.getContext('2d');ctx.font='bold 92px KaiTi,STKaiti,SimSun,serif';ctx.textAlign='center';ctx.textBaseline='middle';
     [...text].forEach((ch,i)=>{const x=horizontal?(i+.5)*120:60,y=horizontal?60:(i+.5)*120;
@@ -353,15 +357,19 @@ function buildScene(scene, data, trees) {
     const letters=new T.Mesh(new T.PlaneGeometry(4.3,11.5),new T.MeshStandardMaterial({map,alphaTest:.25,roughness:.63}));
     letters.position.set(-8,13.8,-190.40);letters.name='Computer college entrance lettering';scene.add(letters);
   }
-  const base=new T.Mesh(new T.PlaneGeometry(5100,5100),new T.MeshStandardMaterial({color:'#718269',map:terrainTexture()}));
+  const holes=hasMarco(data)?[marcoHole()]:[],extent=2550;
+  const baseGeo=groundShape([[-extent,-extent],[extent,-extent],[extent,extent],[-extent,extent]],holes);
+  const uv=baseGeo.getAttribute('uv');
+  for(let i=0;i<uv.count;i++)uv.setXY(i,.5+uv.getX(i)/(2*extent),.5+uv.getY(i)/(2*extent));
+  const base=new T.Mesh(baseGeo,new T.MeshStandardMaterial({color:'#718269',map:terrainTexture()}));
   base.rotation.x=-Math.PI/2;
   base.position.y=ground-.15;
   base.receiveShadow=true;
   scene.add(base);
   const layers=new Batch(), buildings=new Batch();
-  layers.surface(data.boundary,.06,'#687e56');
+  layers.surface(data.boundary,.06,'#687e56',holes);
   for(const [ring,kind] of data.green) layers.surface(ring,.16,kind==='farmland'?'#777f58':'#61784e');
-  for(const p of data.plaza) layers.surface(p,.45,'#a29990');
+  for(const p of data.plaza) layers.surface(p,.45,'#a29990',isMarcoRing(p)?holes:[]);
   for(const [p,y,color] of data.field.surfaces)layers.surface(p,y,color);
   for(const road of data.road){
     const [p,w,,type,bridge]=road;
@@ -475,11 +483,11 @@ export function createModel(stage,data,onFrame){
   let drag=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
   const footprints=[...buildingSolids(data.building)].filter(s=>s.base<2.45).map(({p})=>[bounds(p),p]);
   if(hasEastGate(data))for(const p of eastGateBlockers())footprints.push([bounds(p),p]);
-  const water=data.water.map(ring=>[bounds(ring),ring]);
-  const blockers=[...footprints,...water],physics=data.building.some(b=>b[4]===labId);
-  const obstructed=(x,z)=>blockers.some(([[a,b,c,d],ring])=>x>a&&x<c&&z>b&&z<d&&contains(x,z,ring));
+  for(const p of publicBlockers(data))footprints.push([bounds(p),p]);
+  const {onDeck,waterBlocks}=walkingWater(data.field,data.water,contains,bounds),physics=data.building.some(b=>b[4]===labId);
+  const obstructed=(x,z)=>footprints.some(([[a,b,c,d],ring])=>x>a&&x<c&&z>b&&z<d&&contains(x,z,ring))||waterBlocks(x,z);
   const facultyHeight=facultyHeights(data);
-  const eye=(x,z)=>1.70+(physics&&x>-125&&x<-55&&z>200&&z<256?
+  const eye=(x,z)=>1.70+(onDeck(x,z)?1.055:physics&&x>-125&&x<-55&&z>200&&z<256?
     (physicsGroundHeight(x,z)??(contains(x,z,physicsCourt)?.94:.75)):(facultyHeight(x,z)??.75));
 
   function resize(){
@@ -511,6 +519,10 @@ export function createModel(stage,data,onFrame){
     offset.setLength(240);
     setOrbit(new T.Vector3(x,4,z),offset);
   }
+  function lookFrom(eye,target){
+    const center=new T.Vector3(...target),offset=new T.Vector3(...eye).sub(center);
+    setOrbit(center,offset.multiplyScalar(Math.max(1,.92/camera.aspect)),false);
+  }
   function face(){
     direction.set(Math.sin(walk.yaw)*Math.cos(walk.pitch),Math.sin(walk.pitch),-Math.cos(walk.yaw)*Math.cos(walk.pitch));
     camera.position.copy(walk.position);
@@ -520,7 +532,7 @@ export function createModel(stage,data,onFrame){
     const dx=Math.sin(walk.yaw)*metres+Math.cos(walk.yaw)*side;
     const dz=-Math.cos(walk.yaw)*metres+Math.sin(walk.yaw)*side;
     // Buttons can advance five metres. Do not jump over a slender porch pier.
-    const n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.40));
+    const n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.18));
     for(let i=0;i<n;i++){
       const x=T.MathUtils.clamp(walk.position.x+dx/n,-extent,extent),z=T.MathUtils.clamp(walk.position.z+dz/n,-extent,extent);
       if(obstructed(x,z))break;
@@ -631,7 +643,7 @@ export function createModel(stage,data,onFrame){
   }
   home(false);
   renderer.setAnimationLoop(frame);
-  return {focus,home,zoom,north,enterWalk,exitWalk,step,
+  return {focus,lookFrom,home,zoom,north,enterWalk,exitWalk,step,
     getDiagnostics(){
       let vertices=0,invalid=0;
       scene.traverse(object=>{

@@ -323,7 +323,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     (material==='brick'?brick:material==='glass'?glass:material==='canopy'?canopy:masonry).quad(...points,color);
     // Only the broad new surfaces cast shadows: the canopy, curved hall and
     // piers should shade the court without adding every window bar to its map.
-    if(material!=='brick'&&material!=='canopy'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
+    if(material!=='brick'&&material!=='canopy'&&material!=='ground'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
       silhouettes.quad(...points,'#ffffff');
   }
 
@@ -469,7 +469,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   group.add(walls, windows, equipment);
   if(canopy.positions.length){
     const pane=canopy.mesh({physical:true,roughness:.17,transparent:true,opacity:.29,depthWrite:false,envMapIntensity:.66});
-    pane.name='Hospital glazed canopy';group.add(pane);
+    pane.name='Glazed entrance canopies';group.add(pane);
   }
   if(brick.positions.length){
     const skin=brick.mesh({roughness:.95});

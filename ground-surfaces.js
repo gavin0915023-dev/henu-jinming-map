@@ -14,7 +14,7 @@ function register(kind, colors) {
 register(1, ['#a29990','#b1a99b','#c4b9a6','#c4b7a5','#bdb6a9','#b6b0a4','#c8b9a7','#baae9c']); // Stone forecourts.
 register(2, ['#a4aa8b','#b08676','#b3ad9d']); // Pedestrian paths and the stadium's red pavers.
 register(3, ['#777c7b', '#8a8c86']); // Arterial and internal carriageways.
-register(4, ['#a96754', '#6b9176', '#b1846d', '#7d9277', '#548183', '#85a29a', '#4e7c84', '#608676', '#b58a67']);
+register(4, ['#a96754', '#6b9176', '#b1846d', '#7d9277', '#548183', '#85a29a', '#4e7c84', '#608676', '#b58a67','#84967e','#687e91','#a5a49a','#a4a59e','#989e98']);
 register(5, ['#687e56', '#61784e', '#777f58', '#66875c', '#66895a', '#668c5c', '#719965','#829362','#7f945f','#718958','#78845d']);
 register(6, ['#c4c2aa']); // Raised concrete kerbs, only their horizontal faces.
 register(7, ['#aaa092']); // Broad warm-grey surface on Boxiang Road.

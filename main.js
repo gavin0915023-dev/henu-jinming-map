@@ -1,6 +1,7 @@
 import { createModel } from './model.js';
 import { fieldViews, mountFieldViews, walks } from './field-views.js';
 import { imageryLayer, addCampusBasemap } from './satellite.js';
+import { cuitingCenter } from './campus-commons.js';
 
 const $=selector=>document.querySelector(selector);
 const icons={
@@ -36,19 +37,18 @@ const library='https://jjc.henu.edu.cn/info/1004/1002.htm';
 const photoItems=[
   ['1704854320368001575','图书馆正面'],
   ['1704854320368017370','西门与校园中轴航拍'],
-  ['1704854320384040625','校园圆形广场']
+  ['1704854320384040625','马可广场 · 校方俯拍']
 ];
 const viewer='https://www.arcgis.com/apps/mapviewer/index.html?basemapUrl=https%3A%2F%2Fservices.arcgisonline.com%2FArcGIS%2Frest%2Fservices%2FWorld_Imagery%2FMapServer&center=114.30335,34.81805&level=16';
 const places=[
   {id:'library',name:'金明校区图书馆',type:'图书馆',note:'西侧中轴',icon:'book',color:'#dbbc80',x:-134,z:-73,y:36,walk:[-251,-72,1.57],desc:'校区标志性建筑之一。由西大门往东，经明德广场可抵达图书馆。',link:[library,'校方建筑介绍'],photo:0,main:true},
   {id:'west',name:'西大门',type:'校门',note:'金明大道',icon:'gate',color:'#c5f276',x:-459,z:-76,y:4,walk:[-485,-76,Math.PI/2],desc:'校名石墙朝西，两侧是入校通道。面向金字往东看，后方是明德广场和图书馆。',link:['https://ganbu.henu.edu.cn/info/1036/4225.htm','校方校门照片'],photo:1,main:true},
-  {id:'marco',name:'马可广场',type:'广场',note:'校园中部',icon:'square',color:'#d7a9d0',x:16,z:-77,y:8,walk:[17,-68,-1.45],desc:'校园中部的圆形广场，位于图书馆以东、公共教学楼组团以西。',photo:2,main:true},
-  {id:'lake',name:'粹庭湖',type:'水景',note:'教学区北侧',icon:'lake',color:'#9bdedb',x:136.3,z:-238.8,y:8,walk:[130,-176,0],desc:'校园东北部的湖泊之一，邻近经管教学楼。可从地面视角转向湖岸观察周边。',main:true},
+  {id:'marco',name:'马可广场',type:'广场',note:'图书馆东侧 · 下沉式圆形广场',icon:'square',color:'#d7a9d0',x:19.15,z:-76.5,y:3,walk:[69.2,-76.5,Math.PI*1.5,-.09],desc:'从东侧沿台阶下到广场中央，脚下是深浅相间的同心石环。回到上面俯看，还能看见台阶如何把弧形草台分成几段。',photo:2,main:true},
+  {id:'lake',name:'粹庭湖',type:'水景',note:'经济学院以北 · 雪垠路东侧',icon:'lake',color:'#9bdedb',...cuitingCenter,y:5,walk:[83.7,-446.3,1.484,.070],desc:'校方平面图将粹庭湖标在经济学院以北。沿西端小径向东看，垂枝伸到岸边，浅色岸沿随水面转弯。',link:['https://www.henu.edu.cn/images/jmxq.jpg','校方平面图'],main:true},
   {id:'stadium',name:'志义体育场',type:'体育场',note:'校园东侧 · 中州路',icon:'field',color:'#ebb28a',x:426,z:-220,y:8,walk:[318.7,-203,1.484,.076],desc:'西看台面向中州路，宽大的桁架顶棚和黑底红字馆名标出了主入口。',main:true},
   {id:'cs',name:'计算机与信息工程学院',type:'教学楼',note:'文甫路 · 马可广场以北',icon:'school',color:'#a9c5ec',x:-24,z:-196,y:21,walk:[10,-158,-.43,.19],desc:'文甫路一侧的入口在南翼东端，抬头可见竖排院名。沿外墙向西绕到雪垠路，可以看见长条玻璃和设备格栅。'},
-  {id:'north',name:'北大门',type:'校门',note:'东京大道',icon:'gate',color:'#c5f276',x:21,z:-601,y:8,walk:[21,-596,3.14],desc:'校区北侧入口，面向东京大道。模型中的入口为近似定位。',main:true},
+  {id:'north',name:'北大门',type:'校门',note:'东京大道 · 校名石墙',icon:'gate',color:'#c5f276',x:19.3,z:-600.8,y:4,walk:[11.9,-633.5,2.915,.052],desc:'从东京大道朝校园看，低石墙上的金字面向街道。石墙两侧都可进入，走进去回望能看到墙后的绿篱。',link:['https://ganbu.henu.edu.cn/info/1036/4225.htm','校方校门照片'],main:true},
   {id:'autumn',name:'访秋湖',type:'水景',note:'公共教学楼以南',icon:'lake',color:'#9bdedb',x:91,z:62,y:8,walk:[75,26,3.14],desc:'位于公共教学楼南侧，是校方平面图标注的校园水系之一。',main:true},
-  {id:'canteen',name:'北苑餐厅',type:'餐厅',note:'校园东北部',icon:'meal',color:'#e9ce7b',x:340,z:-434,y:12,walk:[326,-401,.35],desc:'校区东北部的餐厅，邻近生命科学学院与北侧教学区。'},
   {id:'hall',name:'计算机大楼报告厅',type:'报告厅',note:'文甫路 · 两栋教学楼之间',icon:'school',color:'#d6ad89',x:19.2,z:-207,y:12.5,walk:[19.2,-178.5,0,.10],desc:'从文甫路朝北看，暖色墙面和三组高窗连接两侧白色教学楼。中央通道可步行穿过。'},
   {id:'software',name:'软件学院',type:'教学楼',note:'文甫路 · 报告厅以东',icon:'school',color:'#c6a78d',x:62,z:-197,y:21,walk:[48.3,-179.3,-.66,.21],desc:'门厅在南翼西端。文甫路边可以看见独立的红字院牌，沿雪垠路可看东北侧的窗带和设备格栅。'},
   {id:'physics',name:'物理实验楼（物理与电子学院 C 座）',type:'实验楼',note:'普通物理分中心 · 锥形报告厅旁',icon:'school',color:'#b57961',x:-112,z:222,y:21,walk:[-111.2,250.8,.07,.24],desc:'院内的红砖楼和锥形报告厅由低楼相连。绕到南侧看玻璃门厅，或沿院边到另一侧看砖墙和顶层敞廊。'},
@@ -60,7 +60,11 @@ const places=[
   {id:'dorm17',name:'17号研究生宿舍（学十七公寓）',type:'宿舍',note:'弯道路口西侧',aliases:'研究生公寓 十七号 17号楼',icon:'school',color:'#ced1b9',x:-414,z:419,y:20,walk:[-358.2,419.9,4.433,.140],desc:'从路口向西看，白色端墙的开口集中在几道竖列中；阳台的栏杆与侧面窗带做了区分。'},
   {id:'clinic',name:'河大校医院',type:'校医院',note:'河南大学医院 · 西侧入口',icon:'pin',color:'#94b6ca',x:-449,z:604,y:18,walk:[-469.3,600.5,1.839,.045],desc:'西侧入口上有折面玻璃雨棚和连廊，左侧的蓝色玻璃上保留了街景中的竖排院名。'},
   {id:'jiaoyuan',name:'教苑餐厅',type:'餐厅',note:'西侧入口 · 老街景民族餐厅招牌',aliases:'教苑食堂 民族食堂',icon:'pin',color:'#cf9273',x:-248,z:431,y:11,walk:[-283.5,444.9,1.204,.157],desc:'三层橙红色窗下墙随着转角折过去，短墙上是蓝色餐厅门牌。绕到南面，底层大窗带金属竖栅。'},
-  {id:'beiyuan',name:'北苑餐厅',type:'餐厅',note:'中州路 · 室外楼梯与门廊',aliases:'北苑食堂',icon:'pin',color:'#d6c4a6',x:338,z:-430,y:11,walk:[306,-396.1,.698,.122],desc:'街景里的北苑餐厅朝向一个开阔前场。左侧外梯升到平台，中段有细柱门廊，东端是一排独立小窗。'},
+  {id:'beiyuan',name:'北苑餐厅',type:'餐厅',note:'中州路 · 室外楼梯与门廊',aliases:'北苑食堂 canteen',icon:'meal',color:'#d6c4a6',x:338,z:-430,y:11,walk:[306,-396.1,.698,.122],desc:'街景里的北苑餐厅朝向一个开阔前场。左侧外梯升到平台，中段有细柱门廊，东端是一排独立小窗。'},
+  {id:'campus-bridge',name:'九章路石桥',type:'桥梁',note:'教学区 · 镂空石栏',aliases:'九章路桥 教学区石桥',icon:'pin',color:'#d1cbb9',x:137,z:-229.7,y:5,walk:[113.6,-229.4,.663,0],desc:'从桥头向东北看，两侧的石柱和镂空栏板沿桥面排开。粹庭湖在更北面，是另一处水面。'},
+  {id:'office',name:'办公楼',type:'办公楼',note:'明德广场以南 · 弧形外廊',icon:'school',color:'#c8c4b0',x:-359,z:35.5,y:22,walk:[-360.4,81.6,0,.227],desc:'南面的玻璃雨棚伸到台阶上方，沿曲面绕到北侧后，外廊栏杆和分段挑板比窗更靠近行人。'},
+  {id:'east-courts',name:'东南网球场与篮球场',type:'运动场',note:'南运动区 · 高网与矮栏',aliases:'网球场 篮球场 南操场',icon:'field',color:'#b7c8ad',x:163,z:330,y:4,walk:[111.4,292,1.658,.052],desc:'网球场有高网、双头场灯和蓝灰色球区；往南再向东，灰色篮球场的蓝色球架靠近路边，矮围栏在入口断开。'},
+  {id:'nanyuan',name:'南苑餐厅',type:'餐厅',note:'南生活区 · 弧形餐厅',aliases:'南苑食堂',icon:'meal',color:'#cab392',x:-264,z:597.5,y:15,walk:[-203.5,595,4.678,.157],desc:'从东侧前场看，金色餐厅名落在内收的长廊前。绕到南面是弧形白檐、方柱和通透的屋顶钢架。'},
   {id:'education',name:'田家炳教育书院',type:'书院',note:'东西两院 · 钟塔与连廊',aliases:'教育科学学院 教育学院 钟楼',icon:'school',color:'#bf8975',x:229,z:-293,y:36,walk:[211.2,-302.7,1.745,.192],desc:'从西院仰看红砖钟塔，再走到廊下看顶板的圆形开口。在东院回望，可看见两翼之间的整段架空空间。'},
   {id:'geography',name:'地理楼',type:'教学楼',note:'原地图标注：地理科学学院',aliases:'环境与规划学院 地理与环境学院',icon:'school',color:'#bc8c78',x:-70,z:321,y:16,walk:[-81.5,363.7,.262,.175],desc:'红砖楼的南面有弧形玻璃、白色挑台和林带；北侧小路靠墙更近，可看清成对的窗和浅色短饰条。'}
 ];
@@ -172,7 +176,7 @@ function updateLabels(project, bearing, mpp, {w,h}, walking=false){
     const s=project(p.x,p.y,p.z);
     const width=12+p.name.length*12;
     const space=occupied.every(v=>Math.abs(v.x-s.x)>(v.width+width)/2+5||Math.abs(v.y-s.y)>25);
-    const visible=!walking&&(p.main||p===active||mpp<1.6)&&s.visible&&s.x>width/2&&s.x<w-width/2&&s.y>68&&s.y<h-50&&space;
+    const visible=!walking&&!activeView?.orbit&&(p.main||p===active||mpp<1.6)&&s.visible&&s.x>width/2&&s.x<w-width/2&&s.y>68&&s.y<h-50&&space;
     pin.hidden=!visible;
     if(!visible)continue;
     occupied.push({...s,width});
@@ -297,7 +301,7 @@ function setMode(next,walkPose,item=null){
   }
   if(model){
     model.exitWalk();
-    if(active)model.focus(active.x,active.z);
+    if(item?.orbit)model.lookFrom(...item.orbit);else if(active)model.focus(active.x,active.z);
   }else displayError('三维场景需要支持 WebGL 的浏览器。可切换卫星影像。');
 }
 
@@ -355,8 +359,11 @@ function visitView(item){
   active=places.find(p=>p.id===item.place)??null;
   if(!active||!placeMatches(active,search.value.trim().toLowerCase()))search.value='';
   renderPlaces();
-  const [x,z,bearing,pitch]=item.camera;
-  setMode('walk',[x,z,bearing*Math.PI/180,pitch*Math.PI/180,78],item);
+  if(item.orbit)setMode('model',null,item);
+  else{
+    const [x,z,bearing,pitch]=item.camera;
+    setMode('walk',[x,z,bearing*Math.PI/180,pitch*Math.PI/180,78],item);
+  }
   $('#mode-note').textContent=item.title;
 }
 const openViews=mountFieldViews($('#field-dialog'),visitView);

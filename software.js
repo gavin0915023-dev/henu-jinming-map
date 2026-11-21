@@ -1,13 +1,15 @@
-import { Matrix4 } from 'three';
+import { Matrix4,ShapeUtils,Vector2 } from 'three';
 import { libraryFacade } from './facade.js';
 import { observedTeachingFace, computingElevation, computingSignColumns } from './building-detail.js';
 import { buildingSolids, softwareSign, softwareId, hallId, reportFacade } from './wenfu.js';
 import { physicsModel, labId, labPlaque } from './physics.js';
 import { eastModels, protectedTeachingEdge, teachingId, isStandFront, stadiumSign, standId, boundaryLines } from './east-campus.js';
 import { centralModels, axisCustomEdge } from './central-axis.js';
-import { facultyModels, facultyColors, facultyEdge, siteLettering } from './faculty-sites.js';
+import { facultyModels, facultyColors, facultyEdge, visibleSigns } from './faculty-sites.js';
+import { hasMarco,isMarcoRing,marcoHole,surveyedCourtPlan } from './campus-commons.js';
 import { westGatePlacement } from './west-gate.js';
 import { avenueHedgeRuns } from './avenue.js';
+import { bridgeDeck } from './field-ground.js';
 
 const tint = (hex, factor) => {
   const n=parseInt(hex.slice(1),16);
@@ -44,12 +46,18 @@ export function softwareRenderer(data,palette,trees,inside){
   const matrix=new Matrix4();
   const floor=[], shadows=[], objects=[];
   let width=1,height=1,dpr=1,previous='';
-  function surface(points,y,color){floor.push([poly(points,y),color]);}
+  function surface(points,y,color,holes=[]){
+    if(!holes.length){floor.push([poly(points,y),color]);return;}
+    const verts=p=>(p.length>1&&p[0][0]===p.at(-1)[0]&&p[0][1]===p.at(-1)[1]?p.slice(0,-1):p).map(([x,z])=>new Vector2(x,z));
+    const border=verts(points),cuts=holes.map(verts),indices=ShapeUtils.triangulateShape(border,cuts),v=border.concat(...cuts);
+    for(const tri of indices)floor.push([tri.map(i=>[v[i].x,y,v[i].y]),color]);
+  }
   function line(points,w,y,color){for(const face of ribbon(points,w,y))floor.push([face,color]);}
-  surface([[-2400,-2400],[2400,-2400],[2400,2400],[-2400,2400]],0,'#718069');
-  surface(data.boundary,.07,'#748861');
+  const holes=hasMarco(data)?[marcoHole()]:[];
+  surface([[-2400,-2400],[2400,-2400],[2400,2400],[-2400,2400]],0,'#718069',holes);
+  surface(data.boundary,.07,'#748861',holes);
   for(const [p,kind] of data.green)surface(p,.14,kind==='farmland'?'#7c835f':'#667d56');
-  for(const p of data.plaza)surface(p,.22,'#a7a590');
+  for(const p of data.plaza)surface(p,.45,'#a7a590',isMarcoRing(p)?holes:[]);
   for(const [p,y,color] of data.field.surfaces)surface(p,y,color);
   for(const p of data.water){
     surface(p,.25,'#417879');
@@ -60,6 +68,22 @@ export function softwareRenderer(data,palette,trees,inside){
     const xs=p.map(x=>x[0]),zs=p.map(x=>x[1]);
     const x=Math.min(...xs),z=Math.min(...zs),u=Math.max(...xs),v=Math.max(...zs);
     const cx=(x+u)/2,cz=(z+v)/2;
+    const surveyed=surveyedCourtPlan(p,sport);
+    if(surveyed){
+      surface(p,.60,surveyed.finish.apron);
+      for(const f of surveyed.cells){
+        const tennis=sport==='tennis',w=tennis?10.97:Math.min(15,f.width-2.3),len=tennis?23.77:Math.min(28,f.length-3),l=-w/2,r=w/2,t=-len/2,b=len/2;
+        const at=([x,z])=>[f.c[0]+f.u[0]*x+f.v[0]*z,f.c[1]+f.u[1]*x+f.v[1]*z];
+        const mark=q=>line(q.map(at),.17,.71,'#e1e0cf');
+        surface([[l-1,t-1.1],[r+1,t-1.1],[r+1,b+1.1],[l-1,b+1.1]].map(at),.63,surveyed.finish.play);
+        mark([[l,t],[r,t],[r,b],[l,b],[l,t]]);mark([[l,0],[r,0]]);
+        if(tennis){for(const x of [l*.75,r*.75])mark([[x,t],[x,b]]);
+          for(const z of [-6.4,6.4])mark([[l*.75,z],[r*.75,z]]);mark([[0,-6.4],[0,6.4]]);}
+        else{for(const s of [-1,1])mark([[-2.45,s*b],[-2.45,s*(b-5.8)],[2.45,s*(b-5.8)],[2.45,s*b]]);
+          mark(Array.from({length:25},(_,i)=>[1.8*Math.cos(i*Math.PI/12),1.8*Math.sin(i*Math.PI/12)]));}
+      }
+      continue;
+    }
     const ball=/soccer|football/.test(sport);
     surface(p,.31,kind==='track'?'#9f6754':kind==='sports_centre'?'#586f50':ball?'#557a4c':'#688353');
     if(kind==='sports_centre'&&name==='志义体育场'){
@@ -91,7 +115,7 @@ export function softwareRenderer(data,palette,trees,inside){
   for(const p of boundaryLines(data))line(p,1.4,.63,'#a7be82');
   const sides=data.field.bridge.sides;
   if(sides.length){
-    const [[a,b],[c,d]]=sides;surface([a,b,d,c],1.055,'#b6afa4');
+    surface(bridgeDeck(data.field),1.055,'#b6afa4');
     for(const [s,t] of sides){
       const length=Math.hypot(t[0]-s[0],t[1]-s[1]),bays=Math.max(1,Math.round(length/1.9));
       const v=(f,y)=>[s[0]+(t[0]-s[0])*f,y,s[1]+(t[1]-s[1])*f];
@@ -139,7 +163,7 @@ export function softwareRenderer(data,palette,trees,inside){
   if(hall)for(const bay of reportFacade(hall[0]))objects.push({center:bay.center,parts:bay.parts,southFace:true});
   if(data.building.some(b=>b[2]==='library'))objects.push({center:[-181,16,-73],normal:[-1,0,0],parts:libraryFacade});
   for(const g of [...physicsModel(data.building),...eastModels(data),...centralModels(data),...facultyModels(data)])objects.push(g);
-  for(const {id,text,point:[x,y,z],height,width,yaw,color,horizontal} of siteLettering)if(data.building.some(r=>r[4]===id))
+  for(const {text,point:[x,y,z],height,width,yaw,color,horizontal} of visibleSigns(data))
     objects.push({center:[x,y,z],normal:[Math.sin(yaw),0,Math.cos(yaw)],parts:[],sign:()=>{
       [...text].forEach((ch,i)=>{const t=(i+.5)/text.length-.5;glyph(ch,horizontal?[x+width*t*Math.cos(yaw),y,z-width*t*Math.sin(yaw)]:[x,y-height*t,z],(horizontal?height:width)*.83,color);});
     }});

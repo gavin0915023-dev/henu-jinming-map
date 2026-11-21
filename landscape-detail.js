@@ -1,4 +1,6 @@
 import * as T from 'three';
+import {surveyedCourtPlan} from './campus-commons.js';
+import {bridgeDeck} from './field-ground.js';
 
 // All furniture and markings are merged by material. No per-lamp lights or meshes.
 export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
@@ -185,31 +187,31 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     ringLine(f, 0, 0, .22);
     stats.courts++;
   }
-  function court(f, sport) {
+  function court(f, sport,finish) {
     if (sport === 'basketball' || sport === 'multi') {
       const w = Math.min(15, f.width - 2.3), len = Math.min(28, f.length - 3.0), l = -w / 2, r = w / 2, t = -len / 2, b = len / 2;
-      surfaces.surface(rectangle(f, l - .8, t - .8, r + .8, b + .8), .63, '#548183');
+      surfaces.surface(rectangle(f, l - .8, t - .8, r + .8, b + .8), .63, finish?.play??'#548183');
       for (const sign of [-1, 1]) {
         const z = sign * len / 2, end = z - sign * Math.min(5.8, len * .21);
-        surfaces.surface(rectangle(f, -2.45, Math.min(z, end), 2.45, Math.max(z, end)), .65, '#85a29a');
+        surfaces.surface(rectangle(f, -2.45, Math.min(z, end), 2.45, Math.max(z, end)), .65, finish?.key??'#85a29a');
         line(f, [[-2.45, z], [-2.45, end], [2.45, end], [2.45, z]]);
         ringLine(f, 0, end, 1.8, 1.8, sign < 0 ? 0 : Math.PI, sign < 0 ? Math.PI : Math.PI * 2);
         const basket = z - sign * 1.3;
         ringLine(f, 0, basket, Math.min(6.25, w * .41), Math.min(6.25, w * .41), sign < 0 ? 0 : Math.PI, sign < 0 ? Math.PI : Math.PI * 2);
-        hoop(f, sign, len / 2);
+        if(finish)stats.hoops++;else hoop(f, sign, len / 2);
       }
       line(f, [[l, t], [r, t], [r, b], [l, b], [l, t]]);
       line(f, [[l, 0], [r, 0]]);
       ringLine(f, 0, 0, 1.8);
     } else if (sport === 'tennis') {
       const w = Math.min(10.97, f.width - 2), len = Math.min(23.77, f.length - 3.0), l = -w / 2, r = w / 2, t = -len / 2, b = len / 2;
-      surfaces.surface(rectangle(f, l - 1.2, t - 1.7, r + 1.2, b + 1.7), .63, '#4e7c84');
+      surfaces.surface(rectangle(f, l - 1.2, t - 1.7, r + 1.2, b + 1.7), .63, finish?.play??'#4e7c84');
       line(f, [[l, t], [r, t], [r, b], [l, b], [l, t]]);
       const singles = w * .75 / 2, service = Math.min(6.4, len * .27);
       line(f, [[-singles, t], [-singles, b]]); line(f, [[singles, t], [singles, b]]);
       line(f, [[-singles, -service], [singles, -service]]); line(f, [[-singles, service], [singles, service]]);
       line(f, [[0, -service], [0, service]]);
-      net(f, w, 1.07, .22);
+      if(!finish)net(f, w, 1.07, .22);
     } else {
       const badminton = sport === 'badminton';
       const w = Math.min(badminton ? 6.1 : 9, f.width - 1.8), len = Math.min(badminton ? 13.4 : 18, f.length - 2.4);
@@ -228,6 +230,12 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
 
   for (const [p, kind, sport] of data.sport) {
     if (kind === 'sports_centre' || unknownTracks.some(([q]) => p === q)) continue;
+    const surveyed=surveyedCourtPlan(p,sport);
+    if(surveyed){
+      surfaces.surface(p,.60,surveyed.finish.apron);
+      for(const cell of surveyed.cells)court(cell,sport,surveyed.finish);
+      continue;
+    }
     if (open(p).length !== 4 || !sport) {
       surfaces.surface(p, .60, '#7d9277');
       continue;
@@ -310,7 +318,7 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
   const {spans,sides}=data.field?.bridge??{spans:[],sides:[]};
   if(sides.length){
     const [[a,b],[c,d]]=sides;
-    details.surface([a,b,d,c],1.055,'#aaa092');
+    details.surface(bridgeDeck(data.field),1.055,'#aaa092');
     for(const [s,t] of [[a,b],[c,d]]){
       beam(details,s,t,.86,.32,.39,'#99978b');stoneParapet(s,t);
     }

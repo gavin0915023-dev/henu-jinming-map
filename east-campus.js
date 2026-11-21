@@ -32,11 +32,13 @@ export function eastGateBlockers(){
 }
 // Omit only the segment of the drawn boundary crossing the open road entrance.
 export function boundaryLines(data){
-  if(!hasEastGate(data))return [data.boundary];
   const rows=[],p=data.boundary;let run=[p[0]];
   for(let i=1;i<p.length;i++){
     const a=p[i-1],b=p[i];
-    if(a[0]>450&&b[0]>450&&a[1]<-106&&b[1]>-47){
+    if(a[1]<-600&&b[1]<-600&&a[0]<-5&&b[0]>46){
+      const at=x=>[x,a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0])];
+      run.push(at(-5));rows.push(run);run=[at(46)];
+    }else if(hasEastGate(data)&&a[0]>450&&b[0]>450&&a[1]<-106&&b[1]>-47){
       const at=z=>[a[0]+(b[0]-a[0])*(z-a[1])/(b[1]-a[1]),z];
       run.push(at(-106));rows.push(run);run=[at(-47)];
     }

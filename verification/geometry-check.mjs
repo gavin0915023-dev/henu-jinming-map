@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import * as T from '../assets/three.module.min.js';
 import { campusAvenueData, avenueHedgeRuns, avenueTrees } from '../avenue.js';
-import { fieldGround, entryGap, putFieldTrees } from '../field-ground.js';
+import { fieldGround, entryGap, putFieldTrees, bridgeDeck, walkingWater } from '../field-ground.js';
 import { buildingSolids, hallId, passage, reportFacade } from '../wenfu.js';
 import { fieldViews } from '../field-views.js';
 import { eastGateBlockers, teachingId } from '../east-campus.js';
@@ -10,6 +10,8 @@ import { libraryId } from '../central-axis.js';
 import { civilId, zengId, clinicId, facultyHeights } from '../faculty-sites.js';
 import { eduId, beiId, courtSigns } from '../college-courts.js';
 import { orientedFrame } from '../survey-mesh.js';
+import { cuitingCenter, isMarcoRing, marcoHole, publicBlockers, surveyedCourtPlan } from '../campus-commons.js';
+import { nanyuanId,officeId } from '../round-buildings.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -17,7 +19,7 @@ const modelSource = await readFile(new URL('model.js', root), 'utf8');
 const start = modelSource.indexOf('const closed =');
 const end = modelSource.indexOf('\nfunction seeded()', start);
 assert(start >= 0 && end > start, 'Cannot locate the model geometry helpers');
-const toolkit = new Function('T', `${modelSource.slice(start, end)}\nreturn { Batch, contains, bounds };`)(T);
+const toolkit = new Function('T', `${modelSource.slice(start, end)}\nreturn { Batch, contains, bounds, groundShape };`)(T);
 
 // Browser import maps are unavailable in Node; substitute the same bundled Three.js.
 const vendorURL = new URL('assets/three.module.min.js', root).href;
@@ -58,6 +60,38 @@ assert(!solidAt(181,2.45,-133,teachingId)&&solidAt(181,7,-133,teachingId),'White
 assert(!solidAt(-91,2.45,-73,libraryId)&&solidAt(-109,4,-73,libraryId)&&!solidAt(-109,24,-73,libraryId),'The low east lobby must be set back into the higher library wings');
 assert(eastGateBlockers().every(p=>!toolkit.contains(482.8,-77,p)),'The eastern entrance must stay open down the middle');
 const heightAt=facultyHeights(data);
+const on=(x,z,q)=>toolkit.contains(x,z,q);
+assert(data.water.findIndex(p=>on(cuitingCenter.x,cuitingCenter.z,p))===0&&fieldViews.find(v=>v.id==='jiuzhang').place==='campus-bridge','The named lake is north of Economics; the old stone bridge keeps its separate viewpoint');
+const deck=bridgeDeck(details);
+assert(on(137,-229.7,deck)&&data.water.some(p=>on(137,-229.7,p))&&!on(cuitingCenter.x,cuitingCenter.z,deck),'Only the surveyed bridge deck permits walking over open water');
+const {waterBlocks}=walkingWater(details,data.water,toolkit.contains,toolkit.bounds),mix2=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+for(const k of [.12,.5,.88])for(let t=-.4;t<1.4;t+=.04){
+  const [x,z]=mix2(mix2(deck[0],deck[3],k),mix2(deck[1],deck[2],k),t);
+  assert(!waterBlocks(x,z)&&!solidAt(x,2.45,z),'Both approaches and the whole Jiuzhang crossing are walkable');
+}
+assert(waterBlocks(cuitingCenter.x,cuitingCenter.z)&&data.water[1].some(([x,z])=>waterBlocks(x+1,z+1)),'Open water remains blocked away from the bridge');
+const square=data.plaza.find(isMarcoRing),hole=marcoHole();
+const withHole=toolkit.groundShape(square,[hole]),pos=withHole.attributes.position,idx=withHole.index.array;
+for(let i=0;i<idx.length;i+=3){
+  const tri=[idx[i],idx[i+1],idx[i+2]].map(j=>[pos.getX(j),-pos.getY(j)]);
+  assert(!on(19.15,-76.51,tri)&&!on(52.72,-78.1,tri),'Original plaza pavement must not cover the lowered floor or steps');
+}
+withHole.dispose();
+assert(!details.surfaces.some(([p])=>on(19.15,-76.5,p))&&!details.trees.some(([x,z])=>Math.hypot(x-19.15,z+76.5)<51),'The circular space is not covered by landscaping');
+const treadHeights=Array.from({length:12},(_,j)=>heightAt(19.15+37+(j+.5)*1.2,-76.5));
+assert(heightAt(19.15,-76.5)<-1.8 && treadHeights.every((h,i)=>!i||(h>treadHeights[i-1]+.18&&h<treadHeights[i-1]+.21))&&Math.abs(treadHeights.at(-1)-.45)<.001,'A radial flight has twelve walkable risers between the square floor and rim');
+const obstructions=publicBlockers(data),blocked=(x,z)=>obstructions.some(p=>on(x,z,p));
+assert(blocked(19.3,-600.8)&&!blocked(8.2,-600.8)&&!blocked(30,-600.8),'The gate wall is solid and neither approach road centreline is obstructed');
+assert(blocked(222.5,399.15)&&!blocked(226.5,399.23)&&blocked(114.7,292),'Only the opening in the basketball curb is passable; the tennis net is separate');
+for(const v of fieldViews.filter(v=>['lake','north','office','east-courts','nanyuan'].includes(v.place))){
+  const [x,z]=v.camera;assert(!blocked(x,z)&&!data.water.some(p=>on(x,z,p)),v.id+': camera must be on dry, accessible ground');
+}
+const dining=orientedFrame(-240.8,598.85,1,0),[doorX,doorZ]=dining.world([2,-1.2]);
+assert(!solidAt(doorX,2.4,doorZ,nanyuanId)&&solidAt(doorX,6.2,doorZ,nanyuanId),'Nanyuan entrance is recessed under its upper gallery');
+assert(!solidAt(-361.2,2.6,69.0,officeId)&&solidAt(-361.2,6.0,69,officeId)&&solidAt(-359.2,2.6,71.76,officeId)&&!solidAt(-357.4,2.6,35.3,officeId),
+  'The office south lobby opens behind its round columns, without filling the middle of the horseshoe');
+const baskets=data.sport.filter(([p,,s])=>s==='basketball'&&surveyedCourtPlan(p,s)).flatMap(([p,,s])=>surveyedCourtPlan(p,s).cells);
+assert(baskets.length>20&&baskets.every(f=>f.v[1]>.99),'The surveyed courts face the street to the south');
 for(let offset=-8;offset<=8;offset+=2)
   assert(!solidAt(-138.7+offset*.982,2.8,280.6+offset*.189,civilId),'Civil court should be traversable between the columns');
 assert(heightAt(-138.7,280.6)>1.5 && solidAt(-143.3,16,279.7,civilId),'Civil approach must rise under a separate high bridge');

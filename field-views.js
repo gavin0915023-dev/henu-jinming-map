@@ -39,7 +39,19 @@ export const fieldViews=[
   {id:'geography-curve',place:'geography',title:'地理楼 · 西南弧窗',caption:'沿南侧道路往西几步再抬头，楼角连续的玻璃和一层层白色挑台从红砖墙前凸出来。',camera:[-100,363.2,21,9],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011235540925G',12725594.31,4114769.86,21,9)},
   {id:'geography-north',place:'geography',title:'地理楼 · 北侧砖窗',caption:'从北边小路近看，每一组窗之间留着红砖墙，短短的浅色横条和竖条相互断开，底部换成了灰色墙裙。',camera:[-68.4,299.8,175,12],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011302135825G',12725632.79,4114847.04,175,12)},
   {id:'autumn-bank',place:'autumn',title:'访秋湖 · 北侧路缘',caption:'实景从路上朝湖看：近处是树列与低篱，远处树丛遮住水面。',camera:[63,23,154,1],source:'百度街景',url:baidu('01027700001404011243330335G',12725792.37,4115183.62,154,1)},
-  {id:'jiuzhang',place:'lake',title:'九章路 · 粹庭湖桥',caption:'从桥边向东北看，浅灰色镂空石栏和间隔的方柱勾出桥面边缘。',camera:[113.6,-229.4,38,0],source:'百度街景',url:baidu('01027700001404011226315395G',12725853.26,4115490.24,38,0)},
+  {id:'jiuzhang',place:'campus-bridge',title:'九章路 · 教学区石桥',caption:'从桥边向东北看，浅灰色镂空石栏和间隔的方柱勾出桥面边缘。这座教学区石桥与经济学院北面的粹庭湖是两处地点。',camera:[113.6,-229.4,38,0],source:'百度街景',url:baidu('01027700001404011226315395G',12725853.26,4115490.24,38,0)},
+  {id:'north-gate',place:'north',title:'北大门 · 东京大道',caption:'站在东京大道朝南看，金色校名在低石墙上，两侧有入校通道。校方校门照片也能看清字色和石墙的比例。',camera:[11.9,-633.5,167,3],date:'2022年6月',source:'百度街景',url:baidu('09027700122206251154436776P',12725728.95,4115978.76,167,3)},
+  {id:'north-gate-in',place:'north',title:'北大门 · 入校回望',caption:'从校内往北回望，先看到一小片绿篱，再看到石墙背面。这个方向的原照拍摄较早。',camera:[19,-576.5,355,4],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011213040405G',12725737.78,4115909.74,355,4)},
+  {id:'marco-approach',place:'marco',title:'马可广场 · 西侧步道',caption:'从西边穿过绿篱之间的步道，地面上只能望见低处广场的一部分。可选“东侧俯看”看清全貌。',camera:[-61.8,-38.5,64,4],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011228520495G',12725640.17,4115257.02,64,4)},
+  {id:'marco-bowl',place:'marco',title:'马可广场 · 东侧俯看',caption:'从东侧高处朝图书馆方向看，放射状深色石带与几圈同心铺地收在下沉广场里。此模型视角参照校方俯拍，拍摄高度为估计。',orbit:[[120,48,-76.5],[4,2,-76.5]],source:'校方俯拍',url:'https://zbcg.henu.edu.cn/uEditorFile/ueditor/upload/image/20240110/1704854320384040625.jpg'},
+  {id:'cuiting-bank',place:'lake',title:'粹庭湖 · 西端柳岸',caption:'从雪垠路旁向东看，窄小的岸路夹在树和水面之间。垂枝向水边伸下去，硬质岸沿跟着湖形转弯。',camera:[83.7,-446.3,85,4],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011220385385G',12725816.79,4115752.62,85,4)},
+  {id:'cuiting-north',place:'lake',title:'粹庭湖 · 北路望湖',caption:'从北面的路向东南看，中间隔着低篱、行道树和灌木，水面不像西端小径那样一览无余。',camera:[123.4,-481.4,158,5],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011208190505G',12725865.11,4115795.45,158,5)},
+  {id:'office-north',place:'office',title:'办公楼 · 北侧外廊',caption:'沿弧形外廊转过去，浅色楼板突出于深色窗带，外面还有一道细栏杆。旁边平直的翼墙则是间隔开的窗。',camera:[-344.3,-13.9,204,8],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011238110455G',12725295.94,4115224.52,204,8)},
+  {id:'office-south',place:'office',title:'办公楼 · 南门雨棚',caption:'从正南近看，台阶正对有柱子的门厅，几道突出的挑梁托起薄玻璃雨棚。上面成排的窗格与北面的敞廊不同。',camera:[-360.4,81.6,0,13],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011240515745G',12725276.48,4115108.64,0,13)},
+  {id:'tennis-west',place:'east-courts',title:'东南运动区 · 网球场西侧',caption:'隔着绿色高网往东看，蓝灰色球区外留着一圈绿色场地。双头灯高出围网，球场中间的球网低得多。',camera:[111.4,292,95,3],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011258395545G',12725851.8,4114858.13,95,3)},
+  {id:'hoops-south',place:'east-courts',title:'东南运动区 · 篮球场南口',caption:'从路边朝北看，蓝色弯臂球架立在灰色场地边缘。近处是水泥矮基上的绿网，右边留有能直接走进球场的开口。',camera:[222.5,401.8,0,3],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011254430805G',12725987.43,4114726.17,0,3)},
+  {id:'nanyuan-east',place:'nanyuan',title:'南苑餐厅 · 东侧餐厅名',caption:'前场上能读出二层长廊前的金字“南苑餐厅”。两侧的竖向墙板夹着内收的玻璃和折线屋顶。',camera:[-203.5,595,268,9],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011305475415G',12725468.55,4114488.07,268,9)},
+  {id:'nanyuan-south',place:'nanyuan',title:'南苑餐厅 · 南侧弧檐',caption:'绕到南面，弧形白檐几乎占满视野。檐下有独立方柱，上方是露天的细钢架，和东侧的金字长廊不同。',camera:[-259.3,641.1,350,8],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011306165575G',12725400.69,4114431.6,350,8)},
   {id:'west-gate',place:'west',title:'西大门 · 校名墙',caption:'面向校园中轴。金明西门是低矮的校名石墙，两侧留出通道。',camera:[-485,-76,90,0],source:'校方照片',url:uni}
 ];
 
@@ -53,23 +65,37 @@ export const walks=[
   ['教苑餐厅',['jiaoyuan-door','jiaoyuan-side']],
   ['北苑餐厅',['beiyuan-court','beiyuan-stair']],
   ['书院两面',['education-west','education-clock','education-east']],
-  ['地理楼',['geography-south','geography-curve','geography-north']]
+  ['地理楼',['geography-south','geography-curve','geography-north']],
+  ['北门内外',['north-gate','north-gate-in']],['粹庭湖岸',['cuiting-bank','cuiting-north']],
+  ['办公楼两面',['office-north','office-south']],['东南运动区',['tennis-west','hoops-south']],
+  ['南苑餐厅',['nanyuan-east','nanyuan-south']]
 ].map(([label,ids])=>({label,stops:ids.map(id=>fieldViews.find(v=>v.id===id))}));
 
 export function mountFieldViews(dialog,visit){
-  const list=dialog.querySelector('.field-list');
+  const list=dialog.querySelector('.field-list'),select=dialog.querySelector('[data-region]');
+  const areas=[
+    ['中轴与校门',['west','north','east','library','marco','office']],
+    ['北部学院与湖区',['pharmacy','education','beiyuan','lake','campus-bridge']],
+    ['文甫路与公共教学区',['cs','hall','software','teaching','autumn']],
+    ['体育场与球场',['stadium','east-courts']],
+    ['南部学院与生活区',['physics','civil','geography','zeng','dorm17','clinic','jiaoyuan','nanyuan']]
+  ];
+  const area=v=>areas.find(([,ids])=>ids.includes(v.place))?.[0]??areas[0][0];
+  for(const name of ['',...areas.map(a=>a[0])])select.add(new Option((name||'全校')+'（'+fieldViews.filter(v=>!name||name===area(v)).length+'）',name));
   for(const item of fieldViews){
     const row=document.createElement('section'),title=document.createElement('h3'),note=document.createElement('p');
     title.textContent=item.title;note.textContent=item.caption;
     const go=document.createElement('button'),source=document.createElement('a');
-    go.type='button';go.dataset.view=item.id;go.textContent='到这里看模型';
+    row.dataset.area=area(item);go.type='button';go.dataset.view=item.id;go.textContent=item.orbit?'俯看广场模型':'到这里看模型';
     go.onclick=()=>{dialog.close();visit(item);};
     source.textContent=item.source+(item.date?' · '+item.date:'')+' ↗';source.href=item.url;source.target='_blank';source.rel='noopener';
     row.append(title,note,go,source);list.append(row);
   }
+  const filter=()=>{for(const row of list.children)row.hidden=Boolean(select.value)&&select.value!==row.dataset.area;list.scrollTop=0;};
+  select.onchange=filter;
   dialog.querySelector('[data-close]').onclick=()=>dialog.close();
   return (place,id)=>{
-    dialog.showModal();
+    select.value='';filter();dialog.showModal();
     const index=fieldViews.findIndex(v=>id?v.id===id:place&&v.place===place);
     for(const [i,row] of [...list.children].entries())row.toggleAttribute('data-current',i===index);
     list.scrollTop=0;

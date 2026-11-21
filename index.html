@@ -60,13 +60,14 @@
   <dialog id="about" aria-labelledby="about-title">
     <div class="dialog-top"><span class="eyebrow">ABOUT THE MODEL</span><button type="button" id="close-about" class="icon-button" aria-label="关闭模型说明" data-icon="close"></button></div>
     <h2 id="about-title">模型与来源说明</h2>
-    <p>本模型沿用提供的校园轮廓和建筑估算高度。窗框、屋顶、入口及景观设施采用程序化示意细节，用于浏览校园空间，不代表建筑现状的测绘结果。</p>
+    <p>地点依照校园平面图定位。取景点的门廊、窗带、球场和湖岸按各处实拍分别绘制；台阶尺寸、建筑高度及没有照片的墙面为估计。取景点附有原始街景或校方照片，可按拍摄方向对照。</p>
     <p>卫星影像来自 Esri World Imagery，需要网络连接。影像未加载的区域使用随站点提供的校园平面示意图，仍可查找地点。</p>
-    <div class="source-links"><a href="https://jjc.henu.edu.cn/info/1004/1002.htm" target="_blank" rel="noopener">校方图书馆介绍 ↗</a><a href="https://zbcg.henu.edu.cn/xwtz/5707.chtml" target="_blank" rel="noopener">校方照片来源 ↗</a></div>
+    <div class="source-links"><a href="https://www.henu.edu.cn/images/jmxq.jpg" target="_blank" rel="noopener">校方平面图 ↗</a><a href="https://jjc.henu.edu.cn/info/1004/1002.htm" target="_blank" rel="noopener">校方图书馆介绍 ↗</a><a href="https://zbcg.henu.edu.cn/xwtz/5707.chtml" target="_blank" rel="noopener">校方照片来源 ↗</a></div>
   </dialog>
   <dialog id="field-dialog" aria-labelledby="field-title">
     <div class="dialog-top"><h2 id="field-title">实景取景点</h2><button type="button" data-close class="icon-button" aria-label="关闭取景点" data-icon="close"></button></div>
     <p class="field-intro">选位置看模型，或打开原始实拍对照。街景呈现的是拍摄时的校园。</p>
+    <label class="field-region">取景区域 <select data-region></select></label>
     <div class="field-list"></div>
   </dialog>
   <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">

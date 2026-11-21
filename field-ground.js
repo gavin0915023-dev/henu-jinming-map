@@ -105,6 +105,19 @@ export function entryGap(ground,x,z,margin=0){
   return ground?.gateways.some(([a,b,kerb])=>x>a-margin && x<b+margin && Math.abs(z-kerb)<3+margin);
 }
 
+// The Jiuzhang deck is one surface between its two outer railings. The
+// surveyed water polygon continues underneath; only this crossing is dry.
+export function bridgeDeck(field){
+  const s=field.bridge.sides;
+  return s.length===2?[s[0][0],s[0][1],s[1][1],s[1][0]]:null;
+}
+export function walkingWater(field,water,contains,bounds){
+  const deck=bridgeDeck(field),lakes=water.map(p=>[bounds(p),p]);
+  const onDeck=(x,z)=>Boolean(deck&&contains(x,z,deck));
+  const waterBlocks=(x,z)=>lakes.some(([[l,n,r,s],p])=>x>l&&x<r&&z>n&&z<s&&contains(x,z,p))&&!onDeck(x,z);
+  return {onDeck,waterBlocks};
+}
+
 export function putFieldTrees(planned,ground,inside){
   return [...planned.filter(([x,z])=>!ground.trees.some(t=>(t[0]-x)**2+(t[1]-z)**2<19) &&
     !ground.forecourts.some(p=>inside(x,z,p)) &&
