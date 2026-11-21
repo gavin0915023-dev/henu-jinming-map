@@ -345,7 +345,7 @@ try {
   await evaluate("document.querySelector('#tour-exit').click()");
   check('Leaving the tour restores lighting, labels and the place card',await evaluate("document.querySelector('#tour-card').hidden && !new URL(location.href).searchParams.has('tour') && document.querySelector('.viewport').dataset.lighting==='noon' && document.querySelector('#mode-label').textContent==='三维校园' && !document.querySelector('#detail').hidden"));
   await readyAt(url+'/?tour=lake&stop=6');
-  check('A shared tour link opens the final lakeside stop at night',await evaluate("document.querySelector('#tour-card').dataset.tour==='lake' && document.querySelector('#tour-step').textContent==='6 / 6' && document.querySelector('#tour-next').textContent.includes('完成') && document.querySelector('.viewport').dataset.lighting==='night'"));
+  check('A shared tour link opens the final lakeside stop at night',await evaluate("document.querySelector('#tour-card').dataset.tour==='lake' && document.querySelector('#tour-step').textContent==='6 / 6' && document.querySelector('#tour-next').textContent.includes('完成') && document.querySelector('.viewport').dataset.lighting==='night' && !document.querySelector('#tour-walk').hidden"));
   await capture('tour-night');
   await evaluate("document.querySelector('#tour-next').click()");
   check('Finishing a tour offers a restart',await evaluate("document.querySelector('#tour-card').dataset.finished==='true' && document.querySelector('#tour-toggle').textContent==='重新开始'"));
@@ -353,7 +353,10 @@ try {
   check('Restarting returns to the first stop',await evaluate("document.querySelector('#tour-card').dataset.stop==='1' && document.querySelector('#tour-card').dataset.playing==='true'"));
   await evaluate("document.querySelector('#tour-walk').click()");
   check('Going down to the ground leaves the tour for the stop viewpoint',await evaluate("document.querySelector('#tour-card').hidden && document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && new URL(location.href).searchParams.get('view')==='pharmacy' && document.querySelector('.viewport').dataset.lighting==='noon'"));
-  await evaluate("document.querySelector('#home').click()");
+  await readyAt(url+'/?tour=lake&stop=6');
+  await evaluate("document.querySelector('#tour-walk').click()");
+  check('Descending from a nighttime library tour stop preserves night lighting in walk mode',await evaluate("document.querySelector('#tour-card').hidden && document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && document.querySelector('.viewport').dataset.lighting==='night' && document.querySelector('#mode-note').textContent.includes('图书馆')"));
+  await evaluate("document.querySelector('[data-light=noon]').click();document.querySelector('#home').click()");
   if(process.env.CHECK_SATELLITE==='1'){
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
     await until(()=>evaluate("document.querySelector('#fallback').hidden && (()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return tiles.length>=4 && tiles.every(t=>t.complete && t.naturalWidth>0)})()"),'Satellite imagery loads',50000);
@@ -430,17 +433,17 @@ try {
   {
     const pose=async()=>new URL(await evaluate("(document.querySelector('#share').click(),location.href)")).searchParams.get('pos').split(',').map(Number);
     const [jx,jy]=await evaluate("(()=>{const r=document.querySelector('#joystick').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()");
-    const hold=async(dx,dy,ms)=>{
+    const hold=async(dx,dy,ms,frames=6)=>{
       await call('Input.dispatchMouseEvent',{type:'mousePressed',x:jx,y:jy,button:'left',buttons:1,clickCount:1});
       await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:jx+dx,y:jy+dy,button:'left',buttons:1});
-      await pause(ms);
+      await Promise.all([pause(ms),evaluate(`new Promise(r=>{let n=0;const f=()=>++n>=${frames}?r():requestAnimationFrame(f);requestAnimationFrame(f)})`)]);
       await call('Input.dispatchMouseEvent',{type:'mouseReleased',x:jx+dx,y:jy+dy,button:'left',buttons:0,clickCount:1});
       await settle();
     };
     const start=await pose();
-    await hold(0,-44,900);
+    await hold(0,-44,700,6);
     const moved=await pose();
-    await hold(44,0,600);
+    await hold(44,0,500,6);
     const turned=await pose();
     check('One-thumb joystick walks forward and turns, then recentres',Math.hypot(moved[0]-start[0],moved[1]-start[1])>2&&Math.abs(turned[2]-moved[2])>.2&&
       await evaluate("document.querySelector('.joystick-knob').style.transform==='' && !document.querySelector('#joystick').classList.contains('engaged')"));

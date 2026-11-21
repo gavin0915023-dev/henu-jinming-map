@@ -872,9 +872,9 @@ tourCtl = createTourController(tourCard, id => places.find(p => p.id === id), {
       tourUrl({ id: tour.id, index });
     } finally { tourDriving = false; }
   },
-  exit() {
+  exit(_was, { keepLighting = false } = {}) {
     viewportEl.classList.remove('touring');
-    applyLighting(tourPrevLighting ?? 'noon');
+    if (!keepLighting) applyLighting(tourPrevLighting ?? 'noon');
     tourPrevLighting = null;
     tourUrl(null);
     if (mode === 'model') {
@@ -888,9 +888,17 @@ tourCtl = createTourController(tourCard, id => places.find(p => p.id === id), {
   reducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches
 });
 $('#tour-walk').onclick = () => {
-  const view = fieldViews.find(v => v.id === tourCtl.state?.stop.view);
-  tourCtl.exit();
+  const stop = tourCtl.state?.stop;
+  const view = stop?.view ? fieldViews.find(v => v.id === stop.view) : null;
+  const place = stop ? places.find(p => p.id === stop.place) : null;
+  tourCtl.exit({ keepLighting: true });
   if (view) visitView(view);
+  else if (place?.walk) {
+    active = place;
+    renderPlaces();
+    setMode('walk', place.walk);
+    $('#mode-note').textContent = place.name;
+  }
 };
 // Any direct manipulation of the scene pauses the tour so the visitor can take over.
 const takeOver = () => {

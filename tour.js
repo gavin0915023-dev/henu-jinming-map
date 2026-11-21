@@ -58,7 +58,7 @@ export function createTourController(card, findPlace, hooks) {
 
   function render() {
     if (!tour) return;
-    const stop = tour.stops[index], last = index === tour.stops.length - 1;
+    const stop = tour.stops[index], last = index === tour.stops.length - 1, place = findPlace(stop.place);
     card.dataset.tour = tour.id;
     card.dataset.stop = String(index + 1);
     card.dataset.playing = String(playing);
@@ -70,7 +70,7 @@ export function createTourController(card, findPlace, hooks) {
     $('#tour-next').textContent = last ? '完成 ✓' : '下一站 ›';
     $('#tour-toggle').textContent = playing ? '暂停' : '继续';
     $('#tour-toggle').setAttribute('aria-pressed', String(!playing));
-    $('#tour-walk').hidden = !stop.view;
+    $('#tour-walk').hidden = !stop.view && !place?.walk;
     $('#tour-dots').replaceChildren(...tour.stops.map((_, i) => {
       const d = document.createElement('i');
       if (i < index) d.className = 'done'; else if (i === index) d.className = 'current';
@@ -132,7 +132,7 @@ export function createTourController(card, findPlace, hooks) {
     go(at);
     return true;
   }
-  function exit() {
+  function exit(options) {
     if (!tour) return;
     const was = tour;
     clearTimeout(timer);
@@ -140,12 +140,12 @@ export function createTourController(card, findPlace, hooks) {
     hooks.stopDrift();
     card.hidden = true;
     delete card.dataset.tour; delete card.dataset.stop; delete card.dataset.finished;
-    hooks.exit(was);
+    hooks.exit(was, options);
   }
   $('#tour-prev').onclick = () => { delete card.dataset.finished; go(index - 1); };
   $('#tour-next').onclick = () => { if (index === tour.stops.length - 1) finish(); else { delete card.dataset.finished; go(index + 1); } };
   $('#tour-toggle').onclick = () => (playing ? pause() : resume());
-  $('#tour-exit').onclick = exit;
+  $('#tour-exit').onclick = () => exit();
   return {
     start, exit, pause, resume,
     get active() { return Boolean(tour); },
