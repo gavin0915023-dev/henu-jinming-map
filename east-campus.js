@@ -1,5 +1,7 @@
-import { frame, patch, clip, panel, panelWindow } from './survey-mesh.js';
+import { frame, patch, panel, panelWindow } from './survey-mesh.js';
 import {standId,stadiumFieldModel} from './stadium-bowl.js';
+import {teachingCourtModels} from './teaching-courts.js';
+export {teachingCourtSolids as teachingSolids,isTeachingCourtEdge as protectedTeachingEdge} from './teaching-courts.js';
 
 export const teachingId='712688930';
 export {standId};
@@ -11,22 +13,6 @@ export const easternCourts=[
 ];
 export const stadiumSign={text:'河南大学志义体育场',point:[349.96,11.92,-207.3],yaw:-Math.PI/2,width:23.1,height:2.63,color:'#bd483a',background:'#393d42'};
 export const hasEastGate=d=>d.road.some(r=>r[2]==='夷山大街')&&d.boundary.some(([x,z])=>x>496&&z<0);
-export const protectedTeachingEdge=(a,z,b,t)=>Math.min(a,b)>174&&Math.max(z,t)>-146.3&&Math.min(z,t)<-88;
-
-// Only cut back the east side actually seen through the stair and pilotis.
-// The western side of the long irregular source footprint stays intact.
-export function* teachingSolids(record){
-  const p=record[0].slice(0,-1),top=record[1]+.08;
-  for(const [lo,hi,kind] of [[-200,-146,0],[-146,-118,1],[-118,-104.5,2],[-104.5,20,0]]){
-    const row=clip(clip(p,1,lo,false),1,hi,true);
-    for(const [piece,base] of kind===0?[[row,.08]]:[[clip(row,0,177.1,true),.08],[clip(row,0,177.1,false),kind===1?4.6:top]]){
-      if(piece.length>2&&base<top)yield {p:[...piece,piece[0]],base,top,record};
-    }
-  }
-  for(const [l,r,n,s,h] of [[-6.9,6.2,-6.62,.10,6.86],...[8.8,17.4,26.1,32.1].map(u=>[u-.40,u+.40,-.32,.50,4.6])]){
-    const ring=patch(school,l,r,n,s);yield {p:[...ring,ring[0]],base:.08,top:h,custom:true,record};
-  }
-}
 export function eastGateBlockers(){
   return [[-25,-18,-5,1],[17,24,-5,1],[-5.6,-3.5,-1.05,1.05],[4.9,7.0,-1.05,1.05],
     [-31.3,-22,-2,-.8],[22,31.3,-2,-.8]].map(a=>patch(gate,...a));
@@ -80,14 +66,6 @@ function classroom(){
     group([0,(hi+lo)/2,v]);bar([x0,lo-.15,v+.74],[x1,hi-.15,v+.74],.12,white,0);
     for(const y of [.49,.92])bar([x0,lo+y,v+.70],[x1,hi+y,v+.70],.037,iron);
     for(let j=0;j<=6;j++){const x=x0+(x1-x0)*j/6,y=lo+(hi-lo)*j/6;bar([x,y,v+.70],[x,y+.94,v+.70],.033,iron);}
-  }
-  // North wing on tall white columns; yellowed glazing shades are horizontal,
-  // while the broad white end panels are blank in the supplied view.
-  for(const u of [8.8,17.4,26.1,32.1])box(u-.40,u+.40,.66,4.64,-.32,.50,white);
-  box(6.45,33.0,4.60,16.21,-1.2,.41,white);
-  for(const [l,r] of [[7.10,11.3],[14.4,24.85],[27.0,32.2]]){
-    for(let j=0;j<3;j++)panelWindow(d,l,r,5.40+j*3.42,7.38+j*3.42,.46,Math.ceil((r-l)/2.2));
-    for(let j=0;j<8;j++){const y=5.30+j*1.36;box(l-.08,r+.08,y,y+.14,.42,1.24,'#e1dccb');}
   }
   // Southern return has broad separate bays. The shelter sits on the forecourt, not on the wall.
   for(let j=0;j<5;j++){
@@ -167,7 +145,7 @@ function eastGate(){
   return d.groups;
 }
 export function eastModels(data){
-  const rows=[];
+  const rows=teachingCourtModels(data,teachingId);
   if(data.building.some(b=>b[4]===teachingId))rows.push(...classroom());
   if(data.building.some(b=>b[4]===standId))rows.push(...stadiumWestEntrance(),...stadiumFieldModel(data));
   if(hasEastGate(data))rows.push(...eastGate());

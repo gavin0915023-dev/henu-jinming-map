@@ -1,7 +1,7 @@
 import { Matrix4,ShapeUtils,Vector2 } from 'three';
 import { libraryFacade } from './facade.js';
 import { observedTeachingFace, computingElevation, computingSignColumns } from './building-detail.js';
-import { buildingSolids, softwareSign, softwareId, hallId, reportFacade } from './wenfu.js';
+import { buildingSolids, hallId, reportFacade } from './wenfu.js';
 import { physicsModel, labId, labPlaque } from './physics.js';
 import { eastModels, protectedTeachingEdge, teachingId, stadiumSign, standId, boundaryLines } from './east-campus.js';
 import { centralModels, axisCustomEdge } from './central-axis.js';
@@ -11,6 +11,7 @@ import { westGatePlacement } from './west-gate.js';
 import { avenueHedgeRuns } from './avenue.js';
 import { bridgeDeck } from './field-ground.js';
 import { runningTracks,inset } from './running-tracks.js';
+import { teachingWingEdge } from './teaching-courts.js';
 
 const tint = (hex, factor) => {
   const n=parseInt(hex.slice(1),16);
@@ -156,12 +157,6 @@ export function softwareRenderer(data,palette,trees,inside){
       sign:()=>{if((cam.position.x-gx)*co+(cam.position.z-gz)*si<0)
         [...'河南大学'].forEach((ch,i)=>glyph(ch,at(-.56,2.31,(i-1.5)*5.5),1.98));}});
   }
-  if(data.building.some(b=>b[4]===softwareId)){
-    const {x,z,width,height,base,angle}=softwareSign;
-    const at=(a,y)=>[x+a*Math.cos(angle),base+y,z-a*Math.sin(angle)];
-    objects.push({center:at(0,height/2),parts:[[[at(-width/2,0),at(width/2,0),at(width/2,height),at(-width/2,height)],'#c9bfa8']],
-      sign:()=>[...'软件学院'].forEach((ch,i)=>glyph(ch,at(0,height*(.84-.21*i)),.59,'#9e3f33'))});
-  }
   const hall=data.building.find(b=>b[4]===hallId);
   if(hall)for(const bay of reportFacade(hall[0]))objects.push({center:bay.center,parts:bay.parts,southFace:true});
   if(data.building.some(b=>b[2]==='library'))objects.push({center:[-181,16,-73],normal:[-1,0,0],parts:libraryFacade});
@@ -199,7 +194,7 @@ export function softwareRenderer(data,palette,trees,inside){
       const edge={ax:x,az:z,nx:normal[0]/len,nz:normal[1]/len,tx:(a-x)/len,tz:(b-z)/len,length:len,sign:orientationSign};
       const obs=observedTeachingFace(id,edge);
       faces.push({normal,points:[base[i-1],base[i],top[i],top[i-1]],color:tint(wall,shade),len,
-        plain:id===standId||facultyEdge(id,edge)||axisCustomEdge(id,edge)||id===teachingId&&protectedTeachingEdge(x,z,a,b),
+        plain:id===standId||facultyEdge(id,edge)||axisCustomEdge(id,edge)||teachingWingEdge(id,edge)||id===teachingId&&protectedTeachingEdge(x,z,a,b),
         elevation:obs?flatElevation(obs.edge,record[1],obs.kind,obs.software):null,sign:id==='712688906'&&obs?.kind==='south'});
     }
     shadows.push([p.map(([x,z])=>[x+height*.31,.07,z+height*.24]),'#27372d4a']);

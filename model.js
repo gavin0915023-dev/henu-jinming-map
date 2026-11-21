@@ -8,7 +8,7 @@ import { addTreeModels } from './tree-model.js';
 import { addWestGate } from './west-gate.js';
 import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
 import { fieldGround, entryGap, putFieldTrees, walkingWater } from './field-ground.js';
-import { buildingSolids, softwareSign, softwareId, hallId } from './wenfu.js';
+import { buildingSolids, hallId } from './wenfu.js';
 import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.js';
 import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
 import { publicBlockers,hasMarco,isMarcoRing,marcoHole } from './campus-commons.js';
@@ -346,20 +346,6 @@ function librarySign(anisotropy=1) {
   const sign=new T.Mesh(new T.PlaneGeometry(13,2.45),new T.MeshStandardMaterial({map,alphaTest:.27,roughness:.56}));
   sign.rotation.y=-Math.PI/2;sign.position.set(-183,9.55,-73);sign.name='Library entrance lettering';return sign;
 }
-function addSoftwareSign(scene,anisotropy=1) {
-  const {x,z,width,height,base,angle}=softwareSign,group=new T.Group();
-  group.position.set(x,base,z);group.rotation.y=angle;group.name='软件学院 · 文甫路路牌';
-  const post=new T.Mesh(new T.BoxGeometry(width,height,.18),new T.MeshStandardMaterial({color:'#675d54',roughness:.88}));
-  post.position.y=height/2;post.castShadow=true;group.add(post);
-  const canvas=document.createElement('canvas');canvas.width=160;canvas.height=480;
-  const c=canvas.getContext('2d');c.fillStyle='#d3cab4';c.fillRect(0,0,160,480);
-  c.textAlign='center';c.textBaseline='middle';c.font='bold 94px KaiTi,STKaiti,SimSun,serif';c.fillStyle='#a4382d';
-  [...'软件学院'].forEach((ch,i)=>c.fillText(ch,80,67+105*i));
-  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=anisotropy;
-  const face=new T.PlaneGeometry(width-.10,height-.12),mat=new T.MeshStandardMaterial({map:texture,roughness:.91});
-  for(const side of [-1,1]){const plate=new T.Mesh(face,mat);plate.position.set(0,height/2,side*.094);plate.rotation.y=side>0?0:Math.PI;group.add(plate);}
-  scene.add(group);
-}
 function buildScene(scene, data, trees, anisotropy=1) {
   addWestGate(scene,data,anisotropy);
   for(const {text,width,height,point,yaw,color,horizontal} of visibleSigns(data)){
@@ -391,7 +377,6 @@ function buildScene(scene, data, trees, anisotropy=1) {
     const plate=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,roughness:.82}));
     plate.position.set(...point);plate.rotation.y=yaw;plate.name=text;scene.add(plate);
   }
-  if(data.building.some(b=>b[4]===softwareId))addSoftwareSign(scene,anisotropy);
   const cs=data.building.find(b=>b[4]==='712688906');
   if(cs){
     // Two vertical lines of gold characters on the pale wall above the Wenfu Road entrance.

@@ -7,6 +7,7 @@
     "Beiyuan search has one entrance and the two waterside places remain distinct",
     "Model error panel is hidden",
     "Shared street link opens on Boxiang Road in walking mode",
+    "Named building searches lead to their own shared court in the existing place cards",
     "Search finds the college and its neighboring report hall",
     "The catalog links to each distinct panorama and both university references",
     "The sports filter includes the four stadium positions and the outdoor courts",
@@ -24,6 +25,8 @@
     "Walking viewpoint physics-cone",
     "Walking viewpoint physics-north",
     "Walking viewpoint teaching-stair",
+    "Walking viewpoint teaching-23",
+    "Walking viewpoint teaching-56",
     "Walking viewpoint east-gate",
     "Walking viewpoint stadium-west",
     "Walking viewpoint stadium-field",
@@ -86,25 +89,26 @@
     "Turning at the dorm crossroads keeps its panorama and changes the bearing",
     "Mobile Canvas crosses to the opposite side of the education court",
     "Canvas reaches the stand at track level and identifies it as a model viewpoint",
+    "Both courts are linked in the original mobile walking controls",
     "Mobile Canvas opens the plaza aerial and can descend to the ground",
     "No uncaught browser exceptions"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1253616,
+    "vertices": 1281808,
     "invalid": 0,
-    "trees": 1002,
+    "trees": 1001,
     "treeForms": {
-      "shade": 520,
+      "shade": 519,
       "vase": 372,
       "spire": 110
     },
     "buildings": {
       "buildings": 113,
-      "windows": 12850,
+      "windows": 12557,
       "entrances": 90,
       "rooftopUnits": 102,
-      "triangles": 487222
+      "triangles": 501404
     },
     "landscape": {
       "courts": 103,
@@ -116,8 +120,8 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 66,
-    "triangles": 1206296
+    "drawCalls": 63,
+    "triangles": 1221916
   },
   "failures": []
 }

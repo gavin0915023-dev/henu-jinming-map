@@ -11,7 +11,6 @@ import { courtSolidIds, courtSolids } from './college-courts.js';
 import { officeId,officeSolids,nanyuanId,diningSolids } from './round-buildings.js';
 export const hallId='712688908',softwareId='712688905';
 export const passage={left:15.0,right:23.5,clear:4.85,front:-205.15,rear:-251,frontTop:12.5,setback:-231};
-export const softwareSign={x:55.0,z:-183.1,angle:-.98,width:1.04,height:3.16,base:.65};
 
 function clip(poly,axis,limit,lower){
   const out=[];let a=poly.at(-1);

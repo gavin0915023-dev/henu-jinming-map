@@ -57,7 +57,7 @@ const places = [
   { id: 'north', category: 'outdoor', featured: true, name: '北大门', type: '校门', note: '东京大道 · 校名石墙', icon: 'gate', color: '#c5f276', x: 19.3, z: -600.8, y: 4, walk: [11.9, -633.5, 2.915, .052], desc: '从东京大道朝校园看，低石墙上的金字面向街道。石墙两侧都可进入，走进去回望能看到墙后的绿篱。', link: ['https://ganbu.henu.edu.cn/info/1036/4225.htm', '校方校门照片'], main: true },
   { id: 'autumn', category: 'outdoor', featured: true, name: '访秋湖', type: '水景', note: '公共教学楼以南', icon: 'lake', color: '#9bdedb', x: 91, z: 62, y: 8, walk: [75, 26, 3.14], desc: '位于公共教学楼南侧，是校方平面图标注的校园水系之一。', main: true },
   { id: 'hall', osmId: '712688908', category: 'academic', featured: true, name: '计算机大楼报告厅', type: '报告厅', note: '文甫路 · 两栋教学楼之间', icon: 'school', color: '#d6ad89', x: 19.2, z: -207, y: 12.5, walk: [19.2, -178.5, 0, .10], desc: '从文甫路朝北看，暖色墙面和三组高窗连接两侧白色教学楼。中央通道可步行穿过。' },
-  { id: 'software', osmId: '712688905', category: 'academic', featured: true, name: '软件学院', type: '教学楼', note: '文甫路 · 报告厅以东', icon: 'school', color: '#c6a78d', x: 62, z: -197, y: 21, walk: [48.3, -179.3, -.66, .21], desc: '门厅在南翼西端。文甫路边可以看见独立的红字院牌，沿雪垠路可看东北侧的窗带和设备格栅。' },
+  { id: 'software', osmId: '712688905', category: 'academic', featured: true, name: '软件学院', type: '教学楼', note: '文甫路 · 报告厅以东', icon: 'school', color: '#c6a78d', x: 62, z: -197, y: 21, walk: [48.3, -179.3, -.66, .21], desc: '门厅在南翼西端，入口靠近报告厅。沿雪垠路可看东北侧连续的窗带和设备格栅。' },
   { id: 'physics', osmId: '712688931', category: 'academic', featured: true, name: '物理实验楼（物理与电子学院 C 座）', type: '实验楼', note: '普通物理分中心 · 锥形报告厅旁', icon: 'school', color: '#b57961', x: -112, z: 222, y: 21, walk: [-111.2, 250.8, .07, .24], desc: '院内的红砖楼和锥形报告厅由低楼相连。绕到南侧看玻璃门厅，或沿院边到另一侧看砖墙和顶层敞廊。' },
   { id: 'teaching', osmId: '712688928', category: 'academic', featured: true, name: '公共教学楼（综合教学楼）', type: '教学楼', note: '马可广场以东 · 4号教学楼一侧', icon: 'school', color: '#b48e7c', x: 122, z: -76, y: 18, walk: [-63.8, -99, 1.70, .03], desc: '广场一侧是两端红墙夹着的玻璃正面。绕到东侧，红砖楼梯塔的大开口和白色架空走廊都可以看到。' },
   { id: 'east', category: 'outdoor', featured: true, name: '东大门', type: '校门', note: '东门 · 夷山大街', icon: 'gate', color: '#c5ab90', x: 483, z: -77, y: 5, walk: [509.5, -77.9, 4.684, -.012], desc: '从夷山大街向西进入校园。砖墙上的圆洞、小门岗和中间的通道对应 2022 年的街景。' },
@@ -140,6 +140,13 @@ function enrichCampusPlaces(data) {
       walk: router.streetPoseFor(cx, cz, ring),
       desc: name + '，位于金明校区内（轮廓估高约 ' + Math.round(height) + ' 米）。点击“步行导航”可规划校内路线。'
     };
+    const court = fieldViews.find(v => v.wings?.includes(item.id));
+    if (court) {
+      const [x, z, bearing, pitch] = court.camera;
+      item.walk = [x, z, bearing * Math.PI / 180, pitch * Math.PI / 180, 78, court.lens];
+      item.note = court.id === 'teaching-23' ? '南院口 · 红砖楼梯塔在右' : '北院口 · 红砖楼梯塔在左';
+      item.desc = name + '位于综合教学楼建筑群。' + court.caption;
+    }
     extra.push(item);
     osmPlaceMap.set(id, item);
   }
@@ -224,7 +231,7 @@ function renderDetail() {
   detail.querySelector('.detail-walk:not([data-photo]):not([data-route]):not([data-field-reference])')?.addEventListener('click', () => setMode('walk'));
   detail.querySelector('[data-route]')?.addEventListener('click', () => openRouteTo(active));
   detail.querySelector('[data-photo]')?.addEventListener('click', () => showPhotos(photo));
-  if (fieldViews.some(v => v.place === active.id)) {
+  if (fieldViews.some(v => v.place === active.id || v.wings?.includes(active.id))) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'detail-walk';

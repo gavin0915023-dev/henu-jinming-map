@@ -9,15 +9,17 @@ export const fieldViews=[
   {id:'cs-south',place:'cs',title:'计算机学院 · 南翼中段',caption:'低层的窗墙退在柱后，上层宽窗下有浅色设备格栅。',camera:[-28.7,-178.2,0,10],source:'百度街景',url:baidu('01027700001404011205135615G',12725680,4115426,0,10)},
   {id:'cs-northwest',place:'cs',title:'计算机学院 · 雪垠路侧',caption:'斜向长立面上是连续的玻璃和格栅，底层保留较多实墙。',camera:[-66.6,-237.1,130,10],source:'百度街景',url:baidu('01027700001404011224035415G',12725634,4115497,130,10)},
   {id:'wenfu-hall',place:'hall',title:'报告厅 · 楼间通道',caption:'两栋白楼之间是暖色墙面和三组高窗。中间的窗下留出了通道，从这里可以走到楼后。',camera:[18.4,-178.5,4,10],source:'百度街景',url:baidu('01027700001404011205250795G',12725738.07,4115427.99,4,10)},
-  {id:'software-entry',place:'software',title:'软件学院 · 文甫路入口',caption:'朝西北看，玻璃门厅在东翼靠报告厅的一端。楼角的敞廊叠在入口上方，院牌在路边。',camera:[48.3,-179.3,322,12],source:'百度街景',url:baidu('01027700001404011205325675G',12725774.39,4115428.99,322,12)},
+  {id:'software-entry',place:'software',title:'软件学院 · 文甫路入口',caption:'朝西北看，玻璃门厅在东翼靠报告厅的一端。楼角的敞廊叠在入口上方。旧街景里的路边立牌现已拆除。',camera:[48.3,-179.3,322,12],source:'百度街景',url:baidu('01027700001404011205325675G',12725774.39,4115428.99,322,12)},
   {id:'software-south',place:'software',title:'软件学院 · 南翼窗墙',caption:'正对教学楼能看清两层高的柱和柱后的小窗，四层宽窗下有浅色格栅。',camera:[67.2,-179,2,12],source:'百度街景',url:baidu('01027700001404011205370765G',12725797.23,4115428.54,2,12)},
-  {id:'software-return',place:'software',title:'文甫路东段 · 回望两院',caption:'往西回看，近处是软件学院的路牌和门厅，远处是计算机学院。两翼入口都朝向文甫路，靠近中间的报告厅。',camera:[73.7,-178.8,298,8],source:'百度街景',url:baidu('01027700001404011205385585G',12725805.27,4115428.35,298,8)},
+  {id:'software-return',place:'software',title:'文甫路东段 · 回望两院',caption:'往西回看，近处是软件学院的门厅，远处是计算机学院。两翼入口都朝向文甫路，靠近中间的报告厅。',camera:[73.7,-178.8,298,8],source:'百度街景',url:baidu('01027700001404011205385585G',12725805.27,4115428.35,298,8)},
   {id:'software-xueyin',place:'software',title:'软件学院 · 雪垠路一侧',caption:'绕到东北侧，窗墙变成一层基座上连续的玻璃和设备格栅，两段街景都能看到这条长立面。',camera:[81.5,-252.8,215,10],source:'百度街景',url:baidu('01027700001404011226210565G',12725814.83,4115518.52,215,10)},
   {id:'physics-entry',place:'physics',title:'物理实验楼 C 座 · 正门',caption:'从院子走近，左面是红砖上的五排独立窗，右面是深色玻璃。两根砖柱托住门厅挑檐，柱上可见普通物理分中心的牌子。',camera:[-111.2,250.8,4,14],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011302410375G',12725580.5,4114905.94,4,14)},
   {id:'physics-court',place:'physics',title:'物理实验楼 · 院内转角',caption:'面前是锥形报告厅的弧形台阶，向左转就是实验楼入口；三层连楼把两处接在一起。',camera:[-94.4,240.6,49.91,10.42],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011302455145G',12725600.87,4114918.56,49.91,10.42)},
   {id:'physics-cone',place:'physics',title:'物理实验楼 · 锥形报告厅',caption:'从院子东侧可以看到完整锥顶、玻璃与金属条带、环形平台和右侧折返楼梯。',camera:[-62.5,248.4,333,24],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011302530805G',12725639.78,4114909.29,333,24)},
   {id:'physics-north',place:'physics',title:'物理实验楼 C 座 · 背面',caption:'背面是长排独立窗。底层有浅灰墙裙，顶层是浅色窗带和挑出屋面的白柱。',camera:[-130.5,179.9,165,14],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011247225355G',12725556.88,4114991.75,165,14)},
   {id:'teaching-stair',place:'teaching',title:'公共教学楼 · 东侧楼梯',caption:'红砖墙上有成列方孔。透过大开口可以看到折返楼梯；右侧的白色教学楼架在柱上。',camera:[201.4,-107.3,275.93,4.53],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011230315445G',12725960.85,4115342.81,275.93,4.53)},
+  {id:'teaching-23',place:'teaching',wings:['b-712688925','b-712688926'],title:'2、3 号教学楼 · 东侧院口',caption:'面向西北，白色遮阳板和架空柱在左，右边是开方孔的红砖楼梯塔。往前能从二层红色连廊下走进两栋楼之间。',camera:[195.96,-24.06,295.07,8.78],lens:{horizontal:85,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011230120335G',12725954.35,4115241.98,295.07,8.78)},
+  {id:'teaching-56',place:'teaching',wings:['b-712688927','b-712688929'],title:'5、6 号教学楼 · 东侧院口',caption:'从北院口往西看，红砖楼梯塔换到左侧，右侧是带多排遮阳板的白翼。两座院口用相似的构件，开间、步梯和通行位置各有区别。',camera:[200.78,-120.37,279.39,10.33],lens:{horizontal:85,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011230345435G',12725960.07,4115358.73,279.39,10.33)},
   {id:'east-gate',place:'east',title:'东大门 · 夷山大街',caption:'从街上向西看，两边的砖墙各开一个圆洞，门岗分列在入口两侧，中间可以直行入校。',camera:[509.5,-77.9,268.36,-.7],date:'2022年6月',source:'百度街景',url:baidu('09027700122206231416048065A',12726336.28,4115321.05,268.36,-.7)},
   {id:'stadium-west',place:'stadium',title:'志义体育场 · 西看台正门',caption:'从中州路向东看，黑底红字馆名在两组入口上方，薄顶棚由外露的三角形钢桁架支撑。',camera:[318.7,-203.0,85.05,4.35],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011206425965G',12726103.59,4115459.92,85.05,4.35)},
   {id:'stadium-field',place:'stadium',title:'志义体育场 · 夷山大街望看台',caption:'按分享的方向朝西北看：路树与围栏后面是阶梯，罩棚只盖住中间的深蓝区。左侧从暗红、米黄过渡到绿色，右侧是浅青、紫红和赭黄。',camera:[513.8,-171.5,292.75,5.3],lens:{horizontal:86,eye:2.32},date:'2022年6月',source:'百度街景',url:baidu('09027700122206231415580505A',12726341.44,4115423.69,292.75,5.3)},
@@ -64,6 +66,7 @@ export const walks=[
   ['文甫路',['cs-south','cs-entry','wenfu-hall','software-entry','software-south','software-return']],
   ['物理实验楼',['physics-entry','physics-court','physics-cone','physics-north']],
   ['志义体育场',['stadium-field-north','stadium-field','stadium-track','stadium-west']],
+  ['教学楼东院',['teaching-23','teaching-stair','teaching-56']],
   ['广场两面',['library-rear','teaching-front']],
   ['原地转身',['zeng','dorm17','dorm17-end']],
   ['教苑餐厅',['jiaoyuan-door','jiaoyuan-side']],
@@ -100,7 +103,7 @@ export function mountFieldViews(dialog,visit){
   dialog.querySelector('[data-close]').onclick=()=>dialog.close();
   return (place,id)=>{
     select.value='';filter();dialog.showModal();
-    const index=fieldViews.findIndex(v=>id?v.id===id:place&&v.place===place);
+    const index=fieldViews.findIndex(v=>id?v.id===id:place&&(v.place===place||v.wings?.includes(place)));
     for(const [i,row] of [...list.children].entries())row.toggleAttribute('data-current',i===index);
     list.scrollTop=0;
     if(index>=0)list.children[index].scrollIntoView({block:'start'});

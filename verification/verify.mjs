@@ -132,6 +132,18 @@ try {
       for(let i=0;i<3;i++){next.click();ids.push(current());}
       return ids.join(',')==='stadium-field-north,stadium-field,stadium-track,stadium-west'&&next.disabled;
     })()`));
+    check('Published teaching courts retain both original bearings and the current software entrance',await evaluate(`(()=>{
+      const row=id=>document.querySelector('[data-view='+id+']').parentElement;
+      const h=id=>new URLSearchParams(new URL(row(id).querySelector('a').href).hash.slice(1));
+      return h('teaching-23').get('panoid')==='01027700001404011230120335G'&&h('teaching-56').get('heading')==='279.39'&&row('software-entry').textContent.includes('现已拆除');
+    })()`));
+    await evaluate("document.querySelector('#field-views').click();document.querySelector('[data-view=teaching-23]').click()");
+    check('The published model opens both school courts with the existing route buttons',await evaluate(`(()=>{
+      const note=document.querySelector('#mode-note'),next=document.querySelector('#route-next');
+      if(!note.textContent.includes('2、3 号教学楼'))return false;
+      next.click();next.click();
+      return new URL(location.href).searchParams.get('view')==='teaching-56'&&note.textContent.includes('5、6 号教学楼')&&document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true';
+    })()`));
     await evaluate("document.querySelector('#field-views').click();document.querySelector('[data-view=tennis-west]').click()");
     await evaluate("document.querySelector('#route-next').click()");
     check('Published sports route reaches the basketball entrance',await evaluate("new URL(location.href).searchParams.get('view')==='hoops-south'"));
@@ -170,6 +182,17 @@ try {
   await capture('field-boxiang');
   await evaluate("document.querySelector('#home').click()");
   await capture('overview');
+  check('Named building searches lead to their own shared court in the existing place cards',await evaluate(`(()=>{
+    const s=document.querySelector('#search'),find=v=>{s.value=v;s.dispatchEvent(new Event('input'));};
+    for(const [name,id] of [['2号教学楼','teaching-23'],['3号教学楼','teaching-23'],['5号教学楼','teaching-56'],['6号教学楼','teaching-56']]){
+      find(name);const p=document.querySelector('#place-list .place');if(p?.querySelector('.rowtext b')?.textContent!==name)throw Error('Unexpected result for '+name+': '+p?.textContent);
+      p.click();document.querySelector('#detail [data-field-reference]').click();
+      const selected=document.querySelector('#field-dialog [data-current] [data-view]')?.dataset.view;
+      document.querySelector('#field-dialog [data-close]').click();if(selected!==id)throw Error(name+' links to '+selected+', expected '+id);
+    }
+    find('');return true;
+  })()`));
+  await evaluate("document.querySelector('#home').click()");
   await evaluate("document.querySelector('#search').value='计算机';document.querySelector('#search').dispatchEvent(new Event('input'))");
   check('Search finds the college and its neighboring report hall', await evaluate("document.querySelectorAll('#place-list .place').length===2 && document.querySelector('#place-list').textContent.includes('报告厅')"));
   await evaluate("document.querySelector('#place-list .place').click()");
@@ -178,7 +201,7 @@ try {
   check('The catalog links to each distinct panorama and both university references',await evaluate(`(()=>{
     const modal=document.querySelector('#field-dialog'),links=[...modal.querySelectorAll('.field-list a')].map(a=>new URL(a.href));
     return modal.open && modal.querySelectorAll('[data-view]').length===${fieldViews.length} &&
-      new Set(links.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size===47 &&
+      new Set(links.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size===49 &&
       links.some(l=>l.hostname==='ganbu.henu.edu.cn') && links.some(l=>l.hostname==='zbcg.henu.edu.cn');
   })()`));
   check('The sports filter includes the four stadium positions and the outdoor courts',await evaluate(`(()=>{
@@ -335,6 +358,12 @@ try {
   await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=stadium-field]').click();document.querySelector('#route-next').click()");
   check('Canvas reaches the stand at track level and identifies it as a model viewpoint',await evaluate("document.querySelector('#stage').dataset.renderer==='canvas' && document.querySelector('#mode-note').textContent.includes('跑道边模型近看') && document.querySelector('#route-position').textContent.includes('3 / 4')"));
   await capture('field-fallback-stadium');
+  await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=teaching-23]').click()");
+  await capture('field-fallback-teaching-23');
+  check('Both courts are linked in the original mobile walking controls',await evaluate(`(()=>{
+    const next=document.querySelector('#route-next');next.click();next.click();
+    return new URL(location.href).searchParams.get('view')==='teaching-56'&&document.querySelector('#stage').dataset.renderer==='canvas'&&next.disabled;
+  })()`));
   await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=marco-bowl]').click()");
   check('Mobile Canvas opens the plaza aerial and can descend to the ground',await evaluate(`(()=>{
     if(document.querySelector('[data-mode=model]').getAttribute('aria-pressed')!=='true'||!document.querySelector('#mode-note').textContent.includes('东侧俯看'))return false;

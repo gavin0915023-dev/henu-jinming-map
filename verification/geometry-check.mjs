@@ -58,7 +58,17 @@ const solidAt=(x,y,z,id)=>bodies3d.some(s=>(!id||s.record[4]===id)&&s.base<y&&y<
 for(const v of fieldViews.filter(v=>v.date)){
   const [x,z]=v.camera;assert(!solidAt(x,2.45,z),v.id+': field camera starts inside a wall');
 }
-assert(!solidAt(181,2.45,-133,teachingId)&&solidAt(181,7,-133,teachingId),'White wing has an open ground floor');
+assert(!solidAt(181,2.45,-133,teachingId)&&solidAt(181,10,-133,teachingId),'White wing has an open ground floor');
+for(const [z,bridgeX,shadeZ,towerZ] of [[-33.8,171.0,-21.0,-44.0],[-121.8,170.6,-134.0,-111.5]]){
+  for(let x=155;x<194;x+=.25)assert(!solidAt(x,2.45,z),'An east court must remain open right through to the space between the named wings');
+  assert(solidAt(bridgeX,7,z)&&!solidAt(bridgeX,2.45,z),'A red link spans the route overhead');
+  assert(solidAt(180,11,shadeZ)&&!solidAt(180,3,shadeZ)&&solidAt(z>-80?183.0:183.7,3.0,towerZ),'The tower and the upper white classrooms occupy different sides of each passage');
+}
+for(const id of ['teaching-23','teaching-56']){
+  const v=fieldViews.find(v=>v.id===id),h=new URLSearchParams(new URL(v.url).hash.slice(1));
+  assert(v.wings.length===2&&v.wings.every(w=>data.building.some(b=>w==='b-'+b[4]&&/号教学楼/.test(b[3])))&&
+    h.get('panoid')===(id==='teaching-23'?'01027700001404011230120335G':'01027700001404011230345435G')&&+h.get('heading')===v.camera[2]);
+}
 assert(!solidAt(-91,2.45,-73,libraryId)&&solidAt(-109,4,-73,libraryId)&&!solidAt(-109,24,-73,libraryId),'The low east lobby must be set back into the higher library wings');
 assert(eastGateBlockers().every(p=>!toolkit.contains(482.8,-77,p)),'The eastern entrance must stay open down the middle');
 const heightAt=facultyHeights(data);

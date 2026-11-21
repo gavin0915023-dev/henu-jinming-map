@@ -2,6 +2,7 @@ import * as T from 'three';
 import { hallId, softwareId, reportFacade } from './wenfu.js';
 import { physicsModel, labId, coneId } from './physics.js';
 import { eastModels, protectedTeachingEdge, teachingId, standId } from './east-campus.js';
+import { teachingWingEdge } from './teaching-courts.js';
 import { centralModels, axisCustomEdge, teachingFrontId } from './central-axis.js';
 import { facultyModels, facultyColors, facultyEdge, civilId } from './faculty-sites.js';
 
@@ -408,7 +409,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     }
 
     for (const edge of edges) {
-      if(facultyEdge(id,edge)||axisCustomEdge(id,edge)||id===teachingId&&protectedTeachingEdge(edge.ax,edge.az,edge.ax+edge.tx*edge.length,edge.az+edge.tz*edge.length))continue;
+      if(facultyEdge(id,edge)||axisCustomEdge(id,edge)||teachingWingEdge(id,edge)||id===teachingId&&protectedTeachingEdge(edge.ax,edge.az,edge.ax+edge.tx*edge.length,edge.az+edge.tz*edge.length))continue;
       const face=observedTeachingFace(id,edge);
       // A shared wall against the lower report hall still has an exposed roof
       // edge, but cannot carry ordinary windows at the join.
@@ -460,7 +461,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     // Never superimpose a road-selected porch on either bespoke entrance.
     let entrance=null,entranceScore=Infinity;
     if(!facultyColors[id] && !isLibrary && !computerCollege && id!==softwareId && id!==teachingId && id!==standId && id!==teachingFrontId && height>7)for(const edge of edges){
-      if(edge.length<8)continue;
+      if(edge.length<8||teachingWingEdge(id,edge))continue;
       const x=edge.ax+edge.tx*edge.length/2,z=edge.az+edge.tz*edge.length/2;
       if(otherBuildingAt(x+edge.nx*2,z+edge.nz*2,ring))continue;
       const score=Math.min(...roadSegments.map(([a,b])=>distanceToSegment(x,z,a,b)))-Math.min(edge.length,40)*.05;

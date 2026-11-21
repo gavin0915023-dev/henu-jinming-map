@@ -4,6 +4,7 @@ import { easternCourts, teachingId, standId, hasEastGate } from './east-campus.j
 import { rearCourt, libraryId, teachingFrontId, plantSquare } from './central-axis.js';
 import { facultyGround } from './faculty-sites.js';
 import { stadiumGround } from './stadium-bowl.js';
+import { teachingCourtGround } from './teaching-courts.js';
 
 // Local observations only: the entrance forecourt on Wenfu Road, the grove
 // on Fangqiu Lake's north side, and the tree-planted verge beside Jiuzhang Bridge.
@@ -30,6 +31,7 @@ export function fieldGround(data,inside){
   [data.building.some(b=>b[4]===teachingId),data.building.some(b=>b[4]===standId),hasEastGate(data)].forEach((show,i)=>{
     if(show){surfaces.push(easternCourts[i]);forecourts.push(easternCourts[i][0]);}
   });
+  if(data.building.some(b=>b[4]===teachingId))teachingCourtGround({surfaces,forecourts,shrubs});
   if(data.building.some(b=>b[4]===libraryId)){surfaces.push([rearCourt,.91,'#c8b9a7']);forecourts.push(rearCourt);}
   if(data.building.some(b=>b[4]===teachingFrontId))plantSquare({surfaces,shrubs,forecourts},tree);
   if(data.building.some(b=>b[4]===labId)){
