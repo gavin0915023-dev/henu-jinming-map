@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { hallId, softwareId, reportFacade } from './wenfu.js';
 import { physicsModel, labId, coneId } from './physics.js';
-import { eastModels, protectedTeachingEdge, isStandFront, teachingId, standId } from './east-campus.js';
+import { eastModels, protectedTeachingEdge, teachingId, standId } from './east-campus.js';
 import { centralModels, axisCustomEdge, teachingFrontId } from './central-axis.js';
 import { facultyModels, facultyColors, facultyEdge, civilId } from './faculty-sites.js';
 
@@ -372,14 +372,14 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     target.quad(...points,color);
     // Only the broad new surfaces cast shadows: the canopy, curved hall and
     // piers should shade the court without adding every window bar to its map.
-    if(material!=='brick'&&material!=='canopy'&&material!=='ground'&&material!=='foliage'&&material!=='fence'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
+    if(material!=='brick'&&material!=='canopy'&&material!=='ground'&&material!=='foliage'&&material!=='fence'&&material!=='terrace'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
       silhouettes.quad(...points,'#ffffff');
   }
 
   for (const [ring, height, type, , id, campus] of data.building) {
     if (!campus || height < 4) continue;
     stats.buildings++;
-    if(id===labId||id===coneId||id===civilId){ stats.entrances++;continue; }
+    if(id===labId||id===coneId||id===civilId||id===standId){ stats.entrances++;continue; }
     if(id===hallId){
       for(const bay of reportFacade(ring))for(const [p,color,isGlass] of bay.parts)
         (isGlass?glass:masonry).quad(...p,color);
@@ -408,7 +408,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     }
 
     for (const edge of edges) {
-      if(facultyEdge(id,edge)||axisCustomEdge(id,edge)||isStandFront(id,edge)||id===teachingId&&protectedTeachingEdge(edge.ax,edge.az,edge.ax+edge.tx*edge.length,edge.az+edge.tz*edge.length))continue;
+      if(facultyEdge(id,edge)||axisCustomEdge(id,edge)||id===teachingId&&protectedTeachingEdge(edge.ax,edge.az,edge.ax+edge.tx*edge.length,edge.az+edge.tz*edge.length))continue;
       const face=observedTeachingFace(id,edge);
       // A shared wall against the lower report hall still has an exposed roof
       // edge, but cannot carry ordinary windows at the join.

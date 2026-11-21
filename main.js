@@ -52,7 +52,7 @@ const places = [
   { id: 'west', category: 'outdoor', featured: true, name: '西大门', type: '校门', note: '金明大道', icon: 'gate', color: '#c5f276', x: -459, z: -76, y: 4, walk: [-485, -76, Math.PI / 2], desc: '校名石墙朝西，两侧是入校通道。面向金字往东看，后方是明德广场和图书馆。', link: ['https://ganbu.henu.edu.cn/info/1036/4225.htm', '校方校门照片'], photo: 1, main: true },
   { id: 'marco', category: 'outdoor', featured: true, name: '马可广场', type: '广场', note: '图书馆东侧 · 下沉式圆形广场', icon: 'square', color: '#d7a9d0', x: 19.15, z: -76.5, y: 3, walk: [69.2, -76.5, Math.PI * 1.5, -.09], desc: '从东侧沿台阶下到广场中央，脚下是深浅相间的同心石环。回到上面俯看，还能看见台阶如何把弧形草台分成几段。', photo: 2, main: true },
   { id: 'lake', category: 'outdoor', featured: true, name: '粹庭湖', type: '水景', note: '经济学院以北 · 雪垠路东侧', icon: 'lake', color: '#9bdedb', ...cuitingCenter, y: 5, walk: [83.7, -446.3, 1.484, .070], desc: '校方平面图将粹庭湖标在经济学院以北。沿西端小径向东看，垂枝伸到岸边，浅色岸沿随水面转弯。', link: ['https://www.henu.edu.cn/images/jmxq.jpg', '校方平面图'], main: true },
-  { id: 'stadium', osmId: '712688893', category: 'outdoor', featured: true, name: '志义体育场', type: '体育场', note: '校园东侧 · 中州路', icon: 'field', color: '#ebb28a', x: 426, z: -220, y: 8, walk: [318.7, -203, 1.484, .076], desc: '西看台面向中州路，宽大的桁架顶棚和黑底红字馆名标出了主入口。', main: true },
+  { id: 'stadium', osmId: '712688893', category: 'outdoor', featured: true, name: '志义体育场', type: '体育场', note: '夷山大街望看台 · 中州路正门', aliases: '北操场 田径场 彩色看台 主席台', icon: 'field', color: '#ebb28a', x: 426, z: -220, y: 8, walk: [513.8, -171.5, 292.75 * Math.PI / 180, 5.3 * Math.PI / 180, 78, { horizontal: 86, eye: 2.32 }], desc: '隔着操场往西看，深蓝色主看台上方是钢桁架顶棚，两侧是露天的彩色阶梯。到跑道边可沿浅色步阶登上看台；另一面的红字正门朝向中州路。', main: true },
   { id: 'cs', osmId: '712688906', category: 'academic', featured: true, name: '计算机与信息工程学院', type: '教学楼', note: '文甫路 · 马可广场以北', icon: 'school', color: '#a9c5ec', x: -24, z: -196, y: 21, walk: [10, -158, -.43, .19], desc: '文甫路一侧的入口在南翼东端，抬头可见竖排院名。沿外墙向西绕到雪垠路，可以看见长条玻璃和设备格栅。' },
   { id: 'north', category: 'outdoor', featured: true, name: '北大门', type: '校门', note: '东京大道 · 校名石墙', icon: 'gate', color: '#c5f276', x: 19.3, z: -600.8, y: 4, walk: [11.9, -633.5, 2.915, .052], desc: '从东京大道朝校园看，低石墙上的金字面向街道。石墙两侧都可进入，走进去回望能看到墙后的绿篱。', link: ['https://ganbu.henu.edu.cn/info/1036/4225.htm', '校方校门照片'], main: true },
   { id: 'autumn', category: 'outdoor', featured: true, name: '访秋湖', type: '水景', note: '公共教学楼以南', icon: 'lake', color: '#9bdedb', x: 91, z: 62, y: 8, walk: [75, 26, 3.14], desc: '位于公共教学楼南侧，是校方平面图标注的校园水系之一。', main: true },
@@ -798,7 +798,7 @@ function visitView(item) {
   if (item.orbit) setMode('model', null, item);
   else {
     const [x, z, bearing, pitch] = item.camera;
-    setMode('walk', [x, z, bearing * Math.PI / 180, pitch * Math.PI / 180, 78], item);
+    setMode('walk', [x, z, bearing * Math.PI / 180, pitch * Math.PI / 180, 78, item.lens], item);
   }
   $('#mode-note').textContent = item.title;
 }

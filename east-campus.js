@@ -1,6 +1,8 @@
 import { frame, patch, clip, panel, panelWindow } from './survey-mesh.js';
+import {standId,stadiumFieldModel} from './stadium-bowl.js';
 
-export const teachingId='712688930',standId='712688893';
+export const teachingId='712688930';
+export {standId};
 const school={x:183.7,z:-111.6,out:1},stand={x:351.13,z:-207.3,out:-1},gate={x:482.8,z:-77,out:1};
 export const easternCourts=[
   [patch(school,-17,14,-.1,21.5),.919,'#bdb6a9'],
@@ -10,7 +12,6 @@ export const easternCourts=[
 export const stadiumSign={text:'河南大学志义体育场',point:[349.96,11.92,-207.3],yaw:-Math.PI/2,width:23.1,height:2.63,color:'#bd483a',background:'#393d42'};
 export const hasEastGate=d=>d.road.some(r=>r[2]==='夷山大街')&&d.boundary.some(([x,z])=>x>496&&z<0);
 export const protectedTeachingEdge=(a,z,b,t)=>Math.min(a,b)>174&&Math.max(z,t)>-146.3&&Math.min(z,t)<-88;
-export const isStandFront=(id,e)=>id===standId&&e.nx<-.85&&e.length>70;
 
 // Only cut back the east side actually seen through the stair and pilotis.
 // The western side of the long irregular source footprint stays intact.
@@ -98,8 +99,8 @@ function classroom(){
   box(-14.65,-7.56,3.17,3.26,7.60,10.39,'#428377');
   return d.groups;
 }
-function stadium(){
-  const d=frame(stand),{box,group,bar,quad}=d;
+function stadiumWestEntrance(){
+  const d=frame(stand),{box,group,quad}=d;
   for(let i=-10;i<10;i++){
     const a=i*7.45,b=a+7.45,m=(a+b)/2,entry=Math.abs(m)<8;
     panel(d,a,b,.18,12.12,.60,white);
@@ -112,22 +113,13 @@ function stadium(){
     box(a-.28,a+.28,.32,Math.abs(a)<25?15.72:12.42,.64,1.07,'#b7b7af');
     if(!entry&&i%3===1)panel(d,b-1.30,b-.42,6.19,6.77,.96,'#b3b6ae');
   }
+  const upper=d.groups.length;
   box(-24.3,24.3,12.03,15.45,-6.4,.72,white);
+  // This same volume carries the street sign on its west face. From the
+  // field only its shaded reverse shows behind the top row.
+  d.groups.slice(upper).find(g=>g.normal?.[0]>.99).parts[0][1]='#586675';
   box(-12.23,12.23,10.27,13.58,.76,1.11,'#333b40');
-  // A continuous thin canopy above an open triangular truss, not a solid wedge.
-  for(const x of [-27,27]){
-    group([x,16.9,-4]);bar([x,15.42,-7],[x,17.15,4.1],.080,silver,0);
-    bar([x,18.65,4.1],[x,16.56,-10.0],.065,silver,0);
-  }
-  box(-27.5,27.5,18.60,18.83,-10,4.22,'#aaa99e');
-  for(const v of [4.03,-2.4,-8.4]){
-    group([0,17.4,v]);bar([-27,16.05,v],[27,16.05,v],.070,silver,0);
-    for(let i=0;i<18;i++){
-      const x=-27+i*3;
-      bar([x,18.6,v],[x+1.5,16.05,v],.073,pale,0);bar([x+1.5,16.05,v],[x+3,18.6,v],.073,pale,0);
-      if(i%2===0)bar([x+1.5,16.05,v],[x,18.58,v-2],.055,silver,1);
-    }
-  }
+  // stadiumFieldModel supplies the single canopy and truss for both elevations.
   for(const [l,r] of [[-77,-27.4],[27.4,76]]){
     group([(l+r)/2,12.29,1.1]);
     for(let j=0;j<6;j++){
@@ -177,7 +169,7 @@ function eastGate(){
 export function eastModels(data){
   const rows=[];
   if(data.building.some(b=>b[4]===teachingId))rows.push(...classroom());
-  if(data.building.some(b=>b[4]===standId))rows.push(...stadium());
+  if(data.building.some(b=>b[4]===standId))rows.push(...stadiumWestEntrance(),...stadiumFieldModel(data));
   if(hasEastGate(data))rows.push(...eastGate());
   return rows;
 }

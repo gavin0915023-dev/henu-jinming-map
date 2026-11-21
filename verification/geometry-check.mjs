@@ -12,6 +12,8 @@ import { eduId, beiId, courtSigns } from '../college-courts.js';
 import { orientedFrame } from '../survey-mesh.js';
 import { cuitingCenter, isMarcoRing, marcoHole, publicBlockers, surveyedCourtPlan } from '../campus-commons.js';
 import { nanyuanId,officeId } from '../round-buildings.js';
+import {standId,standFrame,standHeight,canStepOnStand,stadiumFieldModel,stadiumFence} from '../stadium-bowl.js';
+import {runningTracks} from '../running-tracks.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -61,6 +63,28 @@ assert(!solidAt(-91,2.45,-73,libraryId)&&solidAt(-109,4,-73,libraryId)&&!solidAt
 assert(eastGateBlockers().every(p=>!toolkit.contains(482.8,-77,p)),'The eastern entrance must stay open down the middle');
 const heightAt=facultyHeights(data);
 const on=(x,z,q)=>toolkit.contains(x,z,q);
+const trackView=fieldViews.find(v=>v.id==='stadium-track'),shared=fieldViews.find(v=>v.id==='stadium-field');
+const sharedParams=new URLSearchParams(new URL(shared.url).hash.slice(1));
+assert(sharedParams.get('panoid')==='09027700122206231415580505A'&&+sharedParams.get('heading')===shared.camera[2]&&shared.camera[2]===292.75&&+sharedParams.get('pitch')===shared.camera[3]);
+const {tracks}=runningTracks(data.sport),oval=tracks.find(t=>on(...trackView.camera.slice(0,2),t.outer));
+assert(oval&&!on(...trackView.camera.slice(0,2),oval.inner)&&!on(...shared.camera.slice(0,2),oval.outer)&&trackView.title.includes('模型'),'The street reference and the trackside model are distinct; the near camera stands on a real running lane');
+const fence=stadiumFence(data),eastEdge=fence[0].map((a,i)=>(a+fence[2][i])/2);
+assert(on(...eastEdge,fence)&&eastEdge[0]<shared.camera[0]&&eastEdge[0]>Math.max(...oval.outer.map(p=>p[0])),'The boundary fence separates the field from both street cameras');
+const towards=trackView.camera[2]*Math.PI/180,forward=t=>[trackView.camera[0]+Math.sin(towards)*t,trackView.camera[1]-Math.cos(towards)*t];
+let lastHeight=0,risers=0;
+for(let t=.15;t<=37.5;t+=.15){
+  const a=forward(t-.15),b=forward(t),h=standHeight(...b)??.75;
+  assert(canStepOnStand(...a,...b)&&h>=lastHeight,'Visitors can ascend the whole access flight directly from the track viewpoint');
+  if(lastHeight&&h>lastHeight+.1)risers++;lastHeight=h;
+}
+assert(risers>35&&lastHeight>11,'The walk climbs real half-steps all the way to the crest');
+const standAt=(u,y,v)=>{const [x,z]=standFrame.world([u,v]);return solidAt(x,y,z,standId);};
+assert(!standAt(1,8,-2)&&standAt(1,8,-24)&&!canStepOnStand(...standFrame.world([1,-1]),...standFrame.world([1,-1.1])),'Seating rises away from the track; users cannot climb a vertical seat riser');
+const bowl=stadiumFieldModel(data),seats=bowl.filter(g=>g.normal?.[1]>.99&&g.center[1]>4&&g.center[1]<6)
+  .flatMap(g=>g.parts.filter(p=>p[2]==='terrace'&&!p[3]).map(p=>p[1]));
+assert(new Set(seats).size>=8,'The exposed seats, covered centre and access aisles retain distinct finishes');
+const roof=bowl.filter(g=>g.normal?.[1]>.99&&g.center[1]>18).map(g=>standFrame.local([g.center[0],g.center[2]]));
+assert(roof.length&&roof.every(([u])=>Math.abs(u)<32)&&roof.some(([,v])=>v> -12)&&roof.some(([,v])=>v< -29),'The roof spans both sides of the central stand and leaves the end sections open');
 assert(data.water.findIndex(p=>on(cuitingCenter.x,cuitingCenter.z,p))===0&&fieldViews.find(v=>v.id==='jiuzhang').place==='campus-bridge','The named lake is north of Economics; the old stone bridge keeps its separate viewpoint');
 const deck=bridgeDeck(details);
 assert(on(137,-229.7,deck)&&data.water.some(p=>on(137,-229.7,p))&&!on(cuitingCenter.x,cuitingCenter.z,deck),'Only the surveyed bridge deck permits walking over open water');

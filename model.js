@@ -13,6 +13,7 @@ import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.j
 import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
 import { publicBlockers,hasMarco,isMarcoRing,marcoHole } from './campus-commons.js';
 import { stadiumSign, standId, teachingId, eastGateBlockers, hasEastGate, boundaryLines } from './east-campus.js';
+import {standHeight,canStepOnStand,stadiumFence} from './stadium-bowl.js';
 import { campusSky, shadeGround, LIGHTING_PRESETS } from './daylight.js';
 import { applyGroundSurfaceTextures } from './ground-surfaces.js';
 
@@ -574,7 +575,7 @@ export function createModel(stage,data,onFrame,options={}){
   controls.minPolarAngle=.02;
   controls.maxPolarAngle=Math.PI*.48;
   const direction=new T.Vector3(), projection=new T.Vector3(), raycaster=new T.Raycaster(), ndc=new T.Vector2();
-  const walk={active:false,yaw:0,pitch:-.02,position:new T.Vector3(),fov:65};
+  const walk={active:false,yaw:0,pitch:-.02,position:new T.Vector3(),fov:65,horizontal:0,eyeHeight:1.70};
   const keys=new Set();
   let drag=null, tapStart=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
   let lightingName='noon', waterMotion=!matchMedia('(prefers-reduced-motion: reduce)').matches, lastWaterTick=0;
@@ -758,18 +759,22 @@ export function createModel(stage,data,onFrame,options={}){
     lastView='';
   }
 
-  const footprints=[...buildingSolids(data.building)].filter(s=>s.base<2.45).map(({p})=>[bounds(p),p]);
+  const footprints=[...buildingSolids(data.building)].filter(s=>s.base<2.45&&!s.walkSurface).map(({p})=>[bounds(p),p]);
   if(hasEastGate(data))for(const p of eastGateBlockers())footprints.push([bounds(p),p]);
   for(const p of publicBlockers(data))footprints.push([bounds(p),p]);
+  const fence=data.building.some(b=>b[4]===standId)&&stadiumFence(data);
+  if(fence)footprints.push([bounds(fence),fence]);
   const {onDeck,waterBlocks}=walkingWater(data.field,data.water,contains,bounds),physics=data.building.some(b=>b[4]===labId);
   const obstructed=(x,z)=>footprints.some(([[a,b,c,d],ring])=>x>a&&x<c&&z>b&&z<d&&contains(x,z,ring))||waterBlocks(x,z);
-  const facultyHeight=facultyHeights(data);
-  const eye=(x,z)=>1.70+(onDeck(x,z)?1.055:physics&&x>-125&&x<-55&&z>200&&z<256?
-    (physicsGroundHeight(x,z)??(contains(x,z,physicsCourt)?.94:.75)):(facultyHeight(x,z)??.75));
+  const facultyHeight=facultyHeights(data),hasStand=data.building.some(b=>b[4]===standId);
+  const eye=(x,z)=>walk.eyeHeight+((hasStand?standHeight(x,z):undefined)??(onDeck(x,z)?1.055:physics&&x>-125&&x<-55&&z>200&&z<256?
+    (physicsGroundHeight(x,z)??(contains(x,z,physicsCourt)?.94:.75)):(facultyHeight(x,z)??.75)));
+  const fromHorizontal=fov=>T.MathUtils.clamp(2*T.MathUtils.radToDeg(Math.atan(Math.tan(T.MathUtils.degToRad(fov)/2)/camera.aspect)),29,112);
 
   function resize(){
     size={w:Math.max(1,stage.clientWidth),h:Math.max(1,stage.clientHeight)};
     camera.aspect=size.w/size.h;
+    if(walk.active&&walk.horizontal)camera.fov=walk.fov=fromHorizontal(walk.horizontal);
     camera.updateProjectionMatrix();
     renderer.setSize(size.w,size.h,false);
   }
@@ -815,14 +820,15 @@ export function createModel(stage,data,onFrame,options={}){
     const dz=-Math.cos(walk.yaw)*metres+Math.sin(walk.yaw)*side;
     const n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.18));
     const sx=dx/n, sz=dz/n;
+    const canWalk=(x,z)=>!obstructed(x,z)&&(!hasStand||canStepOnStand(walk.position.x,walk.position.z,x,z));
     for(let i=0;i<n;i++){
       const curX=walk.position.x, curZ=walk.position.z;
       const nx=T.MathUtils.clamp(curX+sx,-extent,extent), nz=T.MathUtils.clamp(curZ+sz,-extent,extent);
-      if(!obstructed(nx,nz)){
+      if(canWalk(nx,nz)){
         walk.position.set(nx,eye(nx,nz),nz);
-      }else if(Math.abs(sx)>1e-4 && !obstructed(nx,curZ)){
+      }else if(Math.abs(sx)>1e-4 && canWalk(nx,curZ)){
         walk.position.set(nx,eye(nx,curZ),curZ);
-      }else if(Math.abs(sz)>1e-4 && !obstructed(curX,nz)){
+      }else if(Math.abs(sz)>1e-4 && canWalk(curX,nz)){
         walk.position.set(curX,eye(curX,nz),nz);
       }else{
         break;
@@ -830,14 +836,15 @@ export function createModel(stage,data,onFrame,options={}){
     }
     updateShadowFrustum(false);
   }
-  function enterWalk(x,z,yaw,pitch=.005,fov=65){
+  function enterWalk(x,z,yaw,pitch=.005,fov=65,lens=null){
     controls.enabled=false;
     tween=null;
     walk.active=true;
+    walk.eyeHeight=lens?.eye??1.70;walk.horizontal=lens?.horizontal??0;
     walk.position.set(x,eye(x,z),z);
     walk.yaw=yaw;
     walk.pitch=pitch;
-    walk.fov=fov;
+    walk.fov=walk.horizontal?fromHorizontal(walk.horizontal):fov;
     camera.fov=walk.fov;
     camera.updateProjectionMatrix();
     scene.fog=walkMist;
@@ -924,7 +931,8 @@ export function createModel(stage,data,onFrame,options={}){
   },{passive:false});
   function zoom(amount){
     if(walk.active){
-      walk.fov=T.MathUtils.clamp(walk.fov-amount*8,26,92);
+      const limit=walk.horizontal||walk.fov>92?112:92;
+      walk.horizontal=0;walk.fov=T.MathUtils.clamp(walk.fov-amount*8,26,limit);
       camera.fov=walk.fov;
       camera.updateProjectionMatrix();
       return;

@@ -3,13 +3,13 @@
     "WebGL model starts",
     "All generated geometry is finite",
     "All three tree forms populate the model",
-    "All twenty-six campus places load",
+    "The featured list and the extended categorized catalog both load",
     "Beiyuan search has one entrance and the two waterside places remain distinct",
     "Model error panel is hidden",
     "Shared street link opens on Boxiang Road in walking mode",
     "Search finds the college and its neighboring report hall",
-    "Forty-nine viewpoints link to forty-five panoramas and both university references",
-    "Region filter shows only the three sports viewpoints and restores the full list",
+    "The catalog links to each distinct panorama and both university references",
+    "The sports filter includes the four stadium positions and the outdoor courts",
     "Wenfu walk keeps geographic order, stops at each end and reverses",
     "Walking viewpoint cs-entry",
     "Walking viewpoint cs-south",
@@ -26,6 +26,10 @@
     "Walking viewpoint teaching-stair",
     "Walking viewpoint east-gate",
     "Walking viewpoint stadium-west",
+    "Walking viewpoint stadium-field",
+    "Walking viewpoint stadium-field-north",
+    "Walking viewpoint stadium-track",
+    "The new stadium view keeps the walking minimap and user lighting controls",
     "Walking viewpoint library-rear",
     "Walking viewpoint teaching-front",
     "Walking viewpoint pharmacy",
@@ -62,6 +66,7 @@
     "Reference panel selects the photo for the current viewpoint",
     "Walk mode activates",
     "Home exits walk mode",
+    "Existing walking directions can still route from the west gate to the stadium",
     "Tiles switch hosts when the first host fails",
     "Zoom reports missing tiles instead of treating one tile as success",
     "Campus outline and labels stay visible when both imagery hosts fail",
@@ -80,25 +85,26 @@
     "The two faces of the square keep their own original reference",
     "Turning at the dorm crossroads keeps its panorama and changes the bearing",
     "Mobile Canvas crosses to the opposite side of the education court",
+    "Canvas reaches the stand at track level and identifies it as a model viewpoint",
     "Mobile Canvas opens the plaza aerial and can descend to the ground",
     "No uncaught browser exceptions"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1230382,
+    "vertices": 1253616,
     "invalid": 0,
-    "trees": 989,
+    "trees": 1002,
     "treeForms": {
-      "shade": 515,
-      "vase": 364,
+      "shade": 520,
+      "vase": 372,
       "spire": 110
     },
     "buildings": {
       "buildings": 113,
-      "windows": 13012,
-      "entrances": 89,
-      "rooftopUnits": 103,
-      "triangles": 476162
+      "windows": 12850,
+      "entrances": 90,
+      "rooftopUnits": 102,
+      "triangles": 487222
     },
     "landscape": {
       "courts": 103,
@@ -110,8 +116,8 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 62,
-    "triangles": 1171674
+    "drawCalls": 66,
+    "triangles": 1206296
   },
   "failures": []
 }

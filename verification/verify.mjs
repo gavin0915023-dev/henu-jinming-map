@@ -117,11 +117,21 @@ try {
   if(process.env.TREE_STUDY==='1'){
     await treeStudy();
   }else if(deployedSatellite){
-    await call('Page.navigate',{url:satelliteUrl+'?view=marco-bowl'});
+    await call('Page.navigate',{url:satelliteUrl+'?view=stadium-field'});
     const start=Date.now();
     await until(()=>evaluate("document.querySelector('#stage')?.dataset.ready==='true'"),'Published viewer ready',45000);
-    check('Published deep link opens the plaza in orbit with the new viewpoints',await evaluate("document.querySelector('#mode-note').textContent.includes('东侧俯看') && document.querySelector('[data-mode=model]').getAttribute('aria-pressed')==='true' && document.querySelectorAll('#field-dialog [data-view]').length===49"));
-    await capture('published-marco-bowl');
+    check('Published street view matches the shared stadium panorama and bearing',await evaluate(`(()=>{
+      const b=document.querySelector('[data-view=stadium-field]'),h=new URLSearchParams(new URL(b.parentElement.querySelector('a').href).hash.slice(1));
+      return document.querySelector('#stage').dataset.renderer==='webgl' && document.querySelector('#mode-note').textContent.includes('夷山大街望看台') &&
+        document.querySelectorAll('#field-dialog [data-view]').length===${fieldViews.length}&&h.get('panoid')==='09027700122206231415580505A'&&h.get('heading')==='292.75'&&h.get('pitch')==='5.3';
+    })()`));
+    await capture('published-stadium-field');
+    check('Published stadium route visits both street angles, the track and the west door',await evaluate(`(()=>{
+      const prev=document.querySelector('#route-prev'),next=document.querySelector('#route-next'),current=()=>new URL(location.href).searchParams.get('view');
+      prev.click();const ids=[current()];if(!prev.disabled)return false;
+      for(let i=0;i<3;i++){next.click();ids.push(current());}
+      return ids.join(',')==='stadium-field-north,stadium-field,stadium-track,stadium-west'&&next.disabled;
+    })()`));
     await evaluate("document.querySelector('#field-views').click();document.querySelector('[data-view=tennis-west]').click()");
     await evaluate("document.querySelector('#route-next').click()");
     check('Published sports route reaches the basketball entrance',await evaluate("new URL(location.href).searchParams.get('view')==='hoops-south'"));
@@ -145,7 +155,11 @@ try {
   check('All generated geometry is finite', stats.invalid === 0 && stats.vertices > 10000);
   check('All three tree forms populate the model', ['shade','vase','spire'].every(form=>stats.treeForms?.[form]>0) &&
     Object.values(stats.treeForms).reduce((sum,n)=>sum+n,0)===stats.trees);
-  check('All twenty-six campus places load', await evaluate("document.querySelectorAll('#place-list .place').length===26"));
+  check('The featured list and the extended categorized catalog both load', await evaluate(`(()=>{
+    const tab=name=>document.querySelector('[data-cat='+name+']'),count=()=>document.querySelectorAll('#place-list .place').length;
+    const featured=count();tab('all').click();const all=count();tab('featured').click();
+    return featured===26&&all>featured+20&&count()===featured;
+  })()`));
   check('Beiyuan search has one entrance and the two waterside places remain distinct',await evaluate(`(()=>{
     const s=document.querySelector('#search'),names=q=>{s.value=q;s.dispatchEvent(new Event('input'));return [...document.querySelectorAll('#place-list .place')].map(b=>b.textContent)};
     const b=names('北苑餐厅'),l=names('粹庭湖'),j=names('九章路石桥');names('');
@@ -161,15 +175,15 @@ try {
   await evaluate("document.querySelector('#place-list .place').click()");
   await capture('teaching-building');
   await evaluate("document.querySelector('#detail [data-field-reference]').click()");
-  check('Forty-nine viewpoints link to forty-five panoramas and both university references',await evaluate(`(()=>{
+  check('The catalog links to each distinct panorama and both university references',await evaluate(`(()=>{
     const modal=document.querySelector('#field-dialog'),links=[...modal.querySelectorAll('.field-list a')].map(a=>new URL(a.href));
-    return modal.open && modal.querySelectorAll('[data-view]').length===49 &&
-      new Set(links.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size===45 &&
+    return modal.open && modal.querySelectorAll('[data-view]').length===${fieldViews.length} &&
+      new Set(links.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size===47 &&
       links.some(l=>l.hostname==='ganbu.henu.edu.cn') && links.some(l=>l.hostname==='zbcg.henu.edu.cn');
   })()`));
-  check('Region filter shows only the three sports viewpoints and restores the full list',await evaluate(`(()=>{
+  check('The sports filter includes the four stadium positions and the outdoor courts',await evaluate(`(()=>{
     const s=document.querySelector('[data-region]'),pick=v=>{s.value=v;s.dispatchEvent(new Event('change'));return [...document.querySelectorAll('.field-list section:not([hidden]) [data-view]')].map(b=>b.dataset.view)};
-    const ids=pick('体育场与球场');return ids.length===3&&ids.includes('tennis-west')&&ids.includes('hoops-south')&&ids.includes('stadium-west')&&pick('').length===49;
+    const ids=pick('体育场与球场');return ids.length===6&&['tennis-west','hoops-south','stadium-west','stadium-field','stadium-track','stadium-field-north'].every(id=>ids.includes(id))&&pick('').length===${fieldViews.length};
   })()`));
   await evaluate("document.querySelector('[data-view=cs-south]').click()");
   check('Wenfu walk keeps geographic order, stops at each end and reverses',await evaluate(`(()=>{
@@ -184,6 +198,21 @@ try {
     await evaluate(`document.querySelector('#field-dialog [data-view="${id}"]').click()`);
     check((orbit?'Aerial viewpoint ':'Walking viewpoint ')+id,await evaluate(`new URL(location.href).searchParams.get('view')==='${id}' && document.querySelector('[data-mode="${orbit?'model':'walk'}"]').getAttribute('aria-pressed')==='true' && !document.querySelector('#field-dialog').open && document.querySelector('#mode-note').textContent===document.querySelector('#field-dialog [data-view="${id}"]').parentElement.querySelector('h3').textContent`));
     await capture('field-'+id);
+    if(id==='stadium-track'){
+      check('The new stadium view keeps the walking minimap and user lighting controls',await evaluate(`(()=>{
+        const visible=!document.querySelector('#minimap').hidden&&document.querySelector('#minimap canvas').width>0;
+        document.querySelector('#lighting').click();document.querySelector('[data-light=night]').click();
+        const night=document.querySelector('.viewport').dataset.lighting==='night';
+        document.querySelector('[data-light=noon]').click();if(document.querySelector('#lighting').getAttribute('aria-expanded')==='true')document.querySelector('#lighting').click();
+        return visible&&night&&document.querySelector('.viewport').dataset.lighting==='noon';
+      })()`));
+      await evaluate("for(let i=0;i<6;i++)document.querySelector('#walk-forward').click()");
+      const {x,y}=await evaluate("(()=>{const r=document.querySelector('#stage').getBoundingClientRect();return {x:r.x+r.width*.64,y:r.y+r.height*.54}})()");
+      await call('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',buttons:1,clickCount:1});
+      await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:x-354,y:y-20,button:'left',buttons:1});
+      await call('Input.dispatchMouseEvent',{type:'mouseReleased',x:x-354,y:y-20,button:'left',buttons:0,clickCount:1});
+      await capture('field-stadium-aisle');
+    }
     await evaluate("document.querySelector('#field-views').click()");
   }
   check('Reference panel selects the photo for the current viewpoint',await evaluate("document.querySelector('#field-dialog section[data-current] [data-view]').dataset.view==='west-gate'"));
@@ -196,6 +225,12 @@ try {
   await evaluate("document.querySelector('#walk-forward').click();document.querySelector('#walk-back').click();document.querySelector('#home').click()");
   check('Home exits walk mode', await evaluate("document.querySelector('#street-help').hidden"));
   await evaluate("document.querySelectorAll('#place-list .place')[4].click()");
+  check('Existing walking directions can still route from the west gate to the stadium',await evaluate(`(()=>{
+    document.querySelector('#detail [data-route]').click();
+    const s=document.querySelector('#route-from');s.value='west';s.dispatchEvent(new Event('change'));
+    const ok=document.querySelector('#route-to').value==='stadium'&&/步行约 [0-9]+ 米/.test(document.querySelector('#route-summary').textContent);
+    document.querySelector('#route-clear').click();return ok&&document.querySelector('#route-bar').hidden;
+  })()`));
   await capture('stadium');
   await evaluate("document.querySelectorAll('#place-list .place')[3].click()");
   await capture('lake');
@@ -297,6 +332,9 @@ try {
   await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=education-clock]').click();document.querySelector('#route-next').click()");
   check('Mobile Canvas crosses to the opposite side of the education court',await evaluate("document.querySelector('#stage').dataset.renderer==='canvas' && new URL(location.href).searchParams.get('view')==='education-east' && document.querySelector('#route-position').textContent.includes('3 / 3')"));
   await capture('field-fallback-education');
+  await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=stadium-field]').click();document.querySelector('#route-next').click()");
+  check('Canvas reaches the stand at track level and identifies it as a model viewpoint',await evaluate("document.querySelector('#stage').dataset.renderer==='canvas' && document.querySelector('#mode-note').textContent.includes('跑道边模型近看') && document.querySelector('#route-position').textContent.includes('3 / 4')"));
+  await capture('field-fallback-stadium');
   await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=marco-bowl]').click()");
   check('Mobile Canvas opens the plaza aerial and can descend to the ground',await evaluate(`(()=>{
     if(document.querySelector('[data-mode=model]').getAttribute('aria-pressed')!=='true'||!document.querySelector('#mode-note').textContent.includes('东侧俯看'))return false;

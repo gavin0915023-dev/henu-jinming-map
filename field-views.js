@@ -20,6 +20,9 @@ export const fieldViews=[
   {id:'teaching-stair',place:'teaching',title:'公共教学楼 · 东侧楼梯',caption:'红砖墙上有成列方孔。透过大开口可以看到折返楼梯；右侧的白色教学楼架在柱上。',camera:[201.4,-107.3,275.93,4.53],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011230315445G',12725960.85,4115342.81,275.93,4.53)},
   {id:'east-gate',place:'east',title:'东大门 · 夷山大街',caption:'从街上向西看，两边的砖墙各开一个圆洞，门岗分列在入口两侧，中间可以直行入校。',camera:[509.5,-77.9,268.36,-.7],date:'2022年6月',source:'百度街景',url:baidu('09027700122206231416048065A',12726336.28,4115321.05,268.36,-.7)},
   {id:'stadium-west',place:'stadium',title:'志义体育场 · 西看台正门',caption:'从中州路向东看，黑底红字馆名在两组入口上方，薄顶棚由外露的三角形钢桁架支撑。',camera:[318.7,-203.0,85.05,4.35],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011206425965G',12726103.59,4115459.92,85.05,4.35)},
+  {id:'stadium-field',place:'stadium',title:'志义体育场 · 夷山大街望看台',caption:'按分享的方向朝西北看：路树与围栏后面是阶梯，罩棚只盖住中间的深蓝区。左侧从暗红、米黄过渡到绿色，右侧是浅青、紫红和赭黄。',camera:[513.8,-171.5,292.75,5.3],lens:{horizontal:86,eye:2.32},date:'2022年6月',source:'百度街景',url:baidu('09027700122206231415580505A',12726341.44,4115423.69,292.75,5.3)},
+  {id:'stadium-field-north',place:'stadium',title:'志义体育场 · 北段斜看罩棚',caption:'沿夷山大街向北换一个位置，透过树间空隙可以分清顶棚前缘、棚下的桁架与细柱，以及一侧顺坡收低的浅色边墙。',camera:[517.2,-237.2,258.5,4],lens:{horizontal:66,eye:2.32},date:'2022年6月',source:'百度街景',url:baidu('09027700122206231415533445A',12726345.53,4115503.26,258.5,4)},
+  {id:'stadium-track',place:'stadium',title:'志义体育场 · 跑道边模型近看',caption:'这是场内的模型位置。面前的浅色步阶通向看台上层，向右转可看蓝区上方的桁架。参考照片拍自夷山大街，未使用场内实拍机位。',camera:[393.9,-169.35,269.71,12],lens:{horizontal:93},source:'街外实拍参照',url:baidu('09027700122206231415533445A',12726345.53,4115503.26,258.5,4)},
   {id:'library-rear',place:'library',title:'图书馆 · 东侧后门',caption:'面向西看，两翼夹着较矮的门厅。宽台阶上方是带窄窗的弧形石墙，薄雨棚与它之间留出一条敞口。',camera:[-65.7,-80.8,264.15,9.09],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011228415665G',12725635.32,4115308.36,264.15,9.09)},
   {id:'teaching-front',place:'teaching',title:'公共教学楼 · 广场正面',caption:'隔着广场往东看，教学楼正面是横向玻璃窗带，两端由红色实墙收住；东侧的楼梯在另一面。',camera:[-63.8,-99.0,97.44,1.69],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011228370575G',12725637.67,4115330.44,97.44,1.69)},
   {id:'pharmacy',place:'pharmacy',title:'药学院 · 院前广场',caption:'花坛里的菱形石雕背后，浅色实墙上有竖排的“药学院”。玻璃门厅从它右侧开始，再向右是横向窗带和通透的屋顶框架。',camera:[-166.2,-450.3,1.51,2.87],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011201025605G',12725512.27,4115755.26,1.51,2.87)},
@@ -60,6 +63,7 @@ export const fieldViews=[
 export const walks=[
   ['文甫路',['cs-south','cs-entry','wenfu-hall','software-entry','software-south','software-return']],
   ['物理实验楼',['physics-entry','physics-court','physics-cone','physics-north']],
+  ['志义体育场',['stadium-field-north','stadium-field','stadium-track','stadium-west']],
   ['广场两面',['library-rear','teaching-front']],
   ['原地转身',['zeng','dorm17','dorm17-end']],
   ['教苑餐厅',['jiaoyuan-door','jiaoyuan-side']],

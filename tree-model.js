@@ -62,9 +62,9 @@ function leafAtlas(open=false) {
   return tex;
 }
 
-function template(form, street, style, open=false) {
+function template(form, street, style, open=false, highSummer=false) {
   const random=prng(5243 + 397*style + (form==='shade'?1:form==='vase'?2:3)*31);
-  const colors=(open?['#70814b','#9aa75d','#b4bb73']:greens[form]).map(rgb);
+  const colors=(highSummer?['#344e36','#536f42','#7d9853']:open?['#70814b','#9aa75d','#b4bb73']:greens[form]).map(rgb);
   const positions=[], shades=[], uvs=[], indices=[], foliageNormals=[];
   function point(p, color, u=.016, v=.5) {
     const i=positions.length/3;
@@ -117,9 +117,10 @@ function template(form, street, style, open=false) {
       foliage(p,r,up,false,(random()-.5)*.24);
     }
   }
-  const base=new T.Vector3(), split=new T.Vector3(.011,form==='spire'?.43:street?.43:.32,-.009);
+  const base=new T.Vector3(), split=new T.Vector3(.011,highSummer?.49:form==='spire'||street?.43:.32,-.009);
   const root=split.clone().multiplyScalar(.135/split.y);
-  limb(base,root,.024,.019,street?paleBark:bark,6); limb(root,split,.019,.014,bark,6);
+  const girth=highSummer?.68:1;
+  limb(base,root,.024*girth,.019*girth,street?paleBark:bark,6); limb(root,split,.019*girth,.014*girth,bark,6);
   if(form==='spire'){
     limb(split,polar(.6,.021,.97),.014,.003,bark);
     for(let tier=0;tier<8;tier++){
@@ -132,6 +133,19 @@ function template(form, street, style, open=false) {
       }
     }
     for(let j=0;j<3;j++)foliage(polar(j,.002,.94),polar(j,.036,0),polar(j+1,.012,.085),true,.18);
+  }else if(highSummer){
+    // Young median trees in the June street photographs fork above eye
+    // level and hold small, leafy crowns clear of the distant grandstand.
+    const phase=random()*TAU;
+    for(let k=0;k<5;k++){
+      const a=phase+k*TAU/5+.33*(random()-.5),radius=.13+.085*random();
+      const joint=polar(a+.27,radius*.48,.69+random()*.045);
+      const end=polar(a,radius,.835+.085*random());
+      limb(split,joint,.010,.0055,bark);limb(joint,end,.0055,.0018,bark,4);
+      cluster(end,.115+.035*random(),.065+.025*random(),.130,a);
+    }
+    const lead=polar(phase+.4,.044,.935);limb(split,lead,.009,.002,bark);
+    cluster(lead,.115,.06,.10,phase);
   }else if(open){
     // The April avenue views show separate forks and early leaves all the way
     // to the tips. This template is only used on the observed street frontages.
@@ -197,13 +211,13 @@ export function addTreeModels(scene, positions) {
   const materials=new Map();
   for(const tree of positions) {
     const [,,,form,street,variant]=tree;
-    const open=tree[9]==='open', style=variant<.5?0:1, key=form+'/'+Number(street)+'/'+style+'/'+Number(open);
-    if(!batches.has(key)) batches.set(key,{form,street,style,open,trees:[]});
+    const open=tree[9]==='open',highSummer=tree[9]==='high-summer', style=variant<.5?0:1, key=form+'/'+Number(street)+'/'+style+'/'+(tree[9]??'full');
+    if(!batches.has(key)) batches.set(key,{form,street,style,open,highSummer,trees:[]});
     batches.get(key).trees.push(tree);
   }
-  for(const {form,street,style,open,trees} of batches.values()){
+  for(const {form,street,style,open,highSummer,trees} of batches.values()){
     if(!materials.has(open))materials.set(open,new T.MeshStandardMaterial({map:leafAtlas(open),vertexColors:true,alphaTest:.32,roughness:1}));
-    const mesh=new T.InstancedMesh(template(form,street,style,open),materials.get(open),trees.length);
+    const mesh=new T.InstancedMesh(template(form,street,style,open,highSummer),materials.get(open),trees.length);
     mesh.name='Trees: '+form+(street?' (avenue)':' (lawn)');
     trees.forEach(([x,z,h,,,variant,yaw,sx,sz],i)=>{
       helper.position.set(x,0,z); helper.scale.set(h*sx,h,h*sz); helper.rotation.y=yaw; helper.updateMatrix();

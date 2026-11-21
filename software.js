@@ -3,13 +3,14 @@ import { libraryFacade } from './facade.js';
 import { observedTeachingFace, computingElevation, computingSignColumns } from './building-detail.js';
 import { buildingSolids, softwareSign, softwareId, hallId, reportFacade } from './wenfu.js';
 import { physicsModel, labId, labPlaque } from './physics.js';
-import { eastModels, protectedTeachingEdge, teachingId, isStandFront, stadiumSign, standId, boundaryLines } from './east-campus.js';
+import { eastModels, protectedTeachingEdge, teachingId, stadiumSign, standId, boundaryLines } from './east-campus.js';
 import { centralModels, axisCustomEdge } from './central-axis.js';
 import { facultyModels, facultyColors, facultyEdge, visibleSigns } from './faculty-sites.js';
 import { hasMarco,isMarcoRing,marcoHole,surveyedCourtPlan } from './campus-commons.js';
 import { westGatePlacement } from './west-gate.js';
 import { avenueHedgeRuns } from './avenue.js';
 import { bridgeDeck } from './field-ground.js';
+import { runningTracks,inset } from './running-tracks.js';
 
 const tint = (hex, factor) => {
   const n=parseInt(hex.slice(1),16);
@@ -58,13 +59,23 @@ export function softwareRenderer(data,palette,trees,inside){
   surface(data.boundary,.07,'#748861',holes);
   for(const [p,kind] of data.green)surface(p,.14,kind==='farmland'?'#7c835f':'#667d56');
   for(const p of data.plaza)surface(p,.45,'#a7a590',isMarcoRing(p)?holes:[]);
-  for(const [p,y,color] of data.field.surfaces)surface(p,y,color);
+  for(const [p,y,color,layer] of data.field.surfaces)if(layer!=='stadium')surface(p,y,color);
   for(const p of data.water){
     surface(p,.25,'#417879');
     line(p,1.2,.28,'#99ae95');
   }
-  const sortedSport=[...data.sport].sort((a,b)=>+(b[1]==='sports_centre')-+(a[1]==='sports_centre'));
-  for(const [p,kind,sport,name] of sortedSport){
+  for(const [p,kind] of data.sport)if(kind==='sports_centre')surface(p,.24,'#72806c');
+  const {rings,tracks}=runningTracks(data.sport);
+  for(const {outer,inner} of tracks){
+    surface(outer,.50,'#a96754');
+    const xs=outer.map(q=>q[0]),count=Math.max(...xs)-Math.min(...xs)>90?7:5;
+    for(let k=0;k<=count;k++){
+      const r=inset(outer,.55+k*1.22);line([...r,r[0]],.15,.55,'#edd9c2');
+    }
+    surface(inner,.57,'#66875c');
+  }
+  for(const [p,kind,sport] of data.sport){
+    if(kind==='sports_centre'||rings.has(p))continue;
     const xs=p.map(x=>x[0]),zs=p.map(x=>x[1]);
     const x=Math.min(...xs),z=Math.min(...zs),u=Math.max(...xs),v=Math.max(...zs);
     const cx=(x+u)/2,cz=(z+v)/2;
@@ -85,16 +96,7 @@ export function softwareRenderer(data,palette,trees,inside){
       continue;
     }
     const ball=/soccer|football/.test(sport);
-    surface(p,.31,kind==='track'?'#9f6754':kind==='sports_centre'?'#586f50':ball?'#557a4c':'#688353');
-    if(kind==='sports_centre'&&name==='志义体育场'){
-      const track=[];
-      for(let j=0;j<=48;j++){
-        const a=j*Math.PI/24, s=Math.sin(a),c=Math.cos(a);
-        track.push([cx+c*59,cz+s*50+Math.sign(s)*55]);
-      }
-      surface(track,.34,'#9e6151');
-      line(track,1,.35,'#ceb391');
-    }
+    surface(p,.60,kind==='track'?'#9f6754':ball?'#66895a':'#688353');
     if(!ball||u-x<20||v-z<24)continue;
     const a=x+4,b=z+5,c=u-4,d=v-5;
     line([[a,b],[c,b],[c,d],[a,d],[a,b]],.65,.37,'#c9d3ad');
@@ -113,6 +115,7 @@ export function softwareRenderer(data,palette,trees,inside){
     if(major)line(p,.55,y+.05,'#c5c3ac');
   }
   for(const p of boundaryLines(data))line(p,1.4,.63,'#a7be82');
+  for(const [p,y,color,layer] of data.field.surfaces)if(layer==='stadium')surface(p,y,color);
   const sides=data.field.bridge.sides;
   if(sides.length){
     surface(bridgeDeck(data.field),1.055,'#b6afa4');
@@ -196,7 +199,7 @@ export function softwareRenderer(data,palette,trees,inside){
       const edge={ax:x,az:z,nx:normal[0]/len,nz:normal[1]/len,tx:(a-x)/len,tz:(b-z)/len,length:len,sign:orientationSign};
       const obs=observedTeachingFace(id,edge);
       faces.push({normal,points:[base[i-1],base[i],top[i],top[i-1]],color:tint(wall,shade),len,
-        plain:facultyEdge(id,edge)||axisCustomEdge(id,edge)||isStandFront(id,edge)||id===teachingId&&protectedTeachingEdge(x,z,a,b),
+        plain:id===standId||facultyEdge(id,edge)||axisCustomEdge(id,edge)||id===teachingId&&protectedTeachingEdge(x,z,a,b),
         elevation:obs?flatElevation(obs.edge,record[1],obs.kind,obs.software):null,sign:id==='712688906'&&obs?.kind==='south'});
     }
     shadows.push([p.map(([x,z])=>[x+height*.31,.07,z+height*.24]),'#27372d4a']);
@@ -220,10 +223,10 @@ export function softwareRenderer(data,palette,trees,inside){
       tones:[['#385e50','#547866'],['#466b56','#628470'],['#3f6257','#60816e']], radius:.22, base:.20
     }
   };
-  for(const [x,z,h,form,roadside,variant,yaw,scaleX,scaleZ] of trees){
-    const style=forms[form], i=Math.min(style.tones.length-1,Math.max(0,Math.floor(variant*style.tones.length)));
-    objects.push({center:[x,0,z],tree:{h,style,roadside,conifer:form==='spire',base:style.base+(roadside?.04:0),
-      colors:style.tones[i],mirror:Math.cos(yaw)>=0?1:-1,rx:scaleX,rz:scaleZ,cos:Math.cos(yaw),sin:Math.sin(yaw)}});
+  for(const [x,z,h,form,roadside,variant,yaw,scaleX,scaleZ,profile] of trees){
+    const summer=profile==='high-summer',style=forms[form],i=Math.min(style.tones.length-1,Math.max(0,Math.floor(variant*style.tones.length)));
+    objects.push({center:[x,0,z],tree:{h,style,roadside,conifer:form==='spire',base:summer?.73:style.base+(roadside?.04:0),
+      colors:summer?['#405e40','#627f4a']:style.tones[i],mirror:Math.cos(yaw)>=0?1:-1,rx:scaleX,rz:scaleZ,cos:Math.cos(yaw),sin:Math.sin(yaw)}});
   }
 
   let cam, m;

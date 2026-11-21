@@ -4,6 +4,7 @@
 // retains the source footprint and estimated rear height.
 import { labId, coneId, physicsSolids } from './physics.js';
 import { teachingId, teachingSolids } from './east-campus.js';
+import {standId,standSolids} from './stadium-bowl.js';
 import { libraryId, librarySolids } from './central-axis.js';
 import { civilId, zengId, clinicId, facultySolids } from './faculty-sites.js';
 import { courtSolidIds, courtSolids } from './college-courts.js';
@@ -30,6 +31,7 @@ function clip(poly,axis,limit,lower){
 export function* buildingSolids(records){
   for(const record of records){
     const [p,h,,,id]=record;
+    if(id===standId){yield* standSolids(record);continue;}
     if(id===officeId){yield* officeSolids(record);continue;}
     if(id===nanyuanId){yield* diningSolids(record);continue;}
     if(courtSolidIds.has(id)){yield* courtSolids(record);continue;}

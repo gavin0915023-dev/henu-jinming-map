@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {surveyedCourtPlan} from './campus-commons.js';
 import {bridgeDeck} from './field-ground.js';
+import {inset,signedArea,runningTracks} from './running-tracks.js';
 
 // All furniture and markings are merged by material. No per-lamp lights or meshes.
 export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
@@ -14,7 +15,6 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
   const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
   const open = ring => ring.length > 1 && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1] ? ring.slice(0, -1) : ring.slice();
   const closed = ring => [...open(ring), open(ring)[0]];
-  const signedArea = ring => open(ring).reduce((sum, p, i, a) => sum + p[0] * a[(i + 1) % a.length][1] - a[(i + 1) % a.length][0] * p[1], 0) / 2;
   const center = ring => {
     const [x, z, u, v] = bounds(ring);
     return [(x + u) / 2, (z + v) / 2];
@@ -39,22 +39,6 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     const a = start + (end - start) * i / steps;
     return [cx + Math.cos(a) * rx, cz + Math.sin(a) * rz];
   });
-  // Insets preserve the surveyed perimeter, including rotated and uneven shores.
-  const inset = (ring, amount) => {
-    const a = open(ring), sign = signedArea(a) > 0 ? 1 : -1;
-    return a.map((p, i) => {
-      const before = a[(i + a.length - 1) % a.length], after = a[(i + 1) % a.length];
-      const l1 = Math.hypot(p[0] - before[0], p[1] - before[1]) || 1;
-      const l2 = Math.hypot(after[0] - p[0], after[1] - p[1]) || 1;
-      const n1 = [sign * (before[1] - p[1]) / l1, sign * (p[0] - before[0]) / l1];
-      const n2 = [sign * (p[1] - after[1]) / l2, sign * (after[0] - p[0]) / l2];
-      let nx = n1[0] + n2[0], nz = n1[1] + n2[1];
-      const len = Math.hypot(nx, nz) || 1;
-      nx /= len; nz /= len;
-      const m = Math.min(Math.abs(amount) * 3, Math.abs(amount / Math.max(.35, nx * n2[0] + nz * n2[1]))) * Math.sign(amount);
-      return [p[0] + nx * m, p[1] + nz * m];
-    });
-  };
   const clippedLine = (points, width, y, color, allowed) => {
     let run = [];
     const flush = () => { if (run.length > 1) details.ribbon(run, width, y, color); run = []; };
@@ -95,15 +79,7 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     post(metal, p[0], p[1], .67, h, r, color);
   };
 
-  const unknownTracks = data.sport.filter(([p, kind, sport]) => kind === 'pitch' && !sport && p.length > 20);
-  const tracks = unknownTracks.filter(([p]) => !unknownTracks.some(([q]) => {
-    const a = center(p), b = center(q);
-    return Math.hypot(a[0] - b[0], a[1] - b[1]) < 20 && Math.abs(signedArea(q)) > Math.abs(signedArea(p)) * 1.1;
-  })).map(([p]) => {
-    const c = center(p);
-    const inner = unknownTracks.find(([q]) => q !== p && Math.hypot(...center(q).map((v, i) => v - c[i])) < 20 && Math.abs(signedArea(q)) < Math.abs(signedArea(p)) * .85)?.[0] || inset(p, 6.8);
-    return { outer: p, inner, c };
-  });
+  const {rings,tracks}=runningTracks(data.sport);
 
   // Stadium apron, track, then infield: the running lanes never cover the turf.
   for (const [p, kind] of data.sport) if (kind === 'sports_centre') surfaces.surface(p, .24, '#72806c');
@@ -229,7 +205,7 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
   }
 
   for (const [p, kind, sport] of data.sport) {
-    if (kind === 'sports_centre' || unknownTracks.some(([q]) => p === q)) continue;
+    if (kind === 'sports_centre' || rings.has(p)) continue;
     const surveyed=surveyedCourtPlan(p,sport);
     if(surveyed){
       surfaces.surface(p,.60,surveyed.finish.apron);
