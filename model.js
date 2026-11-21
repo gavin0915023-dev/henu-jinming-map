@@ -13,7 +13,7 @@ import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.j
 import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
 import { publicBlockers,hasMarco,isMarcoRing,marcoHole } from './campus-commons.js';
 import { stadiumSign, standId, teachingId, eastGateBlockers, hasEastGate, boundaryLines } from './east-campus.js';
-import { campusSky, shadeGround } from './daylight.js';
+import { campusSky, shadeGround, LIGHTING_PRESETS } from './daylight.js';
 import { applyGroundSurfaceTextures } from './ground-surfaces.js';
 
 const ground = 0;
@@ -44,51 +44,65 @@ function groundShape(points,holes=[]){
 }
 
 class Batch {
-  constructor() { this.positions = []; this.colors = []; this.normals = []; }
+  constructor() { this.positions = []; this.colors = []; this.normals = []; this.indices = []; }
   add(geometry, color) {
-    const g = geometry.index ? geometry.toNonIndexed() : geometry;
-    const p = g.attributes.position.array, n = g.attributes.normal.array;
-    const painted=!color&&g.getAttribute('color');
+    const p = geometry.attributes.position.array, n = geometry.attributes.normal.array;
+    const painted = !color && geometry.getAttribute('color');
+    const base = this.positions.length / 3;
     const light = new T.Color();
+    const single = !painted && !Array.isArray(color) ? light.set(color) : null;
+    const sideCol = Array.isArray(color) ? new T.Color(color[0]) : null;
+    const topCol = Array.isArray(color) ? new T.Color(color[1]) : null;
     for (let i = 0; i < p.length; i += 3) {
-      this.positions.push(p[i],p[i+1],p[i+2]);
-      this.normals.push(n[i],n[i+1],n[i+2]);
-      if (painted) light.fromBufferAttribute(painted,i/3);
-      else if (Array.isArray(color)) light.set(n[i+1] > .7 ? color[1] : color[0]);
-      else light.set(color);
-      this.colors.push(light.r,light.g,light.b);
+      this.positions.push(p[i], p[i + 1], p[i + 2]);
+      this.normals.push(n[i], n[i + 1], n[i + 2]);
+      if (painted) {
+        light.fromBufferAttribute(painted, i / 3);
+        this.colors.push(light.r, light.g, light.b);
+      } else if (single) {
+        this.colors.push(single.r, single.g, single.b);
+      } else {
+        const c = n[i + 1] > .7 ? topCol : sideCol;
+        this.colors.push(c.r, c.g, c.b);
+      }
     }
-    if (g !== geometry) g.dispose();
+    const idx = geometry.index;
+    if (idx) {
+      const arr = idx.array;
+      for (let i = 0; i < arr.length; i++) this.indices.push(base + arr[i]);
+    } else {
+      for (let i = 0, count = p.length / 3; i < count; i++) this.indices.push(base + i);
+    }
     geometry.dispose();
   }
-  surface(points, y, color,holes=[]) {
-    const g = groundShape(points,holes);
+  surface(points, y, color, holes = []) {
+    const g = groundShape(points, holes);
     g.rotateX(-Math.PI / 2);
-    g.translate(0,y,0);
-    this.add(g,color);
+    g.translate(0, y, 0);
+    this.add(g, color);
   }
   ribbon(points, width, y, color) {
-    const vertices = [];
+    const c = new T.Color(Array.isArray(color) ? color[1] : color);
     for (let i = 0; i < points.length - 1; i++) {
-      const [x,z] = points[i], [u,v] = points[i+1];
-      const len = Math.hypot(u-x,v-z);
+      const [x, z] = points[i], [u, v] = points[i + 1];
+      const len = Math.hypot(u - x, v - z);
       if (len < .15) continue;
-      const dx = (v-z)*width/(2*len), dz = (x-u)*width/(2*len);
-      const ax = x+dx, az=z+dz, bx=x-dx, bz=z-dz, cx=u+dx, cz=v+dz, ex=u-dx, ez=v-dz;
-      vertices.push(ax,y,az,bx,y,bz,cx,y,cz,bx,y,bz,ex,y,ez,cx,y,cz);
+      const dx = (v - z) * width / (2 * len), dz = (x - u) * width / (2 * len);
+      const base = this.positions.length / 3;
+      this.positions.push(x + dx, y, z + dz, x - dx, y, z - dz, u + dx, y, v + dz, u - dx, y, v - dz);
+      this.normals.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
+      this.colors.push(c.r, c.g, c.b, c.r, c.g, c.b, c.r, c.g, c.b, c.r, c.g, c.b);
+      this.indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
     }
-    if (!vertices.length) return;
-    const g = new T.BufferGeometry();
-    g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
-    g.computeVertexNormals();
-    this.add(g,color);
   }
   mesh(options = {}) {
     const g = new T.BufferGeometry();
-    g.setAttribute('position',new T.Float32BufferAttribute(this.positions,3));
-    g.setAttribute('normal',new T.Float32BufferAttribute(this.normals,3));
-    g.setAttribute('color',new T.Float32BufferAttribute(this.colors,3));
-    return new T.Mesh(g,new T.MeshStandardMaterial({vertexColors:true,roughness:.94,side:T.DoubleSide,...options}));
+    g.setAttribute('position', new T.Float32BufferAttribute(this.positions, 3));
+    g.setAttribute('normal', new T.Float32BufferAttribute(this.normals, 3));
+    g.setAttribute('color', new T.Float32BufferAttribute(this.colors, 3));
+    g.setIndex(this.indices);
+    g.computeBoundingSphere();
+    return new T.Mesh(g, new T.MeshStandardMaterial({ vertexColors: true, roughness: .94, side: T.DoubleSide, ...options }));
   }
 }
 
@@ -205,37 +219,50 @@ function finishShrubs(material){
     }
   }
   const tex=new T.CanvasTexture(canvas);tex.wrapS=tex.wrapT=T.RepeatWrapping;
+  material.customProgramCacheKey=()=>'campus-shrub-leaf-v1';
   material.onBeforeCompile=shader=>{
     shader.uniforms.leafTone={value:tex};
-    shader.vertexShader='varying vec3 shrubPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nshrubPoint=position;');
+    shader.vertexShader='varying vec3 shrubPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+      vec4 shrubWorld=vec4(transformed,1.0);
+      #ifdef USE_INSTANCING
+        shrubWorld=instanceMatrix*shrubWorld;
+      #endif
+      shrubPoint=(modelMatrix*shrubWorld).xyz;`);
     shader.fragmentShader='uniform sampler2D leafTone;\nvarying vec3 shrubPoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',
       '#include <color_fragment>\nvec2 p=(shrubPoint.xz+vec2(.53,.91)*shrubPoint.y)/1.45; diffuseColor.rgb*=.29+texture2D(leafTone,p).rgb*1.16;');
   };
+}
+function bushTemplate(cushion){
+  const g=new T.SphereGeometry(1,8,5),p=g.attributes.position,n=g.attributes.normal,c=[];
+  for(let i=0;i<p.count;i++){
+    const a=p.getX(i),b=p.getY(i),d=p.getZ(i);
+    const noise=Math.sin(a*12.2+d*9.11+b*18.1+4.2)*Math.cos(d*11+b*7.9);
+    const f=1+.11*noise;
+    const r=v=>cushion?Math.sign(v)*Math.pow(Math.abs(v),.58):v;
+    p.setXYZ(i,r(a)*f,(r(b)*f+1)*.50,r(d)*f);
+    n.setXYZ(i,a,b,d);
+    const shade=Math.max(.45,1+b*.17+noise*.19);
+    c.push(shade,shade,shade);
+  }
+  g.setAttribute('color',new T.Float32BufferAttribute(c,3));
+  g.computeBoundingSphere();
+  return g;
 }
 function addTrees(scene,positions,data) {
   addTreeModels(scene,positions);
   // Baidu panorama 01027700001404011238110455G shows low clipped hedges
   // and round shrubs beside internal roads. Placement below is schematic.
-  const planting=new Batch(),rnd=seeded();
-  function bush(x,z,rx,h,rz,tone,leaf,lift=0){
-    const g=new T.IcosahedronGeometry(1,1),p=g.attributes.position,n=g.attributes.normal,c=[];
-    const col=new T.Color();
-    for(let i=0;i<p.count;i++){
-      const a=p.getX(i),b=p.getY(i),d=p.getZ(i);
-      const noise=Math.sin(a*12.2+d*9.11+b*18.1+tone*12)*Math.cos(d*11+b*7.9);
-      const f=1+.11*noise;
-      const round=v=>h>1.2?v:Math.sign(v)*Math.pow(Math.abs(v),.58);
-      p.setXYZ(i,x+round(a)*rx*f,.17+lift+(round(b)*f+1)*h*.50,z+round(d)*rz*f);
-      n.setXYZ(i,a,b,d);
-      if(leaf)col.set(leaf);else col.setRGB(.071+tone*.029,.123+tone*.055,.043+tone*.023);
-      col.multiplyScalar(1+b*.17+noise*.19);
-      c.push(col.r,col.g,col.b);
-    }
-    g.setAttribute('color',new T.Float32BufferAttribute(c,3));planting.add(g,null);
+  const lowItems=[], tallItems=[], hedgeItems=[], rnd=seeded();
+  const tmpColor=new T.Color();
+  function pushBush(x,z,rx,h,rz,tone,leaf,lift=0,yaw=0){
+    const color=leaf?tmpColor.set(leaf).clone():new T.Color().setRGB(.071+tone*.029,.123+tone*.055,.043+tone*.023);
+    (h>1.2?tallItems:lowItems).push({x,y:.17+lift,z,sx:rx,sy:h,sz:rz,yaw,color});
   }
   for(const [x,z,rx,h,rz,t,leaf,lift] of data.field.shrubs){
-    bush(x,z,rx*.82,h,rz*.80,t,leaf,lift);bush(x-rx*.43,z+.27,rx*.68,h*.77,rz*.72,1-t,leaf,lift);
-    bush(x+rx*.47,z-.35,rx*.66,h*.86,rz*.79,t*.72,leaf,lift);
+    const a=t*19.3;
+    pushBush(x,z,rx*.82,h,rz*.80,t,leaf,lift,a);
+    pushBush(x-rx*.43,z+.27,rx*.68,h*.77,rz*.72,1-t,leaf,lift,a+2.1);
+    pushBush(x+rx*.47,z-.35,rx*.66,h*.86,rz*.79,t*.72,leaf,lift,a+4.2);
   }
   for(const [from,to,z] of avenueHedgeRuns(data,contains)){
     // Closely clipped growth still has a changing leaf surface and a few
@@ -243,10 +270,15 @@ function addTrees(scene,positions,data) {
     const count=Math.ceil((to-from)/1.12),step=(to-from)/count;
     for(let i=0;i<count;i++){
       const x=from+(i+.5)*step;
-      bush(x,z+(rnd()-.5)*.12,step*.78,.83+rnd()*.24,.55+rnd()*.10,.24+rnd()*.72);
+      pushBush(x,z+(rnd()-.5)*.12,step*.82,.83+rnd()*.24,.58+rnd()*.10,.24+rnd()*.72,null,0,0);
     }
   }
-  const blockers=[...data.building.map(([p])=>p),...data.water,...data.sport.map(([p])=>p)];
+  const blockers=[...data.building.map(([p])=>p),...data.water,...data.sport.map(([p])=>p)].map(p=>[bounds(p),p]);
+  const roadSegs=data.road.flatMap(([p,w])=>p.slice(1).map(([u,v],j)=>{
+    const [a,b]=p[j],lim=w/2+1;
+    return [Math.min(a,u)-lim,Math.min(b,v)-lim,Math.max(a,u)+lim,Math.max(b,v)+lim,a,b,u-a,v-b,lim*lim];
+  }));
+  const hedgeColor=new T.Color('#567747'), shrubColor=new T.Color('#3e633d');
   for(const road of data.road){
     const [points,width,,kind]=road;
     if(kind!=='service'||width<3||width>14)continue;
@@ -254,36 +286,52 @@ function addTrees(scene,positions,data) {
       const [ax,az]=points[i-1],[bx,bz]=points[i];
       const length=Math.hypot(bx-ax,bz-az);
       if(length<24)continue;
+      const yaw=-Math.atan2(bz-az,bx-ax);
       for(let distance=9;distance<length-6;distance+=6)for(const side of [-1,1]){
         const x=ax+(bx-ax)*distance/length+(bz-az)*(width/2+1.8)*side/length;
         const z=az+(bz-az)*distance/length-(bx-ax)*(width/2+1.8)*side/length;
         if(entryGap(data.field,x,z,2.9) || data.field.forecourts.some(p=>contains(x,z,p)) || Math.hypot(x-116.5,z+231)<6.5)continue;
         if(road===data.avenue?.road && x>=data.avenue.start-3 && x<=data.avenue.end+3)continue;
-        if(!contains(x,z,data.boundary)||blockers.some(p=>contains(x,z,p)))continue;
+        if(!contains(x,z,data.boundary)||blockers.some(([[l,t,r,b],p])=>x>=l&&x<=r&&z>=t&&z<=b&&contains(x,z,p)))continue;
         // Avoid junctions and paths crossing the planted verge.
-        if(data.road.some(([p,w])=>p.slice(1).some(([u,v],j)=>{
-          const [a,b]=p[j],dx=u-a,dz=v-b,l=dx*dx+dz*dz;
-          const t=l?T.MathUtils.clamp(((x-a)*dx+(z-b)*dz)/l,0,1):0;
-          return Math.hypot(x-a-t*dx,z-b-t*dz)<w/2+1;
-        })))continue;
-        const hedge=new T.BoxGeometry(5.8,.65,1.15);
-        hedge.rotateY(-Math.atan2(bz-az,bx-ax));
-        hedge.translate(x,.52,z);planting.add(hedge,'#567747');
+        if(roadSegs.some(([l,t,r,b,a,c,dx,dz,lim2])=>{
+          if(x<l||x>r||z<t||z>b)return false;
+          const sq=dx*dx+dz*dz,u=sq?T.MathUtils.clamp(((x-a)*dx+(z-c)*dz)/sq,0,1):0;
+          const rx=x-a-u*dx,rz=z-c-u*dz;
+          return rx*rx+rz*rz<lim2;
+        }))continue;
+        hedgeItems.push({x,y:.52,z,sx:1,sy:1,sz:1,yaw,color:hedgeColor});
         if(Math.round(distance/6)%3===0){
-          const shrub=new T.IcosahedronGeometry(1,1);
-          shrub.scale(1.15,1,1.15);shrub.translate(x,1.25,z);
-          planting.add(shrub,'#3e633d');
+          tallItems.push({x,y:.25,z,sx:1.15,sy:2,sz:1.15,yaw,color:shrubColor});
         }
       }
     }
   }
-  const shrubs=planting.mesh();
-  finishShrubs(shrubs.material);
-  shrubs.name='Street-view inspired clipped roadside planting';
-  shrubs.castShadow=shrubs.receiveShadow=true;scene.add(shrubs);
+  const shrubMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:.94,side:T.FrontSide});
+  finishShrubs(shrubMaterial);
+  const helper=new T.Object3D();
+  function mountInstanced(geo,items,name){
+    if(!items.length){geo.dispose();return;}
+    const mesh=new T.InstancedMesh(geo,shrubMaterial,items.length);
+    mesh.name=name;
+    items.forEach(({x,y,z,sx,sy,sz,yaw,color},i)=>{
+      helper.position.set(x,y,z);helper.rotation.set(0,yaw,0);helper.scale.set(sx,sy,sz);helper.updateMatrix();
+      mesh.setMatrixAt(i,helper.matrix);
+      mesh.setColorAt(i,color);
+    });
+    mesh.instanceMatrix.needsUpdate=true;
+    if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+    mesh.castShadow=mesh.receiveShadow=true;
+    scene.add(mesh);
+  }
+  const boxHedgeGeo=new T.BoxGeometry(5.8,.65,1.15);
+  boxHedgeGeo.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(boxHedgeGeo.attributes.position.count*3).fill(1),3));
+  mountInstanced(bushTemplate(true),lowItems,'Clipped cushion shrubs');
+  mountInstanced(bushTemplate(false),tallItems,'Rounded roadside shrubs');
+  mountInstanced(boxHedgeGeo,hedgeItems,'Street-view inspired clipped roadside hedges');
 }
 // The university entrance photo shows three separate gold characters above the canopy.
-function librarySign() {
+function librarySign(anisotropy=1) {
   const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
   const c=canvas.getContext('2d');
   c.font='bold 78px KaiTi, STKaiti, SimSun, serif';c.textAlign='center';c.textBaseline='middle';
@@ -293,11 +341,11 @@ function librarySign() {
     const x=64+i*192;c.fillStyle='#70522f';c.fillText(ch,x+1,52);
     c.fillStyle=gold;c.fillText(ch,x,49);
   }
-  const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
+  const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
   const sign=new T.Mesh(new T.PlaneGeometry(13,2.45),new T.MeshStandardMaterial({map,alphaTest:.27,roughness:.56}));
   sign.rotation.y=-Math.PI/2;sign.position.set(-183,9.55,-73);sign.name='Library entrance lettering';return sign;
 }
-function addSoftwareSign(scene) {
+function addSoftwareSign(scene,anisotropy=1) {
   const {x,z,width,height,base,angle}=softwareSign,group=new T.Group();
   group.position.set(x,base,z);group.rotation.y=angle;group.name='软件学院 · 文甫路路牌';
   const post=new T.Mesh(new T.BoxGeometry(width,height,.18),new T.MeshStandardMaterial({color:'#675d54',roughness:.88}));
@@ -306,19 +354,19 @@ function addSoftwareSign(scene) {
   const c=canvas.getContext('2d');c.fillStyle='#d3cab4';c.fillRect(0,0,160,480);
   c.textAlign='center';c.textBaseline='middle';c.font='bold 94px KaiTi,STKaiti,SimSun,serif';c.fillStyle='#a4382d';
   [...'软件学院'].forEach((ch,i)=>c.fillText(ch,80,67+105*i));
-  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=anisotropy;
   const face=new T.PlaneGeometry(width-.10,height-.12),mat=new T.MeshStandardMaterial({map:texture,roughness:.91});
   for(const side of [-1,1]){const plate=new T.Mesh(face,mat);plate.position.set(0,height/2,side*.094);plate.rotation.y=side>0?0:Math.PI;group.add(plate);}
   scene.add(group);
 }
-function buildScene(scene, data, trees) {
-  addWestGate(scene,data);
+function buildScene(scene, data, trees, anisotropy=1) {
+  addWestGate(scene,data,anisotropy);
   for(const {text,width,height,point,yaw,color,horizontal} of visibleSigns(data)){
     const cv=document.createElement('canvas');cv.width=120*(horizontal?text.length:1);cv.height=120*(horizontal?1:text.length);
     const ctx=cv.getContext('2d');ctx.font='bold 92px KaiTi,STKaiti,SimSun,serif';ctx.textAlign='center';ctx.textBaseline='middle';
     [...text].forEach((ch,i)=>{const x=horizontal?(i+.5)*120:60,y=horizontal?60:(i+.5)*120;
       ctx.fillStyle='#6a5b50';ctx.fillText(ch,x+2,y+2);ctx.fillStyle=color;ctx.fillText(ch,x,y);});
-    const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;
+    const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
     const sign=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,alphaTest:.20,roughness:.76}));
     sign.position.set(...point);sign.rotation.y=yaw;sign.name=text;scene.add(sign);
   }
@@ -328,7 +376,7 @@ function buildScene(scene, data, trees) {
     const ctx=panel.getContext('2d');ctx.fillStyle='#c4bca7';ctx.fillRect(0,0,112,560);
     ctx.fillStyle='#373c37';ctx.font='bold 70px SimSun,serif';ctx.textAlign='center';ctx.textBaseline='middle';
     [...text].forEach((ch,i)=>ctx.fillText(ch,56,58+i*72));
-    const map=new T.CanvasTexture(panel);map.colorSpace=T.SRGBColorSpace;
+    const map=new T.CanvasTexture(panel);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
     const plate=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,roughness:.79}));
     plate.position.set(...point);plate.rotation.y=yaw;plate.name='Physics teaching laboratory entrance plaque';scene.add(plate);
   }
@@ -338,11 +386,11 @@ function buildScene(scene, data, trees) {
     ctx.fillStyle=background;ctx.fillRect(0,0,cv.width,cv.height);
     ctx.fillStyle=color;ctx.font='bold 104px KaiTi,STKaiti,SimSun,serif';ctx.textAlign='center';ctx.textBaseline='middle';
     [...text].forEach((ch,i)=>ctx.fillText(ch,cv.width*(i+.5)/text.length,72));
-    const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;
+    const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
     const plate=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,roughness:.82}));
     plate.position.set(...point);plate.rotation.y=yaw;plate.name=text;scene.add(plate);
   }
-  if(data.building.some(b=>b[4]===softwareId))addSoftwareSign(scene);
+  if(data.building.some(b=>b[4]===softwareId))addSoftwareSign(scene,anisotropy);
   const cs=data.building.find(b=>b[4]==='712688906');
   if(cs){
     // Two vertical lines of gold characters on the pale wall above the Wenfu Road entrance.
@@ -353,7 +401,7 @@ function buildScene(scene, data, trees) {
       for(const [i,ch] of [...word].entries()){const y=top+i*72;
         c.fillStyle='#685136';c.fillText(ch,x+1.5,y+2);c.fillStyle='#ca9e48';c.fillText(ch,x,y);}
     }
-    const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
+    const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
     const letters=new T.Mesh(new T.PlaneGeometry(4.3,11.5),new T.MeshStandardMaterial({map,alphaTest:.25,roughness:.63}));
     letters.position.set(-8,13.8,-190.40);letters.name='Computer college entrance lettering';scene.add(letters);
   }
@@ -403,15 +451,17 @@ function buildScene(scene, data, trees) {
     g.translate(x,y,z);
     (material==='glass'?libraryGlass:landmark).add(g,color);
   }
-  const library=landmark.mesh({roughness:.78});
+  const library=landmark.mesh({roughness:.78,side:T.FrontSide});
   library.name='Photo-informed library entrance and roof';
   library.castShadow=library.receiveShadow=true;
-  scene.add(library,librarySign());
+  const libSign=librarySign(anisotropy);
+  scene.add(library,libSign);
+  let libraryGlassMesh=null;
   if(libraryGlass.positions.length){
-    const glass=libraryGlass.mesh({roughness:.26,metalness:0});
-    glass.name='Library curtain wall glass';scene.add(glass);
+    libraryGlassMesh=libraryGlass.mesh({roughness:.26,metalness:0});
+    libraryGlassMesh.name='Library curtain wall glass';scene.add(libraryGlassMesh);
   }
-  const landscape=layers.mesh(), architecture=buildings.mesh(), elevation=front.mesh();
+  const landscape=layers.mesh({side:T.FrontSide}), architecture=buildings.mesh({side:T.FrontSide}), elevation=front.mesh();
   applyGroundSurfaceTextures(landscape);
   shadeGround(landscape,data,trees);
   landscape.name='Campus surfaces';architecture.name='Original building footprints';elevation.name='Library west elevation';
@@ -423,13 +473,52 @@ function buildScene(scene, data, trees) {
   scene.add(landscape,architecture,elevation);
   const details={Batch,contains,bounds};
   const buildingDetails=addBuildingDetails(scene,data,details);
+  if(buildingDetails.plazaGround)applyGroundSurfaceTextures(buildingDetails.plazaGround);
+  if(libraryGlassMesh && buildingDetails.nightGlowUniform){
+    const lm=libraryGlassMesh.material;
+    lm.customProgramCacheKey=()=>'campus-lib-glass-v1';
+    lm.onBeforeCompile=shader=>{
+      shader.uniforms.uNightGlow=buildingDetails.nightGlowUniform;
+      shader.vertexShader='varying vec3 vWinPos;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvWinPos=position;');
+      shader.fragmentShader='uniform float uNightGlow;\nvarying vec3 vWinPos;\n'+shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+      if (uNightGlow > 0.01) {
+        float floorIdx = floor((vWinPos.y - 1.2) / 3.8);
+        float bayIdx = floor(vWinPos.z / 5.5);
+        float fh = fract(sin(floorIdx * 127.1 + 19.3) * 43758.5453);
+        float bh = fract(sin(dot(vec2(bayIdx, floorIdx), vec2(91.7, 311.7))) * 43758.5453);
+        float fy = fract((vWinPos.y - 1.2) / 3.8);
+        float band = smoothstep(0.08, 0.26, fy) * (1.0 - smoothstep(0.74, 0.94, fy));
+        float lit = mix(0.16, 0.72, step(0.32, fh) * step(0.28, bh)) * band;
+        vec3 warm = mix(vec3(1.0, 0.80, 0.46), vec3(0.96, 0.88, 0.70), fract(bh * 7.3));
+        totalEmissiveRadiance += warm * lit * uNightGlow * 0.78;
+      }`);
+    };
+  }
   const landscapeDetails=addLandscapeDetails(scene,data,details);
   applyGroundSurfaceTextures(landscapeDetails.group);
+  // Warm ground light pools under the 135 campus street lamps (shown at dusk/night).
+  let lampHalos=null;
+  if(landscapeDetails.lampPositions?.length){
+    const c=document.createElement('canvas');c.width=c.height=64;
+    const ctx=c.getContext('2d'),g=ctx.createRadialGradient(32,32,0,32,32,32);
+    g.addColorStop(0,'rgba(255,212,138,0.68)');g.addColorStop(.45,'rgba(255,194,108,0.22)');g.addColorStop(1,'rgba(255,180,90,0)');
+    ctx.fillStyle=g;ctx.fillRect(0,0,64,64);
+    const tex=new T.CanvasTexture(c);tex.colorSpace=T.SRGBColorSpace;
+    const disc=new T.PlaneGeometry(13.5,13.5);disc.rotateX(-Math.PI/2);
+    const mat=new T.MeshBasicMaterial({map:tex,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending});
+    lampHalos=new T.InstancedMesh(disc,mat,landscapeDetails.lampPositions.length);
+    lampHalos.name='Street lamp ground pools';lampHalos.visible=false;lampHalos.renderOrder=2;
+    const h=new T.Object3D();
+    landscapeDetails.lampPositions.forEach(([x,z],i)=>{h.position.set(x,.88,z);h.updateMatrix();lampHalos.setMatrixAt(i,h.matrix);});
+    lampHalos.instanceMatrix.needsUpdate=true;
+    scene.add(lampHalos);
+  }
   addTrees(scene,trees,data);
-  return {buildingDetails,landscapeDetails};
+  return {buildingDetails,landscapeDetails,lampHalos,libSign};
 }
 
-export function createModel(stage,data,onFrame){
+export function createModel(stage,data,onFrame,options={}){
+  const {onPickBuilding}=options;
   data=campusAvenueData(data);
   data={...data,field:fieldGround(data,contains)};
   const scene = new T.Scene();
@@ -455,10 +544,11 @@ export function createModel(stage,data,onFrame){
   stage.append(renderer.domElement);
   const ambient=new T.HemisphereLight('#e2efff','#a09c8d',1.28);
   const sun=new T.DirectionalLight('#fff0dc',2.55);
-  sun.position.set(-530,750,-620);
+  const sunOffset=new T.Vector3(-530,750,-620);
+  sun.position.copy(sunOffset);
   sun.target.position.set(0,0,60);
   if(context){
-    scene.background=scene.environment=campusSky(sun.position.clone().sub(sun.target.position).normalize());
+    scene.background=scene.environment=campusSky(sun.position.clone().sub(sun.target.position).normalize(),'noon');
     scene.environmentIntensity=.46;
   }
   sun.castShadow=true;
@@ -467,7 +557,13 @@ export function createModel(stage,data,onFrame){
   sun.shadow.normalBias=.28;
   sun.shadow.bias=-.00015;
   scene.add(ambient,sun,sun.target);
-  const details=context?buildScene(scene,data,trees):null;
+  const anisotropy=context?Math.min(8,renderer.capabilities.getMaxAnisotropy()):1;
+  const details=context?buildScene(scene,data,trees,anisotropy):null;
+  let contextLost=false;
+  if(context){
+    canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;},false);
+    canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;renderer.shadowMap.needsUpdate=true;lastView='';},false);
+  }
   const controls = new OrbitControls(camera,stage);
   controls.enableDamping=true;
   controls.dampingFactor=.12;
@@ -477,10 +573,191 @@ export function createModel(stage,data,onFrame){
   controls.maxDistance=2900;
   controls.minPolarAngle=.02;
   controls.maxPolarAngle=Math.PI*.48;
-  const direction=new T.Vector3(), projection=new T.Vector3();
+  const direction=new T.Vector3(), projection=new T.Vector3(), raycaster=new T.Raycaster(), ndc=new T.Vector2();
   const walk={active:false,yaw:0,pitch:-.02,position:new T.Vector3(),fov:65};
   const keys=new Set();
-  let drag=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
+  let drag=null, tapStart=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
+  let lightingName='noon', waterMotion=!matchMedia('(prefers-reduced-motion: reduce)').matches, lastWaterTick=0;
+  let shadowFocusCenter=null, walkDrive=0;
+
+  // Dynamic focused shadow frustum: 160m x 160m high-precision shadow box in walk mode (~4-8cm/texel),
+  // full 1840m x 1900m campus coverage in orbit mode.
+  function updateShadowFrustum(force=false){
+    if(!context)return;
+    if(!walk.active){
+      if(!force && shadowFocusCenter===null)return;
+      shadowFocusCenter=null;
+      sun.target.position.set(0,0,60);
+      sun.position.copy(sun.target.position).add(sunOffset);
+      Object.assign(sun.shadow.camera,{left:-920,right:920,top:950,bottom:-950,near:10,far:2400});
+      sun.shadow.normalBias=.28;
+      sun.shadow.bias=-.00015;
+      sun.shadow.camera.updateProjectionMatrix();
+      sun.target.updateMatrixWorld();
+      renderer.shadowMap.needsUpdate=true;
+      return;
+    }
+    const tx=Math.round((walk.position.x+Math.sin(walk.yaw)*28)/2)*2;
+    const tz=Math.round((walk.position.z-Math.cos(walk.yaw)*28)/2)*2;
+    if(!force && shadowFocusCenter && Math.hypot(tx-shadowFocusCenter[0],tz-shadowFocusCenter[1])<26)return;
+    shadowFocusCenter=[tx,tz];
+    sun.target.position.set(tx,0,tz);
+    sun.position.copy(sun.target.position).add(sunOffset);
+    Object.assign(sun.shadow.camera,{left:-85,right:85,top:85,bottom:-85,near:10,far:2200});
+    sun.shadow.normalBias=.08;
+    sun.shadow.bias=-.0002;
+    sun.shadow.camera.updateProjectionMatrix();
+    sun.target.updateMatrixWorld();
+    renderer.shadowMap.needsUpdate=true;
+  }
+
+  function setLighting(name){
+    const preset=LIGHTING_PRESETS[name]??LIGHTING_PRESETS.noon;
+    lightingName=LIGHTING_PRESETS[name]?name:'noon';
+    sunOffset.set(...preset.sunPos);
+    sun.color.set(preset.sunColor);
+    sun.intensity=preset.sunIntensity;
+    ambient.color.set(preset.hemiSky);
+    ambient.groundColor.set(preset.hemiGround);
+    ambient.intensity=preset.hemiIntensity;
+    orbitMist.color.set(preset.orbitFog[0]);orbitMist.density=preset.orbitFog[1];
+    walkMist.color.set(preset.walkFog[0]);walkMist.density=preset.walkFog[1];
+    if(context){
+      renderer.toneMappingExposure=preset.exposure;
+      scene.background=scene.environment=campusSky(sunOffset.clone().normalize(),lightingName);
+      scene.environmentIntensity=preset.envIntensity;
+      if(details?.buildingDetails?.nightGlowUniform)details.buildingDetails.nightGlowUniform.value=preset.windowGlow;
+      if(details?.landscapeDetails?.lampMaterial)details.landscapeDetails.lampMaterial.emissiveIntensity=preset.lampEmissive;
+      if(details?.lampHalos){
+        details.lampHalos.visible=preset.lampHalo>0.01;
+        details.lampHalos.material.opacity=preset.lampHalo;
+      }
+      if(details?.libSign){
+        details.libSign.material.emissive.set('#c4963e');
+        details.libSign.material.emissiveIntensity=preset.windowGlow*.55;
+      }
+      updateShadowFrustum(true);
+    }else if(renderer.setLighting){
+      renderer.setLighting(lightingName);
+    }
+    lastView='';
+  }
+
+  // Exact ray-vs-extruded-polygon picking for all inside campus buildings (<0.2ms, zero triangle scan).
+  const pickTargets=data.building.filter(b=>b[5]).map(record=>{
+    const [ring,height]=record;
+    const [minX,minZ,maxX,maxZ]=bounds(ring);
+    return {record,ring,height,box:new T.Box3(new T.Vector3(minX,0,minZ),new T.Vector3(maxX,height+.2,maxZ))};
+  });
+  function pickBuilding(clientX,clientY){
+    const rect=stage.getBoundingClientRect();
+    if(!rect.width||!rect.height)return null;
+    ndc.set(((clientX-rect.left)/rect.width)*2-1,-((clientY-rect.top)/rect.height)*2+1);
+    raycaster.setFromCamera(ndc,camera);
+    const ray=raycaster.ray,{origin:o,direction:d}=ray;
+    let best=null,bestT=Infinity;
+    for(const item of pickTargets){
+      if(!ray.intersectsBox(item.box))continue;
+      const {ring,height}=item;
+      // Roof hit
+      if(d.y<-1e-5){
+        const t=(height-o.y)/d.y;
+        if(t>0&&t<bestT&&contains(o.x+t*d.x,o.z+t*d.z,ring)){bestT=t;best=item.record;}
+      }
+      // Vertical wall hit
+      for(let i=1;i<ring.length;i++){
+        const [ax,az]=ring[i-1],[bx,bz]=ring[i];
+        const sx=bx-ax,sz=bz-az,denom=d.x*sz-d.z*sx;
+        if(Math.abs(denom)<1e-6)continue;
+        const rx=ax-o.x,rz=az-o.z;
+        const t=(rx*sz-rz*sx)/denom,u=(rx*d.z-rz*d.x)/denom;
+        if(t>0&&t<bestT&&u>=0&&u<=1){
+          const y=o.y+t*d.y;
+          if(y>=0&&y<=height+.2){bestT=t;best=item.record;}
+        }
+      }
+    }
+    return best;
+  }
+
+  // Glowing outline around currently selected building
+  let highlightGroup=null;
+  function highlightBuilding(id){
+    if(highlightGroup){
+      highlightGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
+      scene.remove(highlightGroup);
+      highlightGroup=null;
+    }
+    if(!context||!id){lastView='';return;}
+    const matches=data.building.filter(b=>b[4]===id);
+    if(!matches.length){lastView='';return;}
+    highlightGroup=new T.Group();
+    highlightGroup.name='Selected building highlight';
+    for(const [ring,height] of matches){
+      const pts=ring.map(([x,z])=>new T.Vector3(x,height+.35,z));
+      const topGeo=new T.BufferGeometry().setFromPoints(pts);
+      const topLine=new T.Line(topGeo,new T.LineBasicMaterial({color:'#39c996'}));
+      const basePts=ring.map(([x,z])=>new T.Vector3(x,.96,z));
+      const baseGeo=new T.BufferGeometry().setFromPoints(basePts);
+      const baseLine=new T.Line(baseGeo,new T.LineBasicMaterial({color:'#39c996',transparent:true,opacity:.65}));
+      highlightGroup.add(topLine,baseLine);
+    }
+    scene.add(highlightGroup);
+    lastView='';
+  }
+
+  // 3D glowing walking route ribbon + start/end markers
+  let routeGroup=null;
+  function setRoute(points){
+    if(routeGroup){
+      routeGroup.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
+      scene.remove(routeGroup);
+      routeGroup=null;
+    }
+    if(renderer.setRoute)renderer.setRoute(points);
+    if(!context||!points||points.length<2){lastView='';return;}
+    routeGroup=new T.Group();
+    routeGroup.name='Campus walking route';
+    const buildRibbon=(width,y,color)=>{
+      const verts=[],indices=[];
+      for(let i=0;i<points.length-1;i++){
+        const [ax,az]=points[i],[bx,bz]=points[i+1];
+        const len=Math.hypot(bx-ax,bz-az);
+        if(len<.05)continue;
+        const dx=(bz-az)*width/(2*len),dz=(ax-bx)*width/(2*len);
+        const b=verts.length/3;
+        verts.push(ax+dx,y,az+dz,ax-dx,y,az-dz,bx+dx,y,bz+dz,bx-dx,y,bz-dz);
+        indices.push(b,b+1,b+2,b+1,b+3,b+2);
+      }
+      if(!verts.length)return null;
+      const g=new T.BufferGeometry();
+      g.setAttribute('position',new T.Float32BufferAttribute(verts,3));
+      g.setIndex(indices);
+      return new T.Mesh(g,new T.MeshBasicMaterial({color,side:T.DoubleSide}));
+    };
+    const halo=buildRibbon(3.4,1.22,'#143d30');
+    const core=buildRibbon(2.1,1.28,'#2ee6a6');
+    if(halo)routeGroup.add(halo);
+    if(core)routeGroup.add(core);
+    // Round joint discs at bends
+    const jointGeo=new T.CircleGeometry(1.08,12);jointGeo.rotateX(-Math.PI/2);
+    const jointMat=new T.MeshBasicMaterial({color:'#2ee6a6'});
+    for(const [x,z] of points){
+      const d=new T.Mesh(jointGeo,jointMat);d.position.set(x,1.29,z);routeGroup.add(d);
+    }
+    // Start & end beacons
+    const [sx,sz]=points[0],[ex,ez]=points[points.length-1];
+    for(const [x,z,col] of [[sx,sz,'#27b883'],[ex,ez,'#e25b47']]){
+      const pole=new T.Mesh(new T.CylinderGeometry(.35,.35,6,10),new T.MeshBasicMaterial({color:col}));
+      pole.position.set(x,4.2,z);
+      const orb=new T.Mesh(new T.SphereGeometry(1.25,12,10),new T.MeshBasicMaterial({color:col}));
+      orb.position.set(x,7.6,z);
+      routeGroup.add(pole,orb);
+    }
+    scene.add(routeGroup);
+    lastView='';
+  }
+
   const footprints=[...buildingSolids(data.building)].filter(s=>s.base<2.45).map(({p})=>[bounds(p),p]);
   if(hasEastGate(data))for(const p of eastGateBlockers())footprints.push([bounds(p),p]);
   for(const p of publicBlockers(data))footprints.push([bounds(p),p]);
@@ -513,31 +790,45 @@ export function createModel(stage,data,onFrame){
     const offset=homeOffset.clone().multiplyScalar(camera.aspect<.83?Math.min(1.65,.83/camera.aspect):1);
     setOrbit(new T.Vector3(-10,0,100),offset,animate);
   }
-  function focus(x,z){
+  function focus(x,z,distance=240){
     const offset=camera.position.clone().sub(controls.target);
-    offset.y=Math.max(offset.y,120);
-    offset.setLength(240);
+    offset.y=Math.max(offset.y,distance*.5);
+    offset.setLength(distance);
     setOrbit(new T.Vector3(x,4,z),offset);
   }
-  function lookFrom(eye,target){
-    const center=new T.Vector3(...target),offset=new T.Vector3(...eye).sub(center);
+  function lookFrom(eyePos,target){
+    const center=new T.Vector3(...target),offset=new T.Vector3(...eyePos).sub(center);
     setOrbit(center,offset.multiplyScalar(Math.max(1,.92/camera.aspect)),false);
+  }
+  function setOrbitPose(eyePos,target){
+    const center=new T.Vector3(...target),offset=new T.Vector3(...eyePos).sub(center);
+    setOrbit(center,offset,false);
   }
   function face(){
     direction.set(Math.sin(walk.yaw)*Math.cos(walk.pitch),Math.sin(walk.pitch),-Math.cos(walk.yaw)*Math.cos(walk.pitch));
     camera.position.copy(walk.position);
     camera.lookAt(camera.position.clone().add(direction));
   }
+  // Smooth wall-sliding movement: if diagonal step hits an obstacle, slide along X or Z independently.
   function step(metres, side=0){
     const dx=Math.sin(walk.yaw)*metres+Math.cos(walk.yaw)*side;
     const dz=-Math.cos(walk.yaw)*metres+Math.sin(walk.yaw)*side;
-    // Buttons can advance five metres. Do not jump over a slender porch pier.
     const n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.18));
+    const sx=dx/n, sz=dz/n;
     for(let i=0;i<n;i++){
-      const x=T.MathUtils.clamp(walk.position.x+dx/n,-extent,extent),z=T.MathUtils.clamp(walk.position.z+dz/n,-extent,extent);
-      if(obstructed(x,z))break;
-      walk.position.set(x,eye(x,z),z);
+      const curX=walk.position.x, curZ=walk.position.z;
+      const nx=T.MathUtils.clamp(curX+sx,-extent,extent), nz=T.MathUtils.clamp(curZ+sz,-extent,extent);
+      if(!obstructed(nx,nz)){
+        walk.position.set(nx,eye(nx,nz),nz);
+      }else if(Math.abs(sx)>1e-4 && !obstructed(nx,curZ)){
+        walk.position.set(nx,eye(nx,curZ),curZ);
+      }else if(Math.abs(sz)>1e-4 && !obstructed(curX,nz)){
+        walk.position.set(curX,eye(curX,nz),nz);
+      }else{
+        break;
+      }
     }
+    updateShadowFrustum(false);
   }
   function enterWalk(x,z,yaw,pitch=.005,fov=65){
     controls.enabled=false;
@@ -550,21 +841,53 @@ export function createModel(stage,data,onFrame){
     camera.fov=walk.fov;
     camera.updateProjectionMatrix();
     scene.fog=walkMist;
+    updateShadowFrustum(true);
     face();
   }
-  function exitWalk(){
+  function teleportWalk(x,z){
+    if(!walk.active)return false;
+    // If clicked spot is obstructed, spiral out gently up to 24m to find nearest walkable spot
+    let tx=T.MathUtils.clamp(x,-extent,extent), tz=T.MathUtils.clamp(z,-extent,extent);
+    if(obstructed(tx,tz)){
+      let found=false;
+      for(let r=3;r<=27&&!found;r+=3){
+        for(let k=0;k<12;k++){
+          const a=k*Math.PI/6, cx=tx+Math.cos(a)*r, cz=tz+Math.sin(a)*r;
+          if(!obstructed(cx,cz)){tx=cx;tz=cz;found=true;break;}
+        }
+      }
+      if(!found)return false;
+    }
+    walk.position.set(tx,eye(tx,tz),tz);
+    updateShadowFrustum(true);
+    face();
+    lastView='';
+    return true;
+  }
+  function exitWalk(preserveSpot=false){
     if(!walk.active)return;
+    const wx=walk.position.x, wz=walk.position.z, wyaw=walk.yaw;
     walk.active=false;
+    walkDrive=0;
     keys.clear();
     controls.enabled=true;
     camera.fov=46;
     camera.updateProjectionMatrix();
     scene.fog=orbitMist;
-    home(false);
+    updateShadowFrustum(true);
+    if(preserveSpot){
+      const offset=new T.Vector3(-Math.sin(wyaw)*95,90,Math.cos(wyaw)*95);
+      setOrbit(new T.Vector3(wx,4,wz),offset,true);
+    }else{
+      home(false);
+    }
   }
   stage.addEventListener('pointerdown',event=>{
     stage.focus({preventScroll:true});
     tween=null;
+    if(event.button===0){
+      tapStart={id:event.pointerId,x:event.clientX,y:event.clientY,t:performance.now()};
+    }
     if(!walk.active||event.button!==0)return;
     drag={id:event.pointerId,x:event.clientX,y:event.clientY};
     stage.setPointerCapture(event.pointerId);
@@ -575,16 +898,26 @@ export function createModel(stage,data,onFrame){
     walk.pitch=T.MathUtils.clamp(walk.pitch+(event.clientY-drag.y)*.0045,-1.32,1.32);
     drag.x=event.clientX; drag.y=event.clientY;
   });
-  for(const type of ['lostpointercapture','pointerup','pointercancel'])stage.addEventListener(type,()=>{drag=null;});
-  const walkingKeys=['w','s','a','d','arrowup','arrowdown','arrowleft','arrowright'];
+  stage.addEventListener('pointerup',event=>{
+    if(!walk.active && onPickBuilding && tapStart && tapStart.id===event.pointerId &&
+       Math.hypot(event.clientX-tapStart.x,event.clientY-tapStart.y)<6 && performance.now()-tapStart.t<450){
+      const hit=pickBuilding(event.clientX,event.clientY);
+      if(hit)onPickBuilding(hit);
+    }
+    tapStart=null;
+    drag=null;
+  });
+  for(const type of ['lostpointercapture','pointercancel'])stage.addEventListener(type,()=>{drag=null;tapStart=null;});
+  const walkingKeys=['w','s','a','d','q','e','shift','arrowup','arrowdown','arrowleft','arrowright'];
   stage.addEventListener('keydown',e=>{
     const key=e.key.toLowerCase();
     if(walk.active&&walkingKeys.includes(key)){
-      e.preventDefault();keys.add(key);
+      if(key!=='shift')e.preventDefault();
+      keys.add(key);
     }
   });
   window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
-  stage.addEventListener('blur',()=>keys.clear());
+  stage.addEventListener('blur',()=>{keys.clear();walkDrive=0;});
   stage.addEventListener('wheel',e=>{
     if(walk.active){e.preventDefault();zoom(e.deltaY<0?1:-1);}
     else tween=null;
@@ -611,15 +944,33 @@ export function createModel(stage,data,onFrame){
     projection.set(x,y,z).project(camera);
     return {x:(projection.x/2+.5)*size.w,y:(.5-projection.y/2)*size.h,visible:projection.z>-1&&projection.z<1};
   }
+  function getView(){
+    return {
+      walking:walk.active,
+      x:walk.active?walk.position.x:controls.target.x,
+      z:walk.active?walk.position.z:controls.target.z,
+      yaw:walk.yaw,
+      pitch:walk.pitch,
+      distance:camera.position.distanceTo(controls.target),
+      camera:[camera.position.x,camera.position.y,camera.position.z],
+      target:[controls.target.x,controls.target.y,controls.target.z],
+      lighting:lightingName
+    };
+  }
   function frame(time){
     const dt=Math.min(.05,(time-last)/1000);
     last=time;
-    if(!visible)return;
+    if(!visible||contextLost)return;
     if(walk.active){
       const has=(a,b)=>keys.has(a)||keys.has(b);
-      const move=Number(has('w','arrowup'))-Number(has('s','arrowdown'));
-      const side=Number(has('d','arrowright'))-Number(has('a','arrowleft'));
-      if(move||side)step(move*dt*13,side*dt*13);
+      let move=Number(has('w','arrowup'))-Number(has('s','arrowdown'))+walkDrive;
+      let side=Number(has('d','arrowright'))-Number(has('a','arrowleft'));
+      const turn=Number(keys.has('e'))-Number(keys.has('q'));
+      if(turn)walk.yaw+=turn*dt*1.65;
+      const mag=Math.hypot(move,side);
+      if(mag>1){move/=mag;side/=mag;}
+      const speed=keys.has('shift')?24:13;
+      if(move||side)step(move*dt*speed,side*dt*speed);
       face();
     }else{
       if(tween){
@@ -633,24 +984,39 @@ export function createModel(stage,data,onFrame){
     // Give shallow facade and paving layers enough depth precision at campus scale.
     const near=walk.active?.2:T.MathUtils.clamp(camera.position.distanceTo(controls.target)/30,.75,40);
     if(Math.abs(camera.near-near)>.01){camera.near=near;camera.updateProjectionMatrix();}
+    let waterDirty=false;
+    if(context && waterMotion && details?.landscapeDetails?.lakeNormals && time-lastWaterTick>40){
+      const wdt=Math.min(.1,(time-lastWaterTick)/1000);
+      lastWaterTick=time;
+      details.landscapeDetails.lakeNormals.offset.x=(details.landscapeDetails.lakeNormals.offset.x+wdt*.024)%1;
+      details.landscapeDetails.lakeNormals.offset.y=(details.landscapeDetails.lakeNormals.offset.y+wdt*.015)%1;
+      waterDirty=true;
+    }
     const view=[camera.position.x,camera.position.y,camera.position.z,camera.quaternion.x,camera.quaternion.y,camera.quaternion.z,camera.quaternion.w,camera.fov,camera.near,size.w,size.h].map(value=>value.toFixed(5)).join(',');
-    if(view===lastView)return;
+    if(view===lastView && !waterDirty)return;
+    const cameraMoved=view!==lastView;
     lastView=view;
     renderer.render(scene,camera);
-    const bearing=walk.active?-walk.yaw:Math.atan2(camera.position.x-controls.target.x,camera.position.z-controls.target.z);
-    const metersPerPixel=2*Math.tan(T.MathUtils.degToRad(camera.fov/2))*camera.position.distanceTo(controls.target)/size.h;
-    onFrame(project,bearing,metersPerPixel,size,walk.active);
+    if(cameraMoved){
+      const bearing=walk.active?-walk.yaw:Math.atan2(camera.position.x-controls.target.x,camera.position.z-controls.target.z);
+      const metersPerPixel=2*Math.tan(T.MathUtils.degToRad(camera.fov/2))*camera.position.distanceTo(controls.target)/size.h;
+      onFrame(project,bearing,metersPerPixel,size,walk.active,walk.active?{x:walk.position.x,z:walk.position.z,yaw:walk.yaw}:null);
+    }
   }
   home(false);
   renderer.setAnimationLoop(frame);
-  return {focus,lookFrom,home,zoom,north,enterWalk,exitWalk,step,
+  return {focus,lookFrom,setOrbitPose,home,zoom,north,enterWalk,exitWalk,step,teleportWalk,
+    setLighting,setWaterMotion(on){waterMotion=Boolean(on);lastView='';},
+    setWalkDrive(dir){walkDrive=dir;},
+    highlightBuilding,setRoute,getView,
     getDiagnostics(){
       let vertices=0,invalid=0;
       scene.traverse(object=>{
         const position=object.geometry?.attributes?.position;
         if(!position)return;
         vertices+=position.count;
-        for(const value of position.array)if(!Number.isFinite(value))invalid++;
+        const arr=position.array;
+        for(let i=0,n=arr.length;i<n;i++)if(!Number.isFinite(arr[i]))invalid++;
       });
       const treeForms={shade:0,vase:0,spire:0};
       for(const entry of trees)treeForms[entry[3]]++;
@@ -658,6 +1024,6 @@ export function createModel(stage,data,onFrame){
         buildings:details?.buildingDetails?.stats,landscape:details?.landscapeDetails?.stats,
         drawCalls:renderer.info?.render.calls,triangles:renderer.info?.render.triangles};
     },
-    setVisible(value){visible=value;keys.clear();if(value){lastView='';resize();}}
+    setVisible(value){visible=value;keys.clear();walkDrive=0;if(value){lastView='';resize();}}
   };
 }

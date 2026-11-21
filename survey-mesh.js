@@ -20,12 +20,12 @@ export function surfaceBuilder(at,vector){
     group([u,b,v],[0,-1,0]);quad([[l,b,n],[r,b,n],[r,b,s],[l,b,s]],color,kind,fine);
   }
   // Four-sided bars used for short shade brackets and stair handrails.
-  function bar(a,b,r,color,detail=1){
+  function bar(a,b,r,color,detail=1,material='wall'){
     const sub=b.map((x,i)=>x-a[i]),len=Math.hypot(...sub);if(len<.001)return;
     const [x,y,z]=sub.map(q=>q/len),h=Math.hypot(x,z);
     const p=h?[-z/h,0,x/h]:[1,0,0],s=[y*p[2]-z*p[1],z*p[0]-x*p[2],x*p[1]-y*p[0]];
     const edge=(v,i)=>v.map((q,j)=>q+r*((i<2?1:-1)*p[j]+(i===0||i===3?1:-1)*s[j]));
-    for(let k=0;k<4;k++)quad([edge(a,k),edge(a,(k+1)%4),edge(b,(k+1)%4),edge(b,k)],color,'wall',detail);
+    for(let k=0;k<4;k++)quad([edge(a,k),edge(a,(k+1)%4),edge(b,(k+1)%4),edge(b,k)],color,material,detail);
   }
   return {groups,group,quad,face,box,bar};
 }

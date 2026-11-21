@@ -94,33 +94,35 @@ function waterside(){
     const rnd=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
     const colors=['#6e854b','#829751','#5f7846','#8c9b58','#758d4c','#889f60'];
     const mix=(a,b,k)=>a.map((v,n)=>v+(b[n]-v)*k);
-    const stem=(a,b,r,col,fine=0)=>{d.group(mix(a,b,.5));d.bar(a,b,r,col,fine);};
+    const stem=(a,b,r,col,fine=0)=>{d.group(mix(a,b,.5));d.bar(a,b,r,col,fine,'foliage');};
     stem(base,fork,.14,'#887c68');
     for(let j=0;j<8;j++){
       const a=t+j*2.39996+(rnd()-.5)*.26,ex=Math.cos(a),ez=Math.sin(a),span=h*(.24+.12*rnd());
       const high=h*(.79+rnd()*.18),knee=[fork[0]+ex*span*.45,high-1.25,fork[2]+ez*span*.45];
       const arch=[x+ex*span*.72,high+.15,z+ez*span*.72],tip=[x+ex*span,high-.35-rnd()*.42,z+ez*span];
-      stem(fork,knee,.071,'#817b64');stem(knee,arch,.048,'#8b8366');stem(arch,tip,.032,'#8d8a64',1);
+      stem(fork,knee,.066,'#817b64');stem(knee,arch,.042,'#8b8366');stem(arch,tip,.024,'#8d8a64',1);
       for(let k=0;k<5;k++){
         const f=(k+.45)/5,hub=mix(knee,tip,f),side=k%2?1:-1;
         const ang=a+side*(.50+rnd()*.72),dx=Math.cos(ang),dz=Math.sin(ang),reach=.55+rnd()*.68;
         const head=[hub[0]+dx*reach,hub[1]+.29+rnd()*.72,hub[2]+dz*reach];
-        stem(hub,head,.026,'#91906a',1);
-        for(let n=0;n<3;n++){
-          const u=(n+.5)/3,start=mix(hub,head,u),sw=(n-1)*.31+(rnd()-.5)*.19;
-          const length=h*(.20+.26*rnd())*(.72+f*.36),drift=.19+.35*rnd(),phase=rnd()*TAU;
+        stem(hub,head,.018,'#91906a',1);
+        for(let n=0;n<2;n++){
+          const u=(n+.42)/2,start=mix(hub,head,u),sw=(n-.5)*.46+(rnd()-.5)*.20;
+          const length=h*(.24+.26*rnd())*(.74+f*.34),drift=.20+.35*rnd(),phase=rnd()*TAU;
           const at=s=>[start[0]+dx*drift*s-dz*sw*s+.07*Math.sin(phase+s*4)*s,
             start[1]-length*s*s+.10*Math.sin(s*Math.PI),start[2]+dz*drift*s+dx*sw*s+.05*Math.sin(phase+s*3)*s];
-          const a0=at(0),amid=at(.54),end=at(1);d.group(amid);
-          d.bar(a0,amid,.010,'#8c905e');d.bar(amid,end,.007,'#84895b');
-          // Short alternate blades follow each curved twig. Gaps between
-          // blades are real air; no kite-shaped sheets enclose the crown.
-          for(let q=0;q<12;q++){
-            const s=(q+.42+rnd()*.20)/12,p=at(s),side=q%2?1:-1,ang=phase+side*1.1+s*.67;
-            const lx=Math.cos(ang),lz=Math.sin(ang),size=.20+.16*rnd(),w=.026+.016*rnd();
-            const end=[p[0]+lx*size*.59,p[1]-size*(.67+.32*s),p[2]+lz*size*.59];
-            const m=mix(p,end,.47),c=colors[Math.floor(rnd()*colors.length)];
-            d.quad([p,[m[0]-lz*w,m[1]+w*.32,m[2]+lx*w],end,[m[0]+lz*w,m[1]-w*.32,m[2]-lx*w]],c,'foliage',q%4?1:0);
+          const a0=at(0),amid=at(.54),end=at(1),rx=-dz*.011,rz=dx*.011;
+          d.group(amid);
+          // Flat tapered stem ribbon instead of two four-sided bars cuts 87% of twig quads.
+          d.quad([[a0[0]-rx,a0[1],a0[2]-rz],[a0[0]+rx,a0[1],a0[2]+rz],[amid[0]+rx*.7,amid[1],amid[2]+rz*.7],[amid[0]-rx*.7,amid[1],amid[2]-rz*.7]],'#8c905e','foliage',1);
+          d.quad([[amid[0]-rx*.7,amid[1],amid[2]-rz*.7],[amid[0]+rx*.7,amid[1],amid[2]+rz*.7],[end[0]+rx*.3,end[1],end[2]+rz*.3],[end[0]-rx*.3,end[1],end[2]-rz*.3]],'#84895b','foliage',1);
+          // Alternate willow leaf blades keep real air gaps while cutting ~65% of quads.
+          for(let q=0;q<9;q++){
+            const s=(q+.35+rnd()*.25)/9,p=at(s),side=q%2?1:-1,ang=phase+side*1.1+s*.67;
+            const lx=Math.cos(ang),lz=Math.sin(ang),size=.28+.20*rnd(),w=.036+.020*rnd();
+            const tipPt=[p[0]+lx*size*.60,p[1]-size*(.68+.30*s),p[2]+lz*size*.60];
+            const m=mix(p,tipPt,.47),c=colors[Math.floor(rnd()*colors.length)];
+            d.quad([p,[m[0]-lz*w,m[1]+w*.32,m[2]+lx*w],tipPt,[m[0]+lz*w,m[1]-w*.32,m[2]-lx*w]],c,'foliage',q%3?1:0);
           }
         }
       }
@@ -214,15 +216,9 @@ function enclosures(){
       const span=len/panels;
       d.bar([u,top,0],[u+span,top,0],.046,'#526d5d',0);
       d.bar([u,base+.14,0],[u+span,base+.14,0],.030,'#5f7567');
-      // Individual clipped diagonal wires. The open cells show the court and
-      // sky without a flat opaque face, from either side of the enclosure.
-      const dh=h-.22,slope=1.32;
-      for(const sign of [-1,1])for(let k=-dh/slope;k<span;k+=low?.122:.136){
-        const x0=Math.max(0,k),x1=Math.min(span,k+dh/slope);
-        if(x1-x0<.025)continue;
-        const y0=base+.15+(sign===1?(x0-k)*slope:dh-(x0-k)*slope),y1=y0+sign*(x1-x0)*slope,r=low?.006:.007;
-        d.quad([[u+x0,y0-r,.017],[u+x1,y1-r,.017],[u+x1,y1+r,.017],[u+x0,y0+r,.017]],low?'#63796a':'#536f62','wall',1);
-      }
+      // Single panel quad per bay rendered via a procedural anti-aliased
+      // chain-link shader in WebGL (and open mesh strokes in Canvas fallback).
+      d.quad([[u,base+.14,.017],[u+span,base+.14,.017],[u+span,top,.017],[u,top,.017]],low?'#63796a':'#536f62','fence',1);
     }
     out.push(...d.groups);
   }

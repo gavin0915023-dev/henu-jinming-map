@@ -18,8 +18,9 @@ function prng(seed) {
 // feathered evergreen bough. Clear gaps at their edges reveal the branches.
 function leafAtlas(open=false) {
   const canvas=document.createElement('canvas');
-  canvas.width=1024; canvas.height=512;
+  canvas.width=512; canvas.height=256;
   const c=canvas.getContext('2d'), random=prng(3145);
+  c.scale(.5,.5);
   c.fillStyle='#fff';c.fillRect(0,0,40,512);
   function dab(x,y,rx,ry,a,tone) {
     const v=Math.round(Math.min(255,Math.max(70,tone)));
@@ -29,31 +30,34 @@ function leafAtlas(open=false) {
   // Each twig carries a different number of leaves. Paint from the shade
   // underneath toward the light, retaining gaps between the outermost twigs.
   const groups=[];
-  for(let i=0;i<130;i++){
+  for(let i=0;i<110;i++){
     const a=random()*TAU, r=Math.sqrt(random())*(.90+.10*Math.sin(a*5)+.055*Math.sin(a*9));
     groups.push([286+178*r*Math.cos(a),257+191*r*Math.sin(a),15+random()*30,random()]);
   }
   groups.sort((a,b)=>b[1]-a[1]);
   for(const [x,y,size,v] of groups){
     const tone=113+v*52+49*(1-y/512)+15*Math.sin(x/23)*Math.cos(y/29);
-    for(let i=0;i<(open?7:75);i++){
+    for(let i=0;i<(open?7:48);i++){
       const a=random()*TAU, r=size*Math.sqrt(random());
       const px=x+Math.cos(a)*r,py=y+Math.sin(a)*r*.86;
-      dab(px,py,(open?2:2.6)+random()*(open?2.8:5.3),(open?1.3:1.8)+random()*(open?2.1:3.8),a,tone+27*(1-(py-y)/size)+random()*30);
+      dab(px,py,(open?2.2:3.0)+random()*(open?3.0:5.5),(open?1.5:2.1)+random()*(open?2.2:4.0),a,tone+27*(1-(py-y)/size)+random()*30);
     }
   }
-  c.save();c.translate(512,0);
-  for(let i=0;i<33;i++)for(const side of [-1,1]){
-    const t=i/34, y=452-t*408, dx=side*(.7+.30*random())*(34+157*Math.sin(Math.PI*(.1+.9*t)))*(1-.42*t);
-    const dy=-57*(1-.65*t);
-    for(let j=0;j<37;j++){
-      const k=j/36, px=256+dx*k,py=y+dy*k+Math.sin(k*Math.PI)*8;
-      const len=(8+random()*13)*(1-.6*k);
-      dab(px,py,len,3+random()*2,side>0?-.85:-2.3,166+60*t+21*random());
-      dab(px,py+2,len*.87,3+random()*2,side>0?.36:2.78,151+57*t+22*random());
+  // Open spring templates are only used on broadleaf avenue trees; skip unused conifer half.
+  if(!open){
+    c.save();c.translate(512,0);
+    for(let i=0;i<28;i++)for(const side of [-1,1]){
+      const t=i/29, y=452-t*408, dx=side*(.7+.30*random())*(34+157*Math.sin(Math.PI*(.1+.9*t)))*(1-.42*t);
+      const dy=-57*(1-.65*t);
+      for(let j=0;j<28;j++){
+        const k=j/27, px=256+dx*k,py=y+dy*k+Math.sin(k*Math.PI)*8;
+        const len=(9+random()*13)*(1-.6*k);
+        dab(px,py,len,3.3+random()*2,side>0?-.85:-2.3,166+60*t+21*random());
+        dab(px,py+2,len*.87,3.3+random()*2,side>0?.36:2.78,151+57*t+22*random());
+      }
     }
+    c.restore();
   }
-  c.restore();
   const tex=new T.CanvasTexture(canvas); tex.colorSpace=T.SRGBColorSpace;
   return tex;
 }
@@ -132,13 +136,13 @@ function template(form, street, style, open=false) {
     // The April avenue views show separate forks and early leaves all the way
     // to the tips. This template is only used on the observed street frontages.
     const phase=random()*TAU,leader=polar(phase+.7,.056,.82);
-    function branch(points,radii){
+    function branch(points,radii,sides=5){
       let previous;
       for(let i=0;i<points.length;i++){
         const axis=points[Math.min(points.length-1,i+1)].clone().sub(points[Math.max(i-1,0)]).normalize();
         const u=axis.clone().cross(new T.Vector3(0,0,1)).normalize(),v=u.clone().cross(axis),ring=[];
-        for(let j=0;j<5;j++){
-          const a=j*TAU/5,p=points[i].clone().addScaledVector(u,radii[i]*Math.cos(a)).addScaledVector(v,radii[i]*Math.sin(a));
+        for(let j=0;j<sides;j++){
+          const a=j*TAU/sides,p=points[i].clone().addScaledVector(u,radii[i]*Math.cos(a)).addScaledVector(v,radii[i]*Math.sin(a));
           ring.push(point(p,bark));
         }
         if(previous)join(previous,ring);previous=ring;
@@ -149,14 +153,14 @@ function template(form, street, style, open=false) {
       const a=phase+k*2.4,reach=.20+random()*.115,top=.82+random()*.15;
       const start=split.clone().lerp(leader,(k%4)*.12);
       const bend=polar(a-.11,reach*.47,.60+random()*.06),fork=polar(a+.06,reach*.70,top-.15);
-      branch([start,bend,fork],[.013,.008,.0043]);
+      branch([start,bend,fork],[.013,.008,.0043],4);
       const side=polar(a-.57,reach*.88,top-.10);
-      branch([bend,bend.clone().lerp(side,.50).add(polar(a,.012,-.014)),side],[.005,.003,.0009]);
+      branch([bend,bend.clone().lerp(side,.50).add(polar(a,.012,-.014)),side],[.005,.003,.0009],3);
       foliage(side,polar(a,.087,0),polar(a+.8,.028,.091),false,random()*.13);
       for(let j=-1;j<=1;j++){
         const t=a+j*.31,tip=polar(t,reach*(.91+random()*.33),top+random()*.06);
         const twig=fork.clone().lerp(tip,.55);twig.x+=.014;
-        branch([fork,twig,tip],[.0043,.0025,.0008]);
+        branch([fork,twig,tip],[.0043,.0025,.0008],3);
         for(let l=0;l<2;l++){
           const az=t+l*1.62,mid=twig.clone().lerp(tip,.48);
           foliage(mid,polar(az,.084,0),polar(az+.9,.029,.105),false,random()*.14);

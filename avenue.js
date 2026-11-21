@@ -18,49 +18,72 @@ export function campusAvenueData(data){
   return shaped;
 }
 
-function roadDistance(x,z,p,q){
+const checkCache=new WeakMap();
+function roadDistanceSq(x,z,p,q){
   const dx=q[0]-p[0],dz=q[1]-p[1],len=dx*dx+dz*dz;
   const t=len?Math.max(0,Math.min(1,((x-p[0])*dx+(z-p[1])*dz)/len)):0;
-  return Math.hypot(x-p[0]-dx*t,z-p[1]-dz*t);
+  const rx=x-p[0]-dx*t,rz=z-p[1]-dz*t;
+  return rx*rx+rz*rz;
 }
 function checks(data){
-  const segments=data.road.flatMap(r=>r===data.avenue.road?[]:r[0].slice(1).map((q,i)=>[r[0][i],q,r[1]/2]));
+  const cached=checkCache.get(data.avenue);
+  if(cached)return cached;
+  const segments=data.road.flatMap(r=>r===data.avenue.road?[]:r[0].slice(1).map((q,i)=>{
+    const p=r[0][i],w=r[1]/2;
+    return [Math.min(p[0],q[0])-w,Math.min(p[1],q[1])-w,Math.max(p[0],q[0])+w,Math.max(p[1],q[1])+w,p,q,w];
+  }));
   const polygons=[...data.water,...data.building.map(b=>b[0]),...data.plaza,...data.sport.map(s=>s[0])];
   const bbox=p=>p.reduce(([l,t,r,b],[x,z])=>[Math.min(l,x),Math.min(t,z),Math.max(r,x),Math.max(b,z)],[Infinity,Infinity,-Infinity,-Infinity]);
   const blocks=polygons.map(p=>[bbox(p),p]);
-  const roadClear=(x,z,gap)=>!segments.some(([p,q,r])=>roadDistance(x,z,p,q)<r+gap);
-  const landscapeClear=(x,z,gap,inside)=>!blocks.some(([[l,t,r,b],p])=>{
+  const roadClear=(x,z,gap,list=segments)=>!list.some(([l,t,r,b,p,q,w])=>{
     if(x<l-gap||x>r+gap||z<t-gap||z>b+gap)return false;
-    return inside(x,z,p)||p.some((a,i)=>roadDistance(x,z,a,p[(i+1)%p.length])<gap);
+    const lim=w+gap;
+    return roadDistanceSq(x,z,p,q)<lim*lim;
   });
-  return {roadClear,landscapeClear};
+  const landscapeClear=(x,z,gap,inside,list=blocks)=>!list.some(([[l,t,r,b],p])=>{
+    if(x<l-gap||x>r+gap||z<t-gap||z>b+gap)return false;
+    const g2=gap*gap;
+    return inside(x,z,p)||p.some((a,i)=>roadDistanceSq(x,z,a,p[(i+1)%p.length])<g2);
+  });
+  const forLine=(z,roadGap,landGap)=>({
+    segs:segments.filter(([,t,,b])=>z>=t-roadGap&&z<=b+roadGap),
+    blks:landGap>=0?blocks.filter(([[,t,,b]])=>z>=t-landGap&&z<=b+landGap):blocks
+  });
+  const api={roadClear,landscapeClear,forLine};
+  checkCache.set(data.avenue,api);
+  return api;
 }
 
 // Produce solid runs, with deliberate breaks at junctions and shore crossings.
 function runs(start,end,z,pass){
   const intervals=[];let from=null;
+  let prevOk=pass(start,z);
   for(let x=start;x<end;x+=.8){
-    const stop=Math.min(x+.8,end), ok=pass(x,z)&&pass(stop,z);
+    const stop=Math.min(x+.8,end), nextOk=pass(stop,z), ok=prevOk&&nextOk;
     if(ok&&from===null)from=x;
     if(!ok && from!==null){intervals.push([from,x,z]);from=null;}
+    prevOk=nextOk;
   }
   if(from!==null)intervals.push([from,end,z]);
   return intervals.filter(([a,b])=>b-a>1);
 }
 export function avenueHedgeRuns(data,inside){
   if(!data.avenue)return [];
-  const {north,south,start,end}=data.avenue,{roadClear,landscapeClear}=checks(data);
-  return [north-.88,south+.88].flatMap(z=>runs(start,end,z,(x,y)=>
-    inside(x,y,data.boundary)&&roadClear(x,y,2.1)&&landscapeClear(x,y,.8,inside)));
+  const {north,south,start,end}=data.avenue,{roadClear,landscapeClear,forLine}=checks(data);
+  return [north-.88,south+.88].flatMap(z=>{
+    const {segs,blks}=forLine(z,2.1,.8);
+    return runs(start,end,z,(x,y)=>inside(x,y,data.boundary)&&roadClear(x,y,2.1,segs)&&landscapeClear(x,y,.8,inside,blks));
+  });
 }
 export function avenueTrees(data,previous,inside){
   if(!data.avenue)return previous;
-  const {north,south,start,end}=data.avenue,{roadClear,landscapeClear}=checks(data),rows=[];
+  const {north,south,start,end}=data.avenue,{roadClear,landscapeClear,forLine}=checks(data),rows=[];
   let seed=291861;const random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
   for(const [side,z] of [[0,north-2],[1,south+2]]){
+    const {segs,blks}=forLine(z,4,2.1);
     for(let x=start+4+side*2;x<=end-2;x+=10.2+random()*.8){
       const h=10.6+random()*1.6;
-      if(!inside(x,z,data.boundary)||!roadClear(x,z,4)||!landscapeClear(x,z,2.1,inside))continue;
+      if(!inside(x,z,data.boundary)||!roadClear(x,z,4,segs)||!landscapeClear(x,z,2.1,inside,blks))continue;
       // The vase profile lifts the crown above the avenue without changing its
       // alignment; the street flag selects the whitewashed trunk base.
       rows.push([x,z,h,'vase',true,random(),random()*Math.PI*2,.99+.1*random(),.96+.10*random(),'open']);
@@ -72,6 +95,9 @@ export function avenueTrees(data,previous,inside){
 }
 function avenueCurbRuns(data){
   if(!data.avenue)return [];
-  const {north,south,min,max}=data.avenue,{roadClear}=checks(data);
-  return [north-.22,south+.22].flatMap(z=>runs(min,max,z,(x,y)=>roadClear(x,y,.35)));
+  const {north,south,min,max}=data.avenue,{roadClear,forLine}=checks(data);
+  return [north-.22,south+.22].flatMap(z=>{
+    const {segs}=forLine(z,.35,-1);
+    return runs(min,max,z,(x,y)=>roadClear(x,y,.35,segs));
+  });
 }

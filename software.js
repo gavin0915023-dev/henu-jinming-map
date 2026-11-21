@@ -45,7 +45,7 @@ export function softwareRenderer(data,palette,trees,inside){
   const canvas=document.createElement('canvas'), ctx=canvas.getContext('2d',{alpha:false});
   const matrix=new Matrix4();
   const floor=[], shadows=[], objects=[];
-  let width=1,height=1,dpr=1,previous='';
+  let width=1,height=1,dpr=1,previous='',lighting='noon',routeFaces=[];
   function surface(points,y,color,holes=[]){
     if(!holes.length){floor.push([poly(points,y),color]);return;}
     const verts=p=>(p.length>1&&p[0][0]===p.at(-1)[0]&&p[0][1]===p.at(-1)[1]?p.slice(0,-1):p).map(([x,z])=>new Vector2(x,z));
@@ -326,19 +326,29 @@ export function softwareRenderer(data,palette,trees,inside){
     domElement:canvas,
     setPixelRatio(value){dpr=Math.min(value,1.45);},
     setSize(w,h){width=w;height=h;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);previous='';},
+    setLighting(name){lighting=name;previous='';},
+    setRoute(points){routeFaces=points&&points.length>1?ribbon(points,2.2,1.2):[];previous='';},
     setAnimationLoop(fn){const loop=t=>{fn(t);requestAnimationFrame(loop);};requestAnimationFrame(loop);},
     render(scene,camera){
       camera.updateMatrixWorld();
       matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
-      const state=matrix.elements.map(n=>n.toFixed(6)).join(',');
+      const state=matrix.elements.map(n=>n.toFixed(6)).join(',')+lighting+routeFaces.length;
       if(state===previous)return;
       previous=state;
       cam=camera;m=matrix.elements;
       const sky=ctx.createLinearGradient(0,0,0,height);
-      sky.addColorStop(0,camera.position.y<20?'#a2b9bd':'#687b71');
-      sky.addColorStop(1,camera.position.y<20?'#e3dbb5':'#596c60');
+      const skies={
+        noon:camera.position.y<20?['#a2b9bd','#e3dbb5']:['#687b71','#596c60'],
+        morning:camera.position.y<20?['#9ab9d1','#f0dfd0']:['#6d7e7a','#63736b'],
+        sunset:camera.position.y<20?['#667099','#f0b48d']:['#6c6266','#755f5c'],
+        night:['#141f33','#25364d']
+      };
+      const [topSky,botSky]=skies[lighting]??skies.noon;
+      sky.addColorStop(0,topSky);
+      sky.addColorStop(1,botSky);
       ctx.fillStyle=sky;ctx.fillRect(0,0,width,height);
       for(const [p,c] of floor)path(p,c);
+      for(const face of routeFaces)path(face,'#27b883');
       for(const [p,c] of shadows)path(p,c);
       const visible=[];
       for(const obj of objects){
@@ -353,7 +363,7 @@ export function softwareRenderer(data,palette,trees,inside){
         else if(obj.parts){
           if(obj.southFace&&cam.position.z<obj.center[2])continue;
           if(obj.normal&&obj.normal[0]*(cam.position.x-obj.center[0])+obj.normal[1]*(cam.position.y-obj.center[1])+obj.normal[2]*(cam.position.z-obj.center[2])<0)continue;
-          for(const [points,color,material,detail] of obj.parts)if(!detail||w<160)path(points,material==='canopy'?color+'50':color);
+          for(const [points,color,material,detail] of obj.parts)if(!detail||w<160)path(points,material==='canopy'?color+'50':material==='fence'?color+'28':color,material==='fence'?color:null);
           obj.sign?.();
         }
         else building(obj,w);

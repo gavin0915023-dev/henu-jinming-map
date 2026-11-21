@@ -274,6 +274,7 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     for (let i = 0; i < 3; i++) localBox(details, f, 0, 1.04 + i * .14, .31, 2.12, .10, .09, '#a58c63');
     stats.benches++;
   }
+  const lampPositions = [];
   function lamp(x, z, nx, nz) {
     post(metal, x, z, .77, 4.9, .115, '#61716a');
     post(metal, x, z, .77, .32, .22, '#7b8274');
@@ -281,6 +282,7 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     const angle = -Math.atan2(nz, nx);
     box(metal, x - nx * 1.05, 5.49, z - nz * 1.05, .88, .15, .40, angle, '#556b61');
     box(light, x - nx * 1.05, 5.39, z - nz * 1.05, .68, .04, .28, angle, '#f0dcad');
+    lampPositions.push([x - nx * 1.05, z - nz * 1.05]);
     stats.lamps++;
   }
   // The photo from the west bank of the Jiuzhang Road crossing shows stone
@@ -438,10 +440,11 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     mesh.castShadow = name === 'Campus furniture and sport equipment';
     group.add(mesh);
   };
-  add(surfaces, 'Sport surfaces', { roughness: .92 });
+  add(surfaces, 'Sport surfaces', { roughness: .92, side: T.FrontSide });
   add(details, 'Paving and markings', { roughness: .88 });
-  add(metal, 'Campus furniture and sport equipment', { roughness: .68, metalness: .14 });
-  add(water, 'Lake water', { roughness: .20, metalness: .03 });
+  add(metal, 'Campus furniture and sport equipment', { roughness: .68, metalness: .14, side: T.FrontSide });
+  add(water, 'Lake water', { roughness: .20, metalness: .03, side: T.FrontSide });
+  let lakeNormals = null;
   const lake=group.getObjectByName('Lake water');
   if(lake){
     // Periodic capillary waves tilt reflected daylight; mipmaps average the
@@ -463,8 +466,10 @@ export function addLandscapeDetails(scene, data, { Batch, contains, bounds }) {
     for(let i=0;i<pos.count;i++){uv[i*2]=pos.getX(i)/6;uv[i*2+1]=-pos.getZ(i)/6;}
     lake.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
     lake.material.normalMap=normals;
+    lakeNormals=normals;
   }
-  add(light, 'Lamp diffusers', { emissive: '#f4dab0', emissiveIntensity: .25, roughness: .60 });
+  add(light, 'Lamp diffusers', { emissive: '#f4dab0', emissiveIntensity: .25, roughness: .60, side: T.FrontSide });
+  const lampMesh = group.getObjectByName('Lamp diffusers');
   scene.add(group);
-  return { group, stats };
+  return { group, stats, lakeNormals, lampMaterial: lampMesh?.material ?? null, lampPositions };
 }

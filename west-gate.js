@@ -13,7 +13,7 @@ export function westGatePlacement(data) {
   const [start,end]=ends,angle=Math.atan2(end[1]-start[1],end[0]-start[0]);
   return [start[0]+5*Math.cos(angle)+6*Math.sin(angle),start[1]+5*Math.sin(angle)-6*Math.cos(angle),angle];
 }
-export function addWestGate(scene,data) {
+export function addWestGate(scene,data,anisotropy=1) {
   const anchor=westGatePlacement(data);
   if(!anchor)return null;
   const [x,z,angle]=anchor;
@@ -22,17 +22,18 @@ export function addWestGate(scene,data) {
   group.position.set(x,0,z);
   group.rotation.y=-angle;
 
-  const pos=[],norm=[],col=[];
+  const pos=[],norm=[],col=[],idx=[];
   const append=(geometry,color)=>{
-    const g=geometry.index?geometry.toNonIndexed():geometry;
-    const verts=g.attributes.position.array,normals=g.attributes.normal.array;
-    const c=new T.Color(color);
+    const verts=geometry.attributes.position.array,normals=geometry.attributes.normal.array;
+    const base=pos.length/3,c=new T.Color(color);
     for(let i=0;i<verts.length;i+=3) {
       pos.push(verts[i],verts[i+1],verts[i+2]);
       norm.push(normals[i],normals[i+1],normals[i+2]);
       col.push(c.r,c.g,c.b);
     }
-    if(g!==geometry)g.dispose();
+    const gIdx=geometry.index;
+    if(gIdx){const a=gIdx.array;for(let i=0;i<a.length;i++)idx.push(base+a[i]);}
+    else for(let i=0,n=verts.length/3;i<n;i++)idx.push(base+i);
     geometry.dispose();
   };
   const box=(x,y,z,dx,dy,dz,color)=>{
@@ -86,7 +87,8 @@ export function addWestGate(scene,data) {
   surface.setAttribute('position',new T.Float32BufferAttribute(pos,3));
   surface.setAttribute('normal',new T.Float32BufferAttribute(norm,3));
   surface.setAttribute('color',new T.Float32BufferAttribute(col,3));
-  const masonry=new T.Mesh(surface,new T.MeshStandardMaterial({vertexColors:true,roughness:.92}));
+  surface.setIndex(idx);
+  const masonry=new T.Mesh(surface,new T.MeshStandardMaterial({vertexColors:true,roughness:.92,side:T.FrontSide}));
   masonry.name='Sandstone name wall and low planted islands';masonry.castShadow=masonry.receiveShadow=true;
   group.add(masonry);
 
@@ -103,7 +105,7 @@ export function addWestGate(scene,data) {
       ctx.strokeStyle='#8b6328';ctx.lineWidth=1.8;ctx.strokeText(ch,x,99);
       ctx.fillStyle=gilding;ctx.fillText(ch,x,99);
     });
-    const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
+    const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
     const sign=new T.Mesh(new T.PlaneGeometry(22,2.45),new T.MeshStandardMaterial({map,alphaTest:.27,roughness:.43,metalness:.27}));
     sign.name='河南大学 · west face';sign.rotation.y=-Math.PI/2;sign.position.set(-.55,2.30,0);group.add(sign);
   }

@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="./viewer.css">
   <link rel="icon" href="data:,">
   <script type="importmap">{"imports":{"three":"./assets/three.module.min.js"}}</script>
-  <script src="./assets/leaflet.js" defer></script>
   <script src="./main.js" type="module"></script>
 </head>
 <body>
@@ -19,7 +18,15 @@
         <span><strong>金明校园</strong><small>河南大学 · 三维漫游</small></span>
       </a>
       <div class="sidebar-intro"><span class="eyebrow">CAMPUS EXPLORER</span><h1>走近校园的每一处</h1><p>从全景俯瞰，到林荫道上的漫步。</p></div>
-      <label class="search-box" for="search"><span data-icon="search"></span><input id="search" type="search" placeholder="搜索地点" autocomplete="off"><kbd>/</kbd></label>
+      <label class="search-box" for="search"><span data-icon="search"></span><input id="search" type="search" placeholder="搜索全校楼宇、宿舍、道路" autocomplete="off"><kbd>/</kbd></label>
+      <div class="category-tabs" role="tablist" aria-label="地点分类">
+        <button type="button" role="tab" class="active" data-cat="featured" aria-selected="true">重点</button>
+        <button type="button" role="tab" data-cat="all" aria-selected="false">全部</button>
+        <button type="button" role="tab" data-cat="academic" aria-selected="false">教学</button>
+        <button type="button" role="tab" data-cat="dorm" aria-selected="false">宿舍</button>
+        <button type="button" role="tab" data-cat="life" aria-selected="false">生活</button>
+        <button type="button" role="tab" data-cat="outdoor" aria-selected="false">室外</button>
+      </div>
       <div class="list-heading"><h2>校园地点</h2><span id="place-count">正在加载</span></div>
       <nav id="place-list" aria-label="地点列表"></nav>
       <footer class="sidebar-footer"><span class="status-dot"></span><span>校园轮廓 · 精细化示意模型</span><button id="sources" class="icon-button" type="button" title="模型与来源说明" aria-label="模型与来源说明" data-icon="info"></button></footer>
@@ -41,19 +48,44 @@
         <div class="control-pair"><button type="button" id="zoom-in" class="icon-button" title="放大" aria-label="放大" data-icon="plus"></button><button type="button" id="zoom-out" class="icon-button" title="缩小" aria-label="缩小" data-icon="minus"></button></div>
         <button type="button" id="home" class="icon-button" title="回到校园全景" aria-label="回到校园全景" data-icon="target"></button>
         <button type="button" id="field-views" class="icon-button" title="实景取景点" aria-label="实景取景点" data-icon="camera"></button>
+        <button type="button" id="lighting" class="icon-button" title="光照与环境" aria-label="光照与环境" aria-expanded="false" data-icon="sun"></button>
+        <button type="button" id="share" class="icon-button" title="复制当前视角链接" aria-label="复制当前视角链接" data-icon="share"></button>
         <button type="button" id="fullscreen" class="icon-button" title="全屏" aria-label="切换全屏" data-icon="expand"></button>
       </div>
+      <div id="env-panel" class="env-panel" role="region" aria-label="光照与水面设置" hidden>
+        <div class="env-title">时段光照</div>
+        <div class="env-presets" role="group" aria-label="时段预设">
+          <button type="button" data-light="morning" aria-pressed="false">清晨</button>
+          <button type="button" data-light="noon" class="active" aria-pressed="true">正午</button>
+          <button type="button" data-light="sunset" aria-pressed="false">黄昏</button>
+          <button type="button" data-light="night" aria-pressed="false">夜景</button>
+        </div>
+        <label class="env-toggle"><input type="checkbox" id="water-motion" checked><span>湖面微风水波</span></label>
+      </div>
+      <div id="route-bar" class="route-bar" role="region" aria-label="校内步行导航" hidden>
+        <div class="route-row">
+          <select id="route-from" aria-label="导航起点"></select>
+          <button type="button" id="route-swap" class="icon-button" title="交换起终点" aria-label="交换起终点" data-icon="swap"></button>
+          <select id="route-to" aria-label="导航终点"></select>
+          <button type="button" id="route-clear" class="icon-button" title="关闭导航" aria-label="关闭导航" data-icon="close"></button>
+        </div>
+        <div class="route-meta">
+          <span id="route-summary" aria-live="polite">正在规划步行路线…</span>
+          <button type="button" id="route-walk" class="route-go">从起点漫游</button>
+        </div>
+      </div>
+      <div id="minimap" class="minimap" hidden></div>
       <article id="detail" class="detail-card" aria-live="polite" hidden></article>
       <div id="street-help" class="street-help" role="group" aria-label="漫游操控" hidden>
-        <span class="walk-key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · 拖动环顾</span>
-        <span class="walk-touch-hint">滑动环顾四周 · 点按前进或后退，每次 5 米</span>
+        <span class="walk-key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · <kbd>Shift</kbd> 加速 · <kbd>Q</kbd><kbd>E</kbd> 转向 · 拖动环顾</span>
+        <span class="walk-touch-hint">滑动环顾 · 点按步进 / 长按连续移动</span>
         <div><button type="button" id="walk-back" aria-label="后退五米">后退</button><button type="button" id="walk-forward" aria-label="前进五米">前进</button><button type="button" id="map-photos">实景参考</button></div>
         <nav id="walk-route" aria-label="沿路线换取景点" hidden><button type="button" id="route-prev">‹ 上一站</button><span id="route-position" aria-live="polite"></span><button type="button" id="route-next">下一站 ›</button></nav>
       </div>
       <div id="fallback" role="status">正在构建校园场景…</div>
       <div id="imagery-status" hidden><span id="imagery-message" role="status"></span><div id="imagery-actions" hidden><button type="button" id="imagery-retry">重试影像</button><a id="imagery-external" target="_blank" rel="noopener">在 ArcGIS 查看 ↗</a></div></div>
       <div id="notice" role="status" hidden></div>
-      <div class="viewport-bottom"><div id="scale"><span id="scale-label">100 米</span></div><span class="orbit-help">拖动旋转 · 右键平移 · 滚轮缩放</span><span id="esri-credit" hidden>影像 © Esri 及其数据提供方</span></div>
+      <div class="viewport-bottom"><div id="scale"><span id="scale-label">100 米</span></div><span class="orbit-help">点击建筑查看 · 拖动旋转 · 右键平移 · 滚轮缩放</span><span id="esri-credit" hidden>影像 © Esri 及其数据提供方</span></div>
     </section>
   </main>
 

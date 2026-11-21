@@ -38,7 +38,7 @@ class FacadeBatch {
     // vertices, preserving their flat normals and per-corner occlusion colors.
     this.indices.push(firstVertex, firstVertex + 1, firstVertex + 2, firstVertex, firstVertex + 2, firstVertex + 3);
   }
-  mesh(options = {}) {
+  mesh(options = {}, sharedMaterial = null) {
     const { physical = false, ...materialOptions } = options;
     const geometry = new T.BufferGeometry();
     geometry.setAttribute('position', new T.Float32BufferAttribute(this.positions, 3));
@@ -47,9 +47,43 @@ class FacadeBatch {
     geometry.setIndex(this.indices);
     geometry.computeBoundingSphere();
     const Material = physical ? T.MeshPhysicalMaterial : T.MeshStandardMaterial;
-    return new T.Mesh(geometry, new Material({
+    const material = sharedMaterial ?? new Material({
       vertexColors: true, roughness: .88, side: T.DoubleSide, ...materialOptions
-    }));
+    });
+    return new T.Mesh(geometry, material);
+  }
+}
+
+class SpatialFacadeBatch {
+  constructor(cellSize = 360) {
+    this.cellSize = cellSize;
+    this.cells = new Map();
+  }
+  quad(a, b, c, d, color) {
+    const cx = (a[0] + b[0] + c[0] + d[0]) * .25;
+    const cz = (a[2] + b[2] + c[2] + d[2]) * .25;
+    const key = `${Math.floor(cx / this.cellSize)},${Math.floor(cz / this.cellSize)}`;
+    let cell = this.cells.get(key);
+    if (!cell) {
+      cell = new FacadeBatch();
+      this.cells.set(key, cell);
+    }
+    cell.quad(a, b, c, d, color);
+  }
+  meshes(baseName, options = {}) {
+    const { physical = false, ...materialOptions } = options;
+    const Material = physical ? T.MeshPhysicalMaterial : T.MeshStandardMaterial;
+    const shared = new Material({
+      vertexColors: true, roughness: .88, side: T.DoubleSide, ...materialOptions
+    });
+    const out = [];
+    for (const [key, cell] of this.cells) {
+      if (!cell.positions.length) continue;
+      const m = cell.mesh(options, shared);
+      m.name = `${baseName} [${key}]`;
+      out.push(m);
+    }
+    return out;
   }
 }
 
@@ -232,7 +266,20 @@ export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,r
 export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   const group = new T.Group();
   group.name = 'campus-architectural-details';
-  const masonry = new FacadeBatch(), glass = new FacadeBatch(), brick = new FacadeBatch(), canopy=new FacadeBatch(), silhouettes=new FacadeBatch(), fittings = new Batch();
+  const masonry = new SpatialFacadeBatch(360), glass = new SpatialFacadeBatch(360);
+  const brick = new FacadeBatch(), canopy = new FacadeBatch(), silhouettes = new FacadeBatch();
+  const plazaGround = new FacadeBatch(), foliage = new FacadeBatch(), fence = new FacadeBatch();
+  const fittings = new Batch();
+  const shadeCache = new Map();
+  const shadedHex = (hex, factor) => {
+    const key = `${hex}|${factor}`;
+    let out = shadeCache.get(key);
+    if (out === undefined) {
+      out = new T.Color(hex).multiplyScalar(factor).getHex();
+      shadeCache.set(key, out);
+    }
+    return out;
+  };
   const stats = { buildings: 0, windows: 0, entrances: 0, rooftopUnits: 0, triangles: 0 };
   // Closely related neutral tints avoid a checkerboard of randomly blue panes.
   // The static daylight environment supplies the angle-dependent reflection.
@@ -269,8 +316,8 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     const border = door ? .115 : .10;
     const w = width / 2, h = height / 2;
     const outerW = w + border, outerH = h + border;
-    const recessShade = new T.Color(trim).multiplyScalar(.66).getHex();
-    const topShade = new T.Color(trim).multiplyScalar(.52).getHex();
+    const recessShade = shadedHex(trim, .66);
+    const topShade = shadedHex(trim, .52);
     const inner = [
       [-w, -h, back], [w, -h, back], [w, h, back], [-w, h, back]
     ];
@@ -311,7 +358,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     // Close the soffit: the previous two-sided ribbon had no downward face,
     // so a grazing view could not read the actual thickness of the sill.
     const below = [a, b, c, d].map(p => [p[0], y - thickness, p[2]]);
-    const underside = new T.Color(color).multiplyScalar(.72).getHex();
+    const underside = shadedHex(color, .72);
     if (edge.sign > 0) masonry.quad(below[0], below[3], below[2], below[1], underside);
     else masonry.quad(below[0], below[1], below[2], below[3], underside);
   }
@@ -320,10 +367,12 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   }
 
   for(const g of [...physicsModel(data.building),...eastModels(data),...centralModels(data),...facultyModels(data)])for(const [points,color,material,fine] of g.parts){
-    (material==='brick'?brick:material==='glass'?glass:material==='canopy'?canopy:masonry).quad(...points,color);
+    const target=material==='brick'?brick:material==='glass'?glass:material==='canopy'?canopy:
+      material==='ground'?plazaGround:material==='foliage'?foliage:material==='fence'?fence:masonry;
+    target.quad(...points,color);
     // Only the broad new surfaces cast shadows: the canopy, curved hall and
     // piers should shade the court without adding every window bar to its map.
-    if(material!=='brick'&&material!=='canopy'&&material!=='ground'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
+    if(material!=='brick'&&material!=='canopy'&&material!=='ground'&&material!=='foliage'&&material!=='fence'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
       silhouettes.quad(...points,'#ffffff');
   }
 
@@ -456,17 +505,79 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     }
   }
 
-  const walls = masonry.mesh(), windows = glass.mesh({
+  const wallChunks = masonry.meshes('window-frames-and-storey-bands');
+  const windowChunks = glass.meshes('recessed-window-glazing', {
     physical: true, roughness: .26, metalness: 0, ior: 1.5,
     envMapIntensity: .8, reflectivity: .45
   });
-  const equipment = fittings.mesh({ roughness: .82 });
-  walls.name = 'window-frames-and-storey-bands';
-  windows.name = 'recessed-window-glazing';
+  const nightGlowUniform = { value: 0 };
+  if (windowChunks.length) {
+    const winMat = windowChunks[0].material;
+    winMat.customProgramCacheKey = () => 'campus-window-glaze-v1';
+    winMat.onBeforeCompile = shader => {
+      shader.uniforms.uNightGlow = nightGlowUniform;
+      shader.vertexShader = 'varying vec3 vWinPos;\n' + shader.vertexShader
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWinPos=position;');
+      shader.fragmentShader = 'uniform float uNightGlow;\nvarying vec3 vWinPos;\n' + shader.fragmentShader
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        if (uNightGlow > 0.01) {
+          vec3 cell = floor(vec3(vWinPos.x / 3.8 + vWinPos.z * 0.13, vWinPos.y / 3.45, vWinPos.z / 3.8 - vWinPos.x * 0.11));
+          float h = fract(sin(dot(cell, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+          float lit = step(0.54, h);
+          vec3 warmTone = mix(vec3(1.0, 0.78, 0.45), vec3(0.95, 0.91, 0.80), fract(h * 19.3));
+          totalEmissiveRadiance += warmTone * lit * (0.45 + 0.65 * fract(h * 7.7)) * uNightGlow;
+        }`);
+    };
+  }
+  const equipment = fittings.mesh({ roughness: .82, side: T.FrontSide });
   equipment.name = 'roof-fittings-and-entrances';
-  walls.receiveShadow = windows.receiveShadow = equipment.receiveShadow = true;
-  equipment.castShadow = true;
-  group.add(walls, windows, equipment);
+  for (const m of wallChunks) { m.receiveShadow = true; group.add(m); }
+  for (const m of windowChunks) { m.receiveShadow = true; group.add(m); }
+  equipment.receiveShadow = equipment.castShadow = true;
+  group.add(equipment);
+  let groundMesh = null;
+  if (plazaGround.positions.length) {
+    groundMesh = plazaGround.mesh({ roughness: .94 });
+    groundMesh.name = 'Surveyed plaza ground';
+    groundMesh.receiveShadow = true;
+    group.add(groundMesh);
+  }
+  if (foliage.positions.length) {
+    const willowMesh = foliage.mesh({ roughness: .96 });
+    willowMesh.name = 'Surveyed lakeside willows';
+    willowMesh.castShadow = willowMesh.receiveShadow = true;
+    group.add(willowMesh);
+  }
+  if (fence.positions.length) {
+    const enclosure = fence.mesh({ roughness: .72, metalness: .15, transparent: true, depthWrite: false });
+    enclosure.name = 'Court chain-link enclosures';
+    enclosure.material.customProgramCacheKey = () => 'campus-chainlink-fence-v1';
+    enclosure.material.onBeforeCompile = shader => {
+      shader.vertexShader = 'varying vec3 fencePoint;varying vec3 fenceNormal;\n' + shader.vertexShader
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nfencePoint=position;fenceNormal=normal;');
+      shader.fragmentShader = 'varying vec3 fencePoint;varying vec3 fenceNormal;\n' + shader.fragmentShader
+        .replace('#include <color_fragment>', `#include <color_fragment>
+        vec2 fn = normalize(fenceNormal.xz + vec2(1e-5, 0.0));
+        vec2 ft = vec2(-fn.y, fn.x);
+        float fu = dot(fencePoint.xz, ft);
+        float fv = fencePoint.y;
+        float pitch = 0.13;
+        float slope = 1.32;
+        float d1 = (fv - slope * fu) / pitch;
+        float d2 = (fv + slope * fu) / pitch;
+        float aa1 = max(0.002, fwidth(d1));
+        float aa2 = max(0.002, fwidth(d2));
+        float wireHalf = 0.068;
+        float w1 = 1.0 - smoothstep(wireHalf, wireHalf + aa1 * 0.85, abs(fract(d1) - 0.5));
+        float w2 = 1.0 - smoothstep(wireHalf, wireHalf + aa2 * 0.85, abs(fract(d2) - 0.5));
+        float wire = max(w1, w2);
+        float farFade = smoothstep(0.32, 0.95, max(aa1, aa2));
+        float coverage = mix(wire, 0.24, farFade);
+        if (coverage < 0.06) discard;
+        diffuseColor.a *= coverage;`);
+    };
+    group.add(enclosure);
+  }
   if(canopy.positions.length){
     const pane=canopy.mesh({physical:true,roughness:.17,transparent:true,opacity:.29,depthWrite:false,envMapIntensity:.66});
     pane.name='Glazed entrance canopies';group.add(pane);
@@ -475,6 +586,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     const skin=brick.mesh({roughness:.95});
     skin.name='Street-view brick exteriors';
     skin.castShadow=skin.receiveShadow=true;
+    skin.material.customProgramCacheKey=()=>'campus-brick-v1';
     skin.material.onBeforeCompile=shader=>{
       shader.vertexShader='varying vec3 brickPoint;varying vec3 brickNormal;\n'+shader.vertexShader
         .replace('#include <begin_vertex>','#include <begin_vertex>\nbrickPoint=position;brickNormal=normal;');
@@ -504,5 +616,5 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   }, 0);
   group.userData.detailStats = stats;
   scene.add(group);
-  return { group, stats };
+  return { group, stats, plazaGround: groundMesh, nightGlowUniform };
 }
