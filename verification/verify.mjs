@@ -200,6 +200,102 @@ try {
   await evaluate("document.querySelectorAll('#place-list .place')[3].click()");
   await capture('lake');
   await evaluate("document.querySelector('#home').click()");
+  // ---- Regression coverage: categories, 3D picking, A* routing, lighting, share links, guided tours ----
+  const mouse=async(type,x,y,buttons=0)=>call('Input.dispatchMouseEvent',{type,x,y,button:type==='mouseMoved'&&!buttons?'none':'left',buttons,clickCount:type==='mouseMoved'?0:1});
+  const clickAt=async(x,y)=>{await mouse('mouseMoved',x,y);await mouse('mousePressed',x,y,1);await mouse('mouseReleased',x,y);};
+  const dragBy=async(x,y,dx,dy)=>{await mouse('mousePressed',x,y,1);for(let i=1;i<=6;i++)await mouse('mouseMoved',x+dx*i/6,y+dy*i/6,1);await mouse('mouseReleased',x+dx,y+dy);};
+  const centerOf=selector=>evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()`);
+  const readyAt=async target=>{await evaluate("document.querySelector('#stage').dataset.ready='false'");await call('Page.navigate',{url:target});await until(()=>evaluate("document.querySelector('#stage')?.dataset.ready==='true'"),'Reloaded '+target);await settle();};
+  check('Category tabs filter every campus building and road, then restore the 26 featured places',await evaluate(`(()=>{
+    const tab=c=>{document.querySelector('[data-cat='+c+']').click();return [...document.querySelectorAll('#place-list .place')].map(b=>b.textContent)};
+    const all=tab('all'),dorm=tab('dorm'),life=tab('life'),outdoor=tab('outdoor'),academic=tab('academic');
+    const ok=all.length>60&&dorm.length>=15&&dorm.every(t=>t.includes('宿舍'))&&dorm.some(t=>t.includes('学十八公寓'))&&
+      life.some(t=>t.includes('华苑餐厅'))&&outdoor.some(t=>t.includes('道路'))&&academic.some(t=>t.includes('数学与信息科学学院'))&&
+      document.querySelector('[data-cat=academic]').getAttribute('aria-selected')==='true';
+    const featured=tab('featured');
+    return ok&&featured.length===26&&document.querySelector('#place-count').textContent.startsWith('26')&&document.querySelector('[data-cat=featured]').getAttribute('aria-selected')==='true';
+  })()`));
+  check('Search reaches non-featured dormitories by name',await evaluate(`(()=>{const s=document.querySelector('#search');s.value='学十八';s.dispatchEvent(new Event('input'));
+    const hit=[...document.querySelectorAll('#place-list .place')].map(b=>b.textContent);s.value='';s.dispatchEvent(new Event('input'));
+    return hit.length===1&&hit[0].includes('学十八公寓')&&document.querySelectorAll('#place-list .place').length===26;})()`));
+  await evaluate("document.querySelector('#place-list .place').click();document.querySelector('#detail [data-close]').click()");
+  await settle();
+  const [stageX,stageY]=await centerOf('#stage');
+  await clickAt(stageX,stageY);
+  await settle();
+  check('Clicking a 3D building picks it, opens its card and marks it in the list',await evaluate("!document.querySelector('#detail').hidden && document.querySelector('#detail h2').textContent.includes('图书馆') && (document.querySelector('#place-list .place[aria-current=true]')?.textContent.includes('图书馆')??false)"));
+  await evaluate("document.querySelector('#detail [data-route]').click()");
+  check('A* routing plans West Gate to the library and re-plans a longer route from the North Gate',await evaluate(`(()=>{
+    const bar=document.querySelector('#route-bar'),m=document.querySelector('#route-summary').textContent.match(/步行约 (\\d+) 米 · 约 (\\d+) 分钟/);
+    if(bar.hidden||!m||document.querySelector('#route-from').value!=='west'||document.querySelector('#route-to').value!=='library')return false;
+    const f=document.querySelector('#route-from');f.value='north';f.dispatchEvent(new Event('change'));
+    const n=document.querySelector('#route-summary').textContent.match(/步行约 (\\d+) 米/);
+    return +m[1]>300&&+m[1]<900&&+m[2]>=1&&n&&+n[1]>+m[1]+150;
+  })()`));
+  await capture('route');
+  await evaluate("document.querySelector('#route-walk').click()");
+  check('A route can be walked from its start with the radar minimap',await evaluate("document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && document.querySelector('#mode-note').textContent.includes('前往金明校区图书馆') && !document.querySelector('#minimap').hidden && document.querySelector('#minimap canvas').width>0"));
+  await evaluate("document.querySelector('#route-clear').click();document.querySelector('#home').click()");
+  check('Closing navigation removes the route bar',await evaluate("document.querySelector('#route-bar').hidden && document.querySelector('#street-help').hidden"));
+  await evaluate("document.querySelector('#lighting').click()");
+  check('Time-of-day presets switch exclusively between dusk, night and morning',await evaluate(`(()=>{
+    if(document.querySelector('#env-panel').hidden||document.querySelector('#lighting').getAttribute('aria-expanded')!=='true')return false;
+    const pick=n=>{document.querySelector('[data-light='+n+']').click();return document.querySelector('.viewport').dataset.lighting===n&&document.querySelector('[data-light='+n+']').getAttribute('aria-pressed')==='true'&&document.querySelectorAll('[data-light][aria-pressed=true]').length===1};
+    return pick('sunset')&&pick('morning')&&pick('night');
+  })()`));
+  await capture('night');
+  await evaluate("document.querySelector('#zoom-in').click()");
+  await settle();
+  const orbitShare=await evaluate("(document.querySelector('#share').click(),location.href)");
+  const sharedCam=new URL(orbitShare).searchParams.get('cam')?.split(',').map(Number);
+  check('Share link records the orbit camera and the night lighting',sharedCam?.length===6&&sharedCam.every(Number.isFinite)&&new URL(orbitShare).searchParams.get('light')==='night');
+  await readyAt(orbitShare);
+  const restoredCam=new URL(await evaluate("(document.querySelector('#share').click(),location.href)")).searchParams.get('cam')?.split(',').map(Number);
+  check('Opening a shared orbit link restores the same camera and lighting',restoredCam?.length===6&&restoredCam.every((v,i)=>Math.abs(v-sharedCam[i])<1.5)&&
+    await evaluate("document.querySelector('.viewport').dataset.lighting==='night' && document.querySelector('[data-light=night]').getAttribute('aria-pressed')==='true'"));
+  await evaluate("document.querySelector('[data-light=noon]').click();document.querySelector('[data-mode=walk]').click();document.querySelector('#walk-forward').click()");
+  const walkShare=await evaluate("(document.querySelector('#share').click(),location.href)");
+  const sharedPos=new URL(walkShare).searchParams.get('pos')?.split(',').map(Number);
+  await readyAt(walkShare);
+  const restoredPos=new URL(await evaluate("(document.querySelector('#share').click(),location.href)")).searchParams.get('pos')?.split(',').map(Number);
+  check('Opening a shared walking link restores the walker position and heading',sharedPos?.length===4&&restoredPos?.length===4&&restoredPos.every((v,i)=>Math.abs(v-sharedPos[i])<.05)&&
+    await evaluate("document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && !new URL(location.href).searchParams.has('light')"));
+  await evaluate("document.querySelector('#home').click();document.querySelector('#tour').click()");
+  check('Tour picker offers three story routes from the toolbar and the sidebar',await evaluate(`(()=>{const d=document.querySelector('#tour-dialog'),ids=[...d.querySelectorAll('[data-tour]')].map(b=>b.dataset.tour);
+    return d.open&&ids.join(',')==='axis,life,lake'&&document.querySelectorAll('[data-open-tour]').length===2&&[...d.querySelectorAll('[data-tour]')].every(b=>/\\d+ 站/.test(b.textContent));})()`));
+  await evaluate("document.querySelector('#tour-dialog [data-tour=axis]').click()");
+  await settle();
+  check('Starting the axis tour flies to West Gate with a caption card in morning light',await evaluate(`(()=>{const c=document.querySelector('#tour-card'),u=new URL(location.href).searchParams;
+    return !document.querySelector('#tour-dialog').open&&!c.hidden&&c.dataset.stop==='1'&&c.dataset.playing==='true'&&document.querySelector('#tour-step').textContent==='1 / 7'&&
+      document.querySelector('#tour-title').textContent.includes('西大门')&&document.querySelector('#tour-caption').textContent.length>20&&document.querySelector('#tour-prev').disabled&&
+      document.querySelector('#mode-label').textContent==='校园云游'&&document.querySelector('#detail').hidden&&u.get('tour')==='axis'&&u.get('stop')==='1'&&
+      document.querySelector('.viewport').dataset.lighting==='morning'&&(document.querySelector('#place-list .place[aria-current=true]')?.textContent.includes('西大门')??false);})()`));
+  await capture('tour-axis');
+  check('Next and previous move between tour stops and keep the link in step',await evaluate(`(()=>{const n=document.querySelector('#tour-next'),p=document.querySelector('#tour-prev'),c=document.querySelector('#tour-card');
+    n.click();n.click();const third=c.dataset.stop==='3'&&document.querySelector('#tour-title').textContent.includes('图书馆')&&new URL(location.href).searchParams.get('stop')==='3';
+    p.click();return third&&c.dataset.stop==='2'&&document.querySelector('#tour-dots .current')===document.querySelectorAll('#tour-dots i')[1];})()`));
+  check('Pause and continue toggle the tour',await evaluate(`(()=>{const t=document.querySelector('#tour-toggle'),c=document.querySelector('#tour-card');
+    t.click();const paused=c.dataset.playing==='false'&&t.textContent==='继续';t.click();return paused&&c.dataset.playing==='true'&&t.textContent==='暂停';})()`));
+  await dragBy(stageX,stageY,60,10);
+  await settle();
+  check('Dragging the scene takes over and pauses the tour without leaving it',await evaluate("document.querySelector('#tour-card').dataset.playing==='false' && !document.querySelector('#tour-card').hidden && document.querySelector('#tour-card').dataset.stop==='2'"));
+  await evaluate("document.querySelector('#tour-toggle').click()");
+  await until(()=>evaluate("document.querySelector('#tour-card').dataset.stop==='3'"),'Tour autoplay advances',25000);
+  check('A resumed tour advances to the next stop on its own',true);
+  const tourShare=await evaluate("(document.querySelector('#share').click(),location.href)");
+  check('Sharing during a tour links to the current tour stop',new URL(tourShare).searchParams.get('tour')==='axis'&&new URL(tourShare).searchParams.get('stop')==='3'&&!new URL(tourShare).searchParams.has('cam'));
+  await evaluate("document.querySelector('#tour-exit').click()");
+  check('Leaving the tour restores lighting, labels and the place card',await evaluate("document.querySelector('#tour-card').hidden && !new URL(location.href).searchParams.has('tour') && document.querySelector('.viewport').dataset.lighting==='noon' && document.querySelector('#mode-label').textContent==='三维校园' && !document.querySelector('#detail').hidden"));
+  await readyAt(url+'/?tour=lake&stop=6');
+  check('A shared tour link opens the final lakeside stop at night',await evaluate("document.querySelector('#tour-card').dataset.tour==='lake' && document.querySelector('#tour-step').textContent==='6 / 6' && document.querySelector('#tour-next').textContent.includes('完成') && document.querySelector('.viewport').dataset.lighting==='night'"));
+  await capture('tour-night');
+  await evaluate("document.querySelector('#tour-next').click()");
+  check('Finishing a tour offers a restart',await evaluate("document.querySelector('#tour-card').dataset.finished==='true' && document.querySelector('#tour-toggle').textContent==='重新开始'"));
+  await evaluate("document.querySelector('#tour-toggle').click()");
+  check('Restarting returns to the first stop',await evaluate("document.querySelector('#tour-card').dataset.stop==='1' && document.querySelector('#tour-card').dataset.playing==='true'"));
+  await evaluate("document.querySelector('#tour-walk').click()");
+  check('Going down to the ground leaves the tour for the stop viewpoint',await evaluate("document.querySelector('#tour-card').hidden && document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && new URL(location.href).searchParams.get('view')==='pharmacy' && document.querySelector('.viewport').dataset.lighting==='noon'"));
+  await evaluate("document.querySelector('#home').click()");
   if(process.env.CHECK_SATELLITE==='1'){
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
     await until(()=>evaluate("document.querySelector('#fallback').hidden && (()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return tiles.length>=4 && tiles.every(t=>t.complete && t.naturalWidth>0)})()"),'Satellite imagery loads',50000);
@@ -265,8 +361,53 @@ try {
   await settle();
   check('Mobile walking controls accept taps after choosing a place',await evaluate(`document.querySelector('#detail').hidden &&
     [...document.querySelectorAll('#street-help button')].filter(b=>b.getClientRects().length).every(b=>{const r=b.getBoundingClientRect();return r.height>=44 && b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})`));
+  check('Touch joystick appears in walk mode without covering the walk buttons',await evaluate(`(()=>{
+    const j=document.querySelector('#joystick');if(j.hidden||!j.getClientRects().length)return false;
+    const r=j.getBoundingClientRect(),hit=(a,b)=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
+    return r.width>=88&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=document.querySelector('.viewport').getBoundingClientRect().bottom&&
+      j.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))&&
+      ![...document.querySelectorAll('#street-help button,#minimap')].filter(b=>b.getClientRects().length).some(b=>hit(b.getBoundingClientRect(),r));
+  })()`));
+  await capture('mobile-walk');
+  {
+    const pose=async()=>new URL(await evaluate("(document.querySelector('#share').click(),location.href)")).searchParams.get('pos').split(',').map(Number);
+    const [jx,jy]=await evaluate("(()=>{const r=document.querySelector('#joystick').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()");
+    const hold=async(dx,dy,ms)=>{
+      await call('Input.dispatchMouseEvent',{type:'mousePressed',x:jx,y:jy,button:'left',buttons:1,clickCount:1});
+      await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:jx+dx,y:jy+dy,button:'left',buttons:1});
+      await pause(ms);
+      await call('Input.dispatchMouseEvent',{type:'mouseReleased',x:jx+dx,y:jy+dy,button:'left',buttons:0,clickCount:1});
+      await settle();
+    };
+    const start=await pose();
+    await hold(0,-44,900);
+    const moved=await pose();
+    await hold(44,0,600);
+    const turned=await pose();
+    check('One-thumb joystick walks forward and turns, then recentres',Math.hypot(moved[0]-start[0],moved[1]-start[1])>2&&Math.abs(turned[2]-moved[2])>.2&&
+      await evaluate("document.querySelector('.joystick-knob').style.transform==='' && !document.querySelector('#joystick').classList.contains('engaged')"));
+  }
   await evaluate("document.querySelector('[data-mode=model]').click()");
   check('Leaving walk mode restores the selected place',await evaluate("!document.querySelector('#detail').hidden && document.querySelector('#detail h2').textContent.includes('图书馆')"));
+  check('Mobile place sheet stays inside the map, clear of the controls, with tappable actions',await evaluate(`(()=>{
+    const d=document.querySelector('#detail').getBoundingClientRect(),v=document.querySelector('.viewport').getBoundingClientRect(),c=document.querySelector('.map-controls').getBoundingClientRect();
+    const actions=[...document.querySelectorAll('#detail .detail-walk')];
+    return d.left>=0&&d.right<=c.left&&d.bottom<=v.bottom&&d.top>=v.top+60&&document.documentElement.scrollWidth<=innerWidth&&
+      actions.length>=2&&actions.every(b=>b.getBoundingClientRect().height>=34);
+  })()`));
+  await capture('mobile-detail');
+  await evaluate("document.querySelector('#tour').click();document.querySelector('#tour-dialog [data-tour=life]').click()");
+  await settle();
+  check('Mobile tour card fits the screen with large controls and no horizontal overflow',await evaluate(`(()=>{
+    const c=document.querySelector('#tour-card'),r=c.getBoundingClientRect(),v=document.querySelector('.viewport').getBoundingClientRect();
+    const buttons=[...c.querySelectorAll('.tour-actions button')].filter(b=>b.getClientRects().length);
+    const home=document.querySelector('#home').getBoundingClientRect();
+    return !c.hidden&&r.left>=0&&r.right<=innerWidth&&r.bottom<=v.bottom&&document.documentElement.scrollWidth<=innerWidth&&
+      buttons.length>=3&&buttons.every(b=>{const q=b.getBoundingClientRect();return q.height>=44&&b.contains(document.elementFromPoint(q.x+q.width/2,q.y+q.height/2))})&&
+      home.bottom<=r.top&&document.querySelector('#home').contains(document.elementFromPoint(home.x+home.width/2,home.y+home.height/2));
+  })()`));
+  await capture('mobile-tour');
+  await evaluate("document.querySelector('#tour-exit').click()");
   await call('Page.addScriptToEvaluateOnNewDocument', { source: "const originalGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type==='webgl2'?null:originalGetContext.call(this,type,...args)}" });
   await evaluate("document.querySelector('#stage').dataset.ready='false'");
   await call('Page.navigate', { url:url+'/?view=cs-entry' });

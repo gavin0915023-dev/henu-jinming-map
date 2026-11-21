@@ -4,6 +4,7 @@ import { imageryLayer, addCampusBasemap } from './satellite.js';
 import { cuitingCenter } from './campus-commons.js';
 import { createCampusRouter } from './routing.js';
 import { createMinimap } from './minimap.js';
+import { tours, createTourController, DWELL } from './tour.js';
 
 const $ = selector => document.querySelector(selector);
 const icons = {
@@ -34,7 +35,8 @@ const icons = {
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4m0-11-6.8 4"/>',
   route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H13a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h4.5"/>',
   swap: '<path d="M7 10h14l-4-4m0 12H3l4 4"/>',
-  road: '<path d="M6 20 10 4m8 16L14 4m-2 3v3m0 4v3"/>'
+  road: '<path d="M6 20 10 4m8 16L14 4m-2 3v3m0 4v3"/>',
+  play: '<circle cx="12" cy="12" r="9"/><path d="m10 8.5 5.5 3.5-5.5 3.5Z" fill="currentColor"/>'
 };
 const icon = name => '<svg viewBox="0 0 24 24" aria-hidden="true">' + icons[name] + '</svg>';
 document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon));
@@ -95,6 +97,7 @@ const pinMap = new Map();
 let active = null, activeView = null, mode = 'model', model = null, satellite = null, satelliteTiles = null, campus = null;
 let router = null, minimap = null, activeRoute = null, satelliteRouteLine = null, satelliteMoved = false;
 let currentLighting = 'noon', imageryFrame = 0, noticeTimer;
+let tourCtl = null, tourDriving = false, tourPrevLighting = null, resetJoystick = null;
 
 function notice(message, duration = 4500) {
   const box = $('#notice');
@@ -209,7 +212,7 @@ function renderPlaces() {
 }
 
 function renderDetail() {
-  detail.hidden = !active || mode === 'walk';
+  detail.hidden = !active || mode === 'walk' || Boolean(tourCtl?.active);
   if (detail.hidden) return;
   const { name, type, desc, link, photo } = active;
   const walkButton = mode === 'walk' ? '' : '<button class="detail-walk">' + icon('walk') + ' 从这里漫游</button>';
@@ -287,6 +290,7 @@ function markView(item) {
 }
 
 function select(p) {
+  if (tourCtl?.active && !tourDriving) tourCtl.exit();
   active = p;
   markView(null);
   model?.highlightBuilding(p.osmId ?? null);
@@ -300,6 +304,7 @@ function select(p) {
 
 // 3D building direct-click handler
 function handlePickBuilding(record) {
+  if (tourCtl?.active) tourCtl.exit();
   const [ring, height, rawType, name, id] = record;
   let target = osmPlaceMap.get(id);
   if (!target && name) target = allPlaces.find(p => p.name === name);
@@ -455,6 +460,7 @@ function setMode(next, walkPose, item = null) {
     notice('当前浏览器暂时无法进入三维地面漫游。');
     return;
   }
+  if (tourCtl?.active && !tourDriving) tourCtl.exit();
   const prevMode = mode;
   const prev3dView = prevMode !== 'satellite' && model ? model.getView() : null;
   mode = next;
@@ -475,6 +481,8 @@ function setMode(next, walkPose, item = null) {
   $('.orbit-help').textContent = mode === 'satellite' ? '拖动平移 · 滚轮缩放' : '点击建筑查看 · 拖动旋转 · 右键平移 · 滚轮缩放';
   stage.setAttribute('aria-label', mode === 'walk' ? '校园地面漫游。拖动环顾，点前进或后退移动；也可用 W A S D 或方向键移动。' : '三维校园，拖动旋转，双指或滚轮缩放。');
   $('#street-help').hidden = mode !== 'walk';
+  $('#joystick').hidden = mode !== 'walk';
+  resetJoystick?.();
   $('#map-photos').hidden = mode !== 'walk';
   $('#minimap').hidden = mode !== 'walk' || !minimap;
   $('#notice').hidden = true;
@@ -674,8 +682,15 @@ $('#share').onclick = async () => {
   url.searchParams.delete('cam');
   url.searchParams.delete('pos');
   url.searchParams.delete('light');
+  url.searchParams.delete('tour');
+  url.searchParams.delete('stop');
   if (currentLighting !== 'noon') url.searchParams.set('light', currentLighting);
-  if (activeView) {
+  if (tourCtl?.active) {
+    url.searchParams.delete('view');
+    url.searchParams.delete('light');
+    url.searchParams.set('tour', tourCtl.state.id);
+    url.searchParams.set('stop', String(tourCtl.state.index + 1));
+  } else if (activeView) {
     url.searchParams.set('view', activeView.id);
   } else if (model) {
     url.searchParams.delete('view');
@@ -730,6 +745,7 @@ $('#zoom-in').onclick = () => mode === 'satellite' ? satellite?.zoomIn() : model
 $('#zoom-out').onclick = () => mode === 'satellite' ? satellite?.zoomOut() : model?.zoom(-1);
 $('#north').onclick = () => mode === 'satellite' ? notice('卫星影像采用正北朝上。') : model?.north();
 $('#home').onclick = () => {
+  if (tourCtl?.active) tourCtl.exit();
   if (mode === 'satellite') { active = null; jumpSatellite(null); renderPlaces(); renderDetail(); return; }
   const wasWalk = mode === 'walk';
   active = null;
@@ -813,8 +829,131 @@ $('#close-photos').onclick = () => $('#photo-dialog').close();
 document.querySelectorAll('[data-photo-tab]').forEach((b, i) => b.onclick = () => setPhoto(i));
 $('#sources').onclick = () => $('#about').showModal();
 $('#close-about').onclick = () => $('#about').close();
-for (const id of ['#about', '#field-dialog', '#photo-dialog']) {
+for (const id of ['#about', '#field-dialog', '#photo-dialog', '#tour-dialog']) {
   $(id).addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+}
+
+/* Guided campus tours */
+const tourCard = $('#tour-card'), tourDialog = $('#tour-dialog');
+function tourUrl(state) {
+  const url = new URL(location.href);
+  url.searchParams.delete('tour'); url.searchParams.delete('stop');
+  if (state) {
+    for (const k of ['view', 'cam', 'pos', 'light']) url.searchParams.delete(k);
+    url.searchParams.set('tour', state.id);
+    url.searchParams.set('stop', String(state.index + 1));
+  }
+  history.replaceState(null, '', url);
+}
+tourCtl = createTourController(tourCard, id => places.find(p => p.id === id), {
+  enter(tour, stop, index, place) {
+    tourDriving = true;
+    try {
+      if (mode !== 'model') setMode('model');
+      if (tourPrevLighting === null) tourPrevLighting = currentLighting;
+      const light = tour.stops.slice(0, index + 1).reduce((l, s) => s.light ?? l, tour.light ?? 'noon');
+      if (light !== currentLighting) applyLighting(light);
+      active = place ?? null;
+      markView(null);
+      model?.highlightBuilding(place?.osmId ?? null);
+      renderPlaces();
+      renderDetail();
+      $('#place-list .place[aria-current=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      viewportEl.classList.add('touring');
+      $('#mode-label').textContent = '校园云游';
+      $('#mode-note').textContent = tour.title + ' · ' + stop.title.split(' · ')[0];
+      tourUrl({ id: tour.id, index });
+    } finally { tourDriving = false; }
+  },
+  exit() {
+    viewportEl.classList.remove('touring');
+    applyLighting(tourPrevLighting ?? 'noon');
+    tourPrevLighting = null;
+    tourUrl(null);
+    if (mode === 'model') {
+      $('#mode-label').textContent = '三维校园';
+      $('#mode-note').textContent = stage.dataset.renderer === 'canvas' ? '兼容模式 · 基础模型' : '精细化模型 · 建筑高度估算';
+    }
+    renderDetail();
+  },
+  fly(eye, target, duration) { model?.flyTo(eye, target, { duration, drift: .3 }); },
+  stopDrift() { model?.stopDrift(); },
+  reducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches
+});
+$('#tour-walk').onclick = () => {
+  const view = fieldViews.find(v => v.id === tourCtl.state?.stop.view);
+  tourCtl.exit();
+  if (view) visitView(view);
+};
+// Any direct manipulation of the scene pauses the tour so the visitor can take over.
+const takeOver = () => {
+  if (!tourCtl.active || !tourCtl.state.playing) return;
+  tourCtl.pause();
+  notice('云游已暂停，可自由拖动查看；点「继续」回到路线', 2600);
+};
+stage.addEventListener('pointerdown', takeOver, true);
+stage.addEventListener('wheel', takeOver, { capture: true, passive: true });
+document.addEventListener('keydown', e => {
+  if (!tourCtl.active || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+  if (e.key === 'Escape') tourCtl.exit();
+  else if (e.key === ' ' && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); tourCtl.state.playing ? tourCtl.pause() : tourCtl.resume(); }
+  else if (e.key === 'ArrowRight' && e.target !== stage) $('#tour-next').click();
+  else if (e.key === 'ArrowLeft' && e.target !== stage) $('#tour-prev').click();
+});
+const tourList = tourDialog.querySelector('.tour-list');
+for (const t of tours) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'tour-option';
+  b.dataset.tour = t.id;
+  const minutes = Math.round(t.stops.length * (DWELL + 2600) / 60000);
+  b.innerHTML = '<span class="tour-option-icon">' + icon('play') + '</span><span class="rowtext"><b></b><small></small></span><span class="tour-option-meta"></span>';
+  b.querySelector('b').textContent = t.title;
+  b.querySelector('small').textContent = t.subtitle + ' · ' + t.stops.map(s => s.title.split(' · ')[0]).join(' → ');
+  b.querySelector('.tour-option-meta').textContent = t.stops.length + ' 站 · 约 ' + minutes + ' 分钟';
+  b.onclick = () => {
+    tourDialog.close();
+    if (!model) { notice('三维场景暂未就绪，请稍候再开始云游。'); return; }
+    if (tourCtl.active) tourCtl.exit();
+    tourCtl.start(t.id);
+  };
+  tourList.append(b);
+}
+tourDialog.querySelector('[data-close]').onclick = () => tourDialog.close();
+document.querySelectorAll('[data-open-tour]').forEach(b => b.onclick = () => {
+  for (const o of tourList.children) o.toggleAttribute('data-current', o.dataset.tour === tourCtl.state?.id);
+  tourDialog.showModal();
+});
+
+/* One-thumb virtual joystick for touch walking (front/back buttons stay available). */
+{
+  const pad = $('#joystick'), knob = pad.querySelector('.joystick-knob');
+  let pointer = null;
+  resetJoystick = () => {
+    if (pointer !== null) model?.setWalkDrive(0, 0);
+    pointer = null;
+    knob.style.transform = '';
+    pad.classList.remove('engaged');
+  };
+  const move = e => {
+    const r = pad.getBoundingClientRect(), radius = r.width / 2 - 10;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > radius) { dx *= radius / len; dy *= radius / len; }
+    knob.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    const dead = v => (Math.abs(v) < .16 ? 0 : (v - Math.sign(v) * .16) / .84);
+    model?.setWalkDrive(-dead(dy / radius), dead(dx / radius) * .85);
+  };
+  pad.addEventListener('pointerdown', e => {
+    if (pointer !== null || mode !== 'walk') return;
+    e.preventDefault();
+    pointer = e.pointerId;
+    pad.setPointerCapture(e.pointerId);
+    pad.classList.add('engaged');
+    move(e);
+  });
+  pad.addEventListener('pointermove', e => { if (e.pointerId === pointer) move(e); });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(type, e => { if (e.pointerId === pointer) resetJoystick(); });
 }
 renderPlaces();
 
@@ -845,6 +984,10 @@ try {
   const reqCam = params.get('cam')?.split(',').map(Number);
   if (requested) {
     visitView(requested);
+  } else if (tours.some(t => t.id === params.get('tour'))) {
+    const t = tours.find(t => t.id === params.get('tour'));
+    const at = Math.max(1, Math.min(t.stops.length, parseInt(params.get('stop'), 10) || 1)) - 1;
+    tourCtl.start(t.id, at);
   } else if (reqPos?.length === 4 && reqPos.every(Number.isFinite)) {
     setMode('walk', [...reqPos, 65]);
   } else if (reqCam?.length === 6 && reqCam.every(Number.isFinite)) {

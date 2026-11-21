@@ -17,7 +17,7 @@
         <span class="brand-symbol" data-icon="brand"></span>
         <span><strong>金明校园</strong><small>河南大学 · 三维漫游</small></span>
       </a>
-      <div class="sidebar-intro"><span class="eyebrow">CAMPUS EXPLORER</span><h1>走近校园的每一处</h1><p>从全景俯瞰，到林荫道上的漫步。</p></div>
+      <div class="sidebar-intro"><span class="eyebrow">CAMPUS EXPLORER</span><h1>走近校园的每一处</h1><p>从全景俯瞰，到林荫道上的漫步。</p><button type="button" class="tour-cta" data-open-tour><span data-icon="play" aria-hidden="true"></span><span><b>校园主题云游</b><small>3 条故事路线 · 自动运镜解说</small></span></button></div>
       <label class="search-box" for="search"><span data-icon="search"></span><input id="search" type="search" placeholder="搜索全校楼宇、宿舍、道路" autocomplete="off"><kbd>/</kbd></label>
       <div class="category-tabs" role="tablist" aria-label="地点分类">
         <button type="button" role="tab" class="active" data-cat="featured" aria-selected="true">重点</button>
@@ -47,6 +47,7 @@
         <button type="button" id="north" class="icon-button north-control" title="朝向正北" aria-label="朝向正北"><span data-icon="north"></span><small>N</small></button>
         <div class="control-pair"><button type="button" id="zoom-in" class="icon-button" title="放大" aria-label="放大" data-icon="plus"></button><button type="button" id="zoom-out" class="icon-button" title="缩小" aria-label="缩小" data-icon="minus"></button></div>
         <button type="button" id="home" class="icon-button" title="回到校园全景" aria-label="回到校园全景" data-icon="target"></button>
+        <button type="button" id="tour" class="icon-button" title="校园主题云游" aria-label="校园主题云游" data-open-tour data-icon="play"></button>
         <button type="button" id="field-views" class="icon-button" title="实景取景点" aria-label="实景取景点" data-icon="camera"></button>
         <button type="button" id="lighting" class="icon-button" title="光照与环境" aria-label="光照与环境" aria-expanded="false" data-icon="sun"></button>
         <button type="button" id="share" class="icon-button" title="复制当前视角链接" aria-label="复制当前视角链接" data-icon="share"></button>
@@ -76,6 +77,15 @@
       </div>
       <div id="minimap" class="minimap" hidden></div>
       <article id="detail" class="detail-card" aria-live="polite" hidden></article>
+      <article id="tour-card" class="tour-card" role="region" aria-label="校园主题云游解说" data-playing="false" hidden>
+        <div class="tour-head"><span class="tour-badge" id="tour-route"></span><span class="tour-step" id="tour-step"></span><button type="button" id="tour-exit" class="tour-exit" aria-label="退出云游" data-icon="close"></button></div>
+        <h2 id="tour-title"></h2>
+        <p id="tour-caption" aria-live="polite"></p>
+        <div class="tour-bar" aria-hidden="true"><i></i></div>
+        <div class="tour-dots" id="tour-dots" aria-hidden="true"></div>
+        <div class="tour-actions"><button type="button" id="tour-prev">‹ 上一站</button><button type="button" id="tour-toggle" class="tour-main" aria-pressed="false">暂停</button><button type="button" id="tour-next">下一站 ›</button><button type="button" id="tour-walk" class="tour-walk">下到地面</button></div>
+      </article>
+      <div id="joystick" class="joystick" role="application" aria-label="单手摇杆：上下推动前进后退，左右推动转向" hidden><span class="joystick-knob"></span></div>
       <div id="street-help" class="street-help" role="group" aria-label="漫游操控" hidden>
         <span class="walk-key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · <kbd>Shift</kbd> 加速 · <kbd>Q</kbd><kbd>E</kbd> 转向 · 拖动环顾</span>
         <span class="walk-touch-hint">滑动环顾 · 点按步进 / 长按连续移动</span>
@@ -101,6 +111,12 @@
     <p class="field-intro">选位置看模型，或打开原始实拍对照。街景呈现的是拍摄时的校园。</p>
     <label class="field-region">取景区域 <select data-region></select></label>
     <div class="field-list"></div>
+  </dialog>
+  <dialog id="tour-dialog" aria-labelledby="tour-dialog-title">
+    <div class="dialog-top"><span class="eyebrow">GUIDED TOUR</span><button type="button" data-close class="icon-button" aria-label="关闭云游路线" data-icon="close"></button></div>
+    <h2 id="tour-dialog-title">校园主题云游</h2>
+    <p class="tour-intro">选一条路线，镜头会按站点自动飞行并配上解说。随时可以暂停、跳站，或者拖动画面接管。</p>
+    <div class="tour-list"></div>
   </dialog>
   <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">
     <div class="dialog-top"><h2 id="photo-title">校园实拍</h2><button type="button" id="close-photos" class="icon-button" aria-label="关闭照片" data-icon="close"></button></div>
