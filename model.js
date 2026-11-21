@@ -564,7 +564,7 @@ export function createModel(stage,data,onFrame,options={}){
   const keys=new Set();
   let drag=null, tapStart=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
   let lightingName='noon', waterMotion=!matchMedia('(prefers-reduced-motion: reduce)').matches, lastWaterTick=0;
-  let shadowFocusCenter=null, walkDrive=0;
+  let shadowFocusCenter=null, walkDrive=0, walkTurn=0;
 
   // Dynamic focused shadow frustum: 160m x 160m high-precision shadow box in walk mode (~4-8cm/texel),
   // full 1840m x 1900m campus coverage in orbit mode.
@@ -767,6 +767,7 @@ export function createModel(stage,data,onFrame,options={}){
   resize();
 
   function setOrbit(target, offset, animate=true){
+    controls.autoRotate=false;
     if(!animate||matchMedia('(prefers-reduced-motion: reduce)').matches){
       tween=null;
       controls.target.copy(target);
@@ -794,6 +795,20 @@ export function createModel(stage,data,onFrame,options={}){
     const center=new T.Vector3(...target),offset=new T.Vector3(...eyePos).sub(center);
     setOrbit(center,offset,false);
   }
+  // Guided-tour camera move: an eased flight that lifts over long hops, then an
+  // optional slow orbital drift while the caption is read. Reduced motion cuts directly.
+  function flyTo(eyePos,target,{duration=2400,drift=0}={}){
+    if(walk.active)return;
+    controls.autoRotate=false;
+    const center=new T.Vector3(...target);
+    const to=new T.Vector3(...eyePos).sub(center).multiplyScalar(Math.max(1,.92/camera.aspect)).add(center);
+    if(duration<=0||matchMedia('(prefers-reduced-motion: reduce)').matches){
+      tween=null;controls.target.copy(center);camera.position.copy(to);controls.update();return;
+    }
+    const from=camera.position.clone();
+    tween={from,fromTarget:controls.target.clone(),to,target:center,start:performance.now(),duration,lift:Math.min(260,from.distanceTo(to)*.22),drift};
+  }
+  function stopDrift(){controls.autoRotate=false;}
   function face(){
     direction.set(Math.sin(walk.yaw)*Math.cos(walk.pitch),Math.sin(walk.pitch),-Math.cos(walk.yaw)*Math.cos(walk.pitch));
     camera.position.copy(walk.position);
@@ -823,6 +838,7 @@ export function createModel(stage,data,onFrame,options={}){
   }
   function enterWalk(x,z,yaw,pitch=.005,fov=65,lens=null){
     controls.enabled=false;
+    controls.autoRotate=false;
     tween=null;
     walk.active=true;
     walk.eyeHeight=lens?.eye??1.70;walk.horizontal=lens?.horizontal??0;
@@ -861,6 +877,7 @@ export function createModel(stage,data,onFrame,options={}){
     const wx=walk.position.x, wz=walk.position.z, wyaw=walk.yaw;
     walk.active=false;
     walkDrive=0;
+    walkTurn=0;
     keys.clear();
     controls.enabled=true;
     camera.fov=46;
@@ -877,6 +894,7 @@ export function createModel(stage,data,onFrame,options={}){
   stage.addEventListener('pointerdown',event=>{
     stage.focus({preventScroll:true});
     tween=null;
+    controls.autoRotate=false;
     if(event.button===0){
       tapStart={id:event.pointerId,x:event.clientX,y:event.clientY,t:performance.now()};
     }
@@ -909,10 +927,10 @@ export function createModel(stage,data,onFrame,options={}){
     }
   });
   window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
-  stage.addEventListener('blur',()=>{keys.clear();walkDrive=0;});
+  stage.addEventListener('blur',()=>{keys.clear();walkDrive=0;walkTurn=0;});
   stage.addEventListener('wheel',e=>{
     if(walk.active){e.preventDefault();zoom(e.deltaY<0?1:-1);}
-    else tween=null;
+    else {tween=null;controls.autoRotate=false;}
   },{passive:false});
   function zoom(amount){
     if(walk.active){
@@ -958,7 +976,7 @@ export function createModel(stage,data,onFrame,options={}){
       const has=(a,b)=>keys.has(a)||keys.has(b);
       let move=Number(has('w','arrowup'))-Number(has('s','arrowdown'))+walkDrive;
       let side=Number(has('d','arrowright'))-Number(has('a','arrowleft'));
-      const turn=Number(keys.has('e'))-Number(keys.has('q'));
+      const turn=Number(keys.has('e'))-Number(keys.has('q'))+walkTurn;
       if(turn)walk.yaw+=turn*dt*1.65;
       const mag=Math.hypot(move,side);
       if(mag>1){move/=mag;side/=mag;}
@@ -967,10 +985,15 @@ export function createModel(stage,data,onFrame,options={}){
       face();
     }else{
       if(tween){
-        const p=Math.min(1,(time-tween.start)/540), q=1-(1-p)**3;
+        const p=Math.min(1,(time-tween.start)/(tween.duration??540));
+        const q=tween.duration?(p<.5?4*p*p*p:1-(-2*p+2)**3/2):1-(1-p)**3;
         camera.position.lerpVectors(tween.from,tween.to,q);
         controls.target.lerpVectors(tween.fromTarget,tween.target,q);
-        if(p===1)tween=null;
+        if(tween.lift)camera.position.y+=Math.sin(Math.PI*q)*tween.lift;
+        if(p===1){
+          if(tween.drift){controls.autoRotate=true;controls.autoRotateSpeed=tween.drift;}
+          tween=null;
+        }
       }
       controls.update();
     }
@@ -998,9 +1021,10 @@ export function createModel(stage,data,onFrame,options={}){
   }
   home(false);
   renderer.setAnimationLoop(frame);
-  return {focus,lookFrom,setOrbitPose,home,zoom,north,enterWalk,exitWalk,step,teleportWalk,
+  return {focus,lookFrom,setOrbitPose,flyTo,stopDrift,home,zoom,north,enterWalk,exitWalk,step,teleportWalk,
     setLighting,setWaterMotion(on){waterMotion=Boolean(on);lastView='';},
-    setWalkDrive(dir){walkDrive=dir;},
+    // dir: forward/back drive (-1..1); turn: yaw rate (-1..1) for the touch joystick.
+    setWalkDrive(dir,turn=0){walkDrive=dir;walkTurn=turn;},
     highlightBuilding,setRoute,getView,
     getDiagnostics(){
       let vertices=0,invalid=0;
@@ -1017,6 +1041,6 @@ export function createModel(stage,data,onFrame,options={}){
         buildings:details?.buildingDetails?.stats,landscape:details?.landscapeDetails?.stats,
         drawCalls:renderer.info?.render.calls,triangles:renderer.info?.render.triangles};
     },
-    setVisible(value){visible=value;keys.clear();walkDrive=0;if(value){lastView='';resize();}}
+    setVisible(value){visible=value;keys.clear();walkDrive=0;walkTurn=0;if(value){lastView='';resize();}}
   };
 }
