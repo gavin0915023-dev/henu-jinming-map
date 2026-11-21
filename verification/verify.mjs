@@ -292,9 +292,23 @@ try {
   })()`));
   await capture('route');
   await evaluate("document.querySelector('#route-walk').click()");
+  await settle();
   check('A route can be walked from its start with the radar minimap',await evaluate("document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && document.querySelector('#mode-note').textContent.includes('前往金明校区图书馆') && !document.querySelector('#minimap').hidden && document.querySelector('#minimap canvas').width>0"));
+  check('Live walking navigation shows remaining distance and a directional arrow',await evaluate("(()=>{const n=document.querySelector('#route-nav');return !n.hidden && /剩余 \\d+ 米/.test(document.querySelector('#route-live').textContent) && Number(n.dataset.remaining)>200 && document.querySelector('#route-arrow').style.transform.includes('rotate(')})()"));
+  await capture('route-nav');
+  {
+    const remBefore=await evaluate("Number(document.querySelector('#route-nav').dataset.remaining)");
+    await evaluate("document.querySelector('#route-autoplay').click()");
+    const started=await evaluate("document.querySelector('#route-bar').dataset.auto==='true' && document.querySelector('#route-autoplay').getAttribute('aria-pressed')==='true'");
+    await Promise.all([pause(600),evaluate("new Promise(r=>{let n=0;const f=()=>++n>=8?r():requestAnimationFrame(f);requestAnimationFrame(f)})")]);
+    const remAfter=await evaluate("Number(document.querySelector('#route-nav').dataset.remaining)");
+    await evaluate("document.querySelector('#walk-forward').click()");
+    await settle();
+    const paused=await evaluate("document.querySelector('#route-bar').dataset.auto==='false' && document.querySelector('#route-autoplay').getAttribute('aria-pressed')==='false'");
+    check('Auto-walk advances along the A* route and pauses cleanly on manual takeover',started&&remAfter<remBefore-2&&paused);
+  }
   await evaluate("document.querySelector('#route-clear').click();document.querySelector('#home').click()");
-  check('Closing navigation removes the route bar',await evaluate("document.querySelector('#route-bar').hidden && document.querySelector('#street-help').hidden"));
+  check('Closing navigation removes the route bar',await evaluate("document.querySelector('#route-bar').hidden && document.querySelector('#route-nav').hidden && document.querySelector('#street-help').hidden"));
   await evaluate("document.querySelector('#lighting').click()");
   check('Time-of-day presets switch exclusively between dusk, night and morning',await evaluate(`(()=>{
     if(document.querySelector('#env-panel').hidden||document.querySelector('#lighting').getAttribute('aria-expanded')!=='true')return false;
@@ -469,6 +483,20 @@ try {
   })()`));
   await capture('mobile-tour');
   await evaluate("document.querySelector('#tour-exit').click()");
+  {
+    const expandedH=await evaluate("document.querySelector('#stage').clientHeight");
+    await evaluate("document.querySelector('#sheet-toggle').click()");
+    await settle();
+    const collapsed=await evaluate("(()=>{const s=document.querySelector('.sidebar'),h=document.querySelector('#sheet-toggle').getBoundingClientRect();return {sheet:s.dataset.sheet,stageH:document.querySelector('#stage').clientHeight,btnH:h.height,overflow:document.documentElement.scrollWidth>window.innerWidth}})()");
+    await capture('mobile-collapsed');
+    const [sx,sy]=await evaluate("(()=>{const r=document.querySelector('#sheet-toggle').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()");
+    await call('Input.dispatchMouseEvent',{type:'mousePressed',x:sx,y:sy,button:'left',buttons:1,clickCount:1});
+    await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:sx,y:sy-40,button:'left',buttons:1});
+    await call('Input.dispatchMouseEvent',{type:'mouseReleased',x:sx,y:sy-40,button:'left',buttons:0,clickCount:1});
+    await settle();
+    const reopened=await evaluate("document.querySelector('.sidebar').dataset.sheet==='expanded' && document.querySelector('#place-list .place').getClientRects().length>0");
+    check('Mobile bottom sheet collapses to expand the 3D viewport and reopens on upward swipe',collapsed.sheet==='collapsed'&&collapsed.stageH>expandedH+90&&collapsed.btnH>=44&&!collapsed.overflow&&reopened);
+  }
   await call('Page.addScriptToEvaluateOnNewDocument', { source: "const originalGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type==='webgl2'?null:originalGetContext.call(this,type,...args)}" });
   await evaluate("document.querySelector('#stage').dataset.ready='false'");
   await call('Page.navigate', { url:url+'/?view=cs-entry' });

@@ -12,7 +12,13 @@
 </head>
 <body>
   <main class="campus-app">
-    <aside class="sidebar" aria-label="校园地点导航">
+    <aside class="sidebar" aria-label="校园地点导航" data-sheet="expanded">
+      <div class="sheet-bar">
+        <button type="button" id="sheet-toggle" class="sheet-handle" aria-expanded="true" aria-controls="place-list" aria-label="收起地点目录">
+          <span class="sheet-pill" aria-hidden="true"></span>
+          <span class="sheet-meta"><strong id="sheet-title">地点目录</strong><small id="sheet-hint">下拉或点击收起</small></span>
+        </button>
+      </div>
       <a class="brand" href="./" aria-label="返回校园全景">
         <span class="brand-symbol" data-icon="brand"></span>
         <span><strong>金明校园</strong><small>河南大学 · 三维漫游</small></span>
@@ -63,16 +69,24 @@
         </div>
         <label class="env-toggle"><input type="checkbox" id="water-motion" checked><span>湖面微风水波</span></label>
       </div>
-      <div id="route-bar" class="route-bar" role="region" aria-label="校内步行导航" hidden>
+      <div id="route-bar" class="route-bar" role="region" aria-label="校内步行导航" data-auto="false" hidden>
         <div class="route-row">
           <select id="route-from" aria-label="导航起点"></select>
           <button type="button" id="route-swap" class="icon-button" title="交换起终点" aria-label="交换起终点" data-icon="swap"></button>
           <select id="route-to" aria-label="导航终点"></select>
           <button type="button" id="route-clear" class="icon-button" title="关闭导航" aria-label="关闭导航" data-icon="close"></button>
         </div>
+        <div id="route-nav" class="route-nav" hidden>
+          <span class="route-arrow" id="route-arrow" aria-hidden="true">↑</span>
+          <span id="route-live" aria-live="polite">沿路直行</span>
+          <div class="route-progress" aria-hidden="true"><i id="route-progress-fill"></i></div>
+        </div>
         <div class="route-meta">
           <span id="route-summary" aria-live="polite">正在规划步行路线…</span>
-          <button type="button" id="route-walk" class="route-go">从起点漫游</button>
+          <div class="route-actions">
+            <button type="button" id="route-walk" class="route-go">从起点漫游</button>
+            <button type="button" id="route-autoplay" class="route-auto" aria-pressed="false">自动沿路走</button>
+          </div>
         </div>
       </div>
       <div id="minimap" class="minimap" hidden></div>

@@ -2,7 +2,7 @@ import { createModel } from './model.js';
 import { fieldViews, mountFieldViews, walks } from './field-views.js';
 import { imageryLayer, addCampusBasemap } from './satellite.js';
 import { cuitingCenter } from './campus-commons.js';
-import { createCampusRouter } from './routing.js';
+import { createCampusRouter, routeProgress } from './routing.js';
 import { createMinimap } from './minimap.js';
 import { tours, createTourController, DWELL } from './tour.js';
 
@@ -95,7 +95,7 @@ stage.after(satelliteHost);
 
 const pinMap = new Map();
 let active = null, activeView = null, mode = 'model', model = null, satellite = null, satelliteTiles = null, campus = null;
-let router = null, minimap = null, activeRoute = null, satelliteRouteLine = null, satelliteMoved = false;
+let router = null, minimap = null, activeRoute = null, routeArrivedNotified = false, satelliteRouteLine = null, satelliteMoved = false;
 let currentLighting = 'noon', imageryFrame = 0, noticeTimer;
 let tourCtl = null, tourDriving = false, tourPrevLighting = null, resetJoystick = null;
 
@@ -203,6 +203,8 @@ function renderPlaces() {
     matches = allPlaces.filter(p => p.category === activeCategory);
   }
   $('#place-count').textContent = matches.length + ' 个地点';
+  const sheetTitle = $('#sheet-title');
+  if (sheetTitle) sheetTitle.textContent = active ? '当前：' + active.name : '地点目录 · ' + matches.length + ' 处';
   const list = $('#place-list');
   list.replaceChildren();
   for (const p of matches) {
@@ -364,6 +366,7 @@ function updateLabels(project, bearing, mpp, { w, h }, walking = false, walkPose
     $('#scale').style.setProperty('--scale', Math.min(n / mpp, 105) + 'px');
   }
   if (walking && walkPose && minimap) minimap.update(walkPose);
+  updateRouteNav(walking ? walkPose : null);
   const occupied = [];
   for (const p of [...places].sort((a, b) => +(b === active) - +(a === active))) {
     const pin = pinMap.get(p.id);
@@ -492,6 +495,7 @@ function setMode(next, walkPose, item = null) {
   resetJoystick?.();
   $('#map-photos').hidden = mode !== 'walk';
   $('#minimap').hidden = mode !== 'walk' || !minimap;
+  if (mode !== 'walk') updateRouteNav(null);
   $('#notice').hidden = true;
   pinMap.forEach(pin => pin.hidden = true);
   satelliteHost.hidden = mode !== 'satellite';
@@ -535,9 +539,11 @@ function setMode(next, walkPose, item = null) {
     model.enterWalk(...(walkPose ?? (active ?? places[0]).walk));
     const v = model.getView();
     minimap?.update({ x: v.x, z: v.z, yaw: v.yaw });
+    updateRouteNav({ x: v.x, z: v.z, yaw: v.yaw });
     stage.focus({ preventScroll: true });
     return;
   }
+  updateRouteNav(null);
 
   if (model) {
     const keepSpot = prevMode === 'walk' && !active && !item?.orbit;
@@ -584,14 +590,51 @@ function resolveRouteEndpoint(val) {
   return allPlaces.find(p => p.id === val) ?? null;
 }
 
+function syncAutoWalkButton(running) {
+  const btn = $('#route-autoplay');
+  btn.setAttribute('aria-pressed', String(running));
+  btn.classList.toggle('active', running);
+  btn.textContent = running ? '暂停自动走' : '自动沿路走';
+  $('#route-bar').dataset.auto = String(running);
+}
+
+function updateRouteNav(walkPose) {
+  const box = $('#route-nav');
+  if (!box) return;
+  if (mode !== 'walk' || !activeRoute?.points || activeRoute.points.length < 2 || !walkPose) {
+    box.hidden = true;
+    return;
+  }
+  const nav = routeProgress(activeRoute.points, walkPose.x, walkPose.z, walkPose.yaw);
+  if (!nav) { box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.toggle('arrived', nav.arrived);
+  box.dataset.remaining = String(nav.remaining);
+  box.dataset.arrived = String(nav.arrived);
+  const arrow = $('#route-arrow');
+  arrow.textContent = nav.arrived ? '✓' : '↑';
+  arrow.style.transform = nav.arrived ? '' : `rotate(${nav.relDeg}deg)`;
+  $('#route-live').textContent = nav.arrived
+    ? `已到达${activeRoute.to.name}附近`
+    : `${nav.hint} · 剩余 ${nav.remaining} 米 · ${nav.minutes > 0 ? `约 ${nav.minutes} 分钟` : '不足 1 分钟'}`;
+  $('#route-progress-fill').style.width = (nav.progress * 100).toFixed(1) + '%';
+  if (nav.arrived && !routeArrivedNotified) {
+    routeArrivedNotified = true;
+    notice(`已抵达${activeRoute.to.name}附近`, 3200);
+  }
+}
+
 function updateActiveRoute(frameResult = false) {
   if (!router) return;
+  model?.stopRouteWalk(true);
+  routeArrivedNotified = false;
   const from = resolveRouteEndpoint($('#route-from').value);
   const to = resolveRouteEndpoint($('#route-to').value);
   if (!from || !to) return;
   const result = router.findRoute([from.x, from.z], [to.x, to.z]);
   if (!result) {
     $('#route-summary').textContent = '暂未找到连通的步行路线';
+    updateRouteNav(null);
     return;
   }
   activeRoute = { ...result, from, to };
@@ -599,6 +642,12 @@ function updateActiveRoute(frameResult = false) {
   model?.setRoute(result.points);
   minimap?.setRoute(result.points);
   syncSatelliteRoute();
+  if (mode === 'walk' && model) {
+    const v = model.getView();
+    updateRouteNav({ x: v.x, z: v.z, yaw: v.yaw });
+  } else {
+    updateRouteNav(null);
+  }
   if (frameResult && model && mode === 'model') {
     const xs = result.points.map(p => p[0]), zs = result.points.map(p => p[1]);
     const mx = (Math.min(...xs) + Math.max(...xs)) / 2, mz = (Math.min(...zs) + Math.max(...zs)) / 2;
@@ -624,8 +673,12 @@ function openRouteTo(dest) {
 }
 
 function clearRoute() {
+  model?.stopRouteWalk(true);
+  syncAutoWalkButton(false);
   activeRoute = null;
+  routeArrivedNotified = false;
   $('#route-bar').hidden = true;
+  updateRouteNav(null);
   model?.setRoute(null);
   minimap?.setRoute(null);
   syncSatelliteRoute();
@@ -642,10 +695,46 @@ $('#route-swap').onclick = () => {
 $('#route-clear').onclick = clearRoute;
 $('#route-walk').onclick = () => {
   if (!activeRoute?.points?.length) return;
-  const p0 = activeRoute.points[0], p1 = activeRoute.points[1] ?? p0;
-  const yaw = Math.atan2(p1[0] - p0[0], -(p1[1] - p0[1]));
-  setMode('walk', [p0[0], p0[1], yaw, 0.04, 65]);
+  routeArrivedNotified = false;
+  const pose = model?.routeStartPose(activeRoute.points);
+  if (pose) {
+    setMode('walk', pose);
+  } else {
+    const p0 = activeRoute.points[0], p1 = activeRoute.points[1] ?? p0;
+    const yaw = Math.atan2(p1[0] - p0[0], -(p1[1] - p0[1]));
+    setMode('walk', [p0[0], p0[1], yaw, 0.04, 65]);
+  }
   $('#mode-note').textContent = `步行导航 · 前往${activeRoute.to.name}`;
+};
+$('#route-autoplay').onclick = () => {
+  if (!activeRoute?.points?.length || !model) return;
+  if (model.isRouteWalking()) {
+    model.stopRouteWalk(true);
+    return;
+  }
+  if (tourCtl?.active) tourCtl.exit();
+  const resumeCurrent = mode === 'walk';
+  if (!resumeCurrent) {
+    const pose = model.routeStartPose(activeRoute.points);
+    if (pose) setMode('walk', pose);
+  }
+  routeArrivedNotified = false;
+  const started = model.startRouteWalk(activeRoute.points, {
+    speed: 14,
+    startDist: resumeCurrent ? null : 0,
+    onState: syncAutoWalkButton,
+    onArrive() {
+      routeArrivedNotified = true;
+      const v = model.getView();
+      updateRouteNav({ x: v.x, z: v.z, yaw: v.yaw });
+      notice(`已沿步行路线抵达${activeRoute.to.name}附近`, 3500);
+    }
+  });
+  if (started) {
+    $('#mode-note').textContent = `自动导航 · 前往${activeRoute.to.name}`;
+    const v = model.getView();
+    updateRouteNav({ x: v.x, z: v.z, yaw: v.yaw });
+  }
 };
 
 /* Lighting & Atmosphere Controls */
@@ -741,9 +830,49 @@ search.addEventListener('keydown', e => {
   if (e.key === 'Enter') $('#place-list .place')?.click();
   if (e.key === 'Escape') { search.value = ''; renderPlaces(); search.blur(); }
 });
+/* Mobile collapsible & draggable bottom sheet drawer */
+const sidebarEl = $('.sidebar'), sheetToggle = $('#sheet-toggle');
+function setSheetCollapsed(collapsed) {
+  sidebarEl.classList.toggle('collapsed', collapsed);
+  sidebarEl.dataset.sheet = collapsed ? 'collapsed' : 'expanded';
+  sheetToggle.setAttribute('aria-expanded', String(!collapsed));
+  sheetToggle.setAttribute('aria-label', collapsed ? '展开地点目录' : '收起地点目录');
+  $('#sheet-hint').textContent = collapsed ? '上拉或点击展开 ▲' : '下拉或点击收起';
+  if (mode === 'satellite') requestAnimationFrame(() => satellite?.invalidateSize());
+}
+{
+  let startY = null, dragged = false, pointerId = null;
+  sheetToggle.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    startY = e.clientY; dragged = false; pointerId = e.pointerId;
+    sheetToggle.setPointerCapture(e.pointerId);
+  });
+  sheetToggle.addEventListener('pointermove', e => {
+    if (pointerId !== e.pointerId || startY === null) return;
+    const dy = e.clientY - startY;
+    if (Math.abs(dy) > 22) {
+      dragged = true;
+      setSheetCollapsed(dy > 0);
+      startY = null; pointerId = null;
+    }
+  });
+  const finishDrag = e => {
+    if (pointerId !== e.pointerId) return;
+    startY = null; pointerId = null;
+    if (dragged) setTimeout(() => { dragged = false; }, 80);
+  };
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) sheetToggle.addEventListener(ev, finishDrag);
+  sheetToggle.onclick = () => {
+    if (dragged) { dragged = false; return; }
+    setSheetCollapsed(!sidebarEl.classList.contains('collapsed'));
+  };
+}
+
 document.addEventListener('keydown', e => {
   if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) {
-    e.preventDefault(); search.focus();
+    e.preventDefault();
+    if (sidebarEl.classList.contains('collapsed')) setSheetCollapsed(false);
+    search.focus();
   }
 });
 

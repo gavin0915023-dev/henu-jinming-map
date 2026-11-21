@@ -564,7 +564,7 @@ export function createModel(stage,data,onFrame,options={}){
   const keys=new Set();
   let drag=null, tapStart=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
   let lightingName='noon', waterMotion=!matchMedia('(prefers-reduced-motion: reduce)').matches, lastWaterTick=0;
-  let shadowFocusCenter=null, walkDrive=0, walkTurn=0;
+  let shadowFocusCenter=null, walkDrive=0, walkTurn=0, routeAuto=null;
 
   // Dynamic focused shadow frustum: 160m x 160m high-precision shadow box in walk mode (~4-8cm/texel),
   // full 1840m x 1900m campus coverage in orbit mode.
@@ -721,15 +721,15 @@ export function createModel(stage,data,onFrame,options={}){
       g.setIndex(indices);
       return new T.Mesh(g,new T.MeshBasicMaterial({color,side:T.DoubleSide}));
     };
-    const halo=buildRibbon(3.4,1.22,'#143d30');
-    const core=buildRibbon(2.1,1.28,'#2ee6a6');
+    const halo=buildRibbon(2.4,0.88,'#143d30');
+    const core=buildRibbon(1.5,0.92,'#2ee6a6');
     if(halo)routeGroup.add(halo);
     if(core)routeGroup.add(core);
     // Round joint discs at bends
-    const jointGeo=new T.CircleGeometry(1.08,12);jointGeo.rotateX(-Math.PI/2);
+    const jointGeo=new T.CircleGeometry(.76,12);jointGeo.rotateX(-Math.PI/2);
     const jointMat=new T.MeshBasicMaterial({color:'#2ee6a6'});
     for(const [x,z] of points){
-      const d=new T.Mesh(jointGeo,jointMat);d.position.set(x,1.29,z);routeGroup.add(d);
+      const d=new T.Mesh(jointGeo,jointMat);d.position.set(x,.93,z);routeGroup.add(d);
     }
     // Start & end beacons
     const [sx,sz]=points[0],[ex,ez]=points[points.length-1];
@@ -814,8 +814,92 @@ export function createModel(stage,data,onFrame,options={}){
     camera.position.copy(walk.position);
     camera.lookAt(camera.position.clone().add(direction));
   }
+  function stopRouteWalk(notify=true){
+    if(!routeAuto)return;
+    const cb=routeAuto.onState;
+    routeAuto=null;
+    if(notify)cb?.(false);
+  }
+  function samplePolyline(points,cum,dist){
+    const lastIdx=points.length-1, d=T.MathUtils.clamp(dist,0,cum[lastIdx]);
+    for(let i=0;i<lastIdx;i++){
+      if(cum[i+1]>=d){
+        const len=cum[i+1]-cum[i], u=len>1e-6?(d-cum[i])/len:0;
+        return [points[i][0]+(points[i+1][0]-points[i][0])*u,points[i][1]+(points[i+1][1]-points[i][1])*u];
+      }
+    }
+    return [points[lastIdx][0],points[lastIdx][1]];
+  }
+  function routeStartPose(points){
+    if(!points||points.length<2)return null;
+    const n=points.length, cum=new Float64Array(n);
+    for(let i=1;i<n;i++)cum[i]=cum[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
+    const total=cum[n-1];
+    if(total<1)return [points[0][0],points[0][1],0,.04,65];
+    // Start slightly ahead of the start beacon and clear of any building/gate wall footprint.
+    let dist=Math.min(total*.15,3.5);
+    const maxSkip=Math.min(total,dist+60);
+    let [sx,sz]=samplePolyline(points,cum,dist);
+    const clear=(x,z)=>!obstructed(x,z)&&!obstructed(x+1.2,z)&&!obstructed(x-1.2,z)&&!obstructed(x,z+1.2)&&!obstructed(x,z-1.2);
+    while(dist<maxSkip&&!clear(sx,sz)){
+      dist=Math.min(maxSkip,dist+2);
+      [sx,sz]=samplePolyline(points,cum,dist);
+    }
+    const [lx,lz]=samplePolyline(points,cum,Math.min(total,dist+14));
+    const yaw=Math.hypot(lx-sx,lz-sz)>.3?Math.atan2(lx-sx,-(lz-sz)):0;
+    return [sx,sz,yaw,-.01,65];
+  }
+  function startRouteWalk(points,{speed=14,startDist=null,onState=null,onArrive=null}={}){
+    if(!points||points.length<2)return false;
+    const n=points.length, cum=new Float64Array(n);
+    for(let i=1;i<n;i++)cum[i]=cum[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
+    const total=cum[n-1];
+    if(total<1)return false;
+    let dist=0;
+    if(startDist!==null&&Number.isFinite(startDist)){
+      dist=T.MathUtils.clamp(startDist,0,total);
+    }else if(walk.active){
+      let bestDist=0, bestD2=Infinity;
+      for(let i=0;i<n-1;i++){
+        const ax=points[i][0],az=points[i][1],bx=points[i+1][0],bz=points[i+1][1];
+        const dx=bx-ax,dz=bz-az,len2=dx*dx+dz*dz;
+        const t=len2>1e-8?Math.max(0,Math.min(1,((walk.position.x-ax)*dx+(walk.position.z-az)*dz)/len2)):0;
+        const px=ax+dx*t,pz=az+dz*t,d2=(walk.position.x-px)**2+(walk.position.z-pz)**2;
+        if(d2<bestD2){bestD2=d2;bestDist=cum[i]+t*(cum[i+1]-cum[i]);}
+      }
+      dist=bestD2<55*55&&bestDist<total-22?bestDist:0;
+    }
+    if(dist<3.5)dist=Math.min(total*.15,3.5);
+    // Skip any short building-center or gate-wall stub so the camera starts cleanly outdoors on the road.
+    let [sx,sz]=samplePolyline(points,cum,dist);
+    const maxSkip=Math.min(total,dist+60);
+    const clear=(x,z)=>!obstructed(x,z)&&!obstructed(x+1.2,z)&&!obstructed(x-1.2,z)&&!obstructed(x,z+1.2)&&!obstructed(x,z-1.2);
+    while(dist<maxSkip&&!clear(sx,sz)){
+      dist=Math.min(maxSkip,dist+2);
+      [sx,sz]=samplePolyline(points,cum,dist);
+    }
+    const [lx,lz]=samplePolyline(points,cum,Math.min(total,dist+14));
+    const initYaw=Math.hypot(lx-sx,lz-sz)>.3?Math.atan2(lx-sx,-(lz-sz)):walk.yaw;
+    if(!walk.active){
+      enterWalk(sx,sz,initYaw,-.01,65);
+    }else{
+      stopRouteWalk(false);
+      if(Math.hypot(walk.position.x-sx,walk.position.z-sz)>6){
+        walk.position.set(sx,eye(sx,sz),sz);
+        walk.yaw=initYaw;
+        walk.pitch=-.01;
+      }
+      updateShadowFrustum(true);
+      face();
+    }
+    routeAuto={points,cum,total,dist,speed,onState,onArrive};
+    onState?.(true);
+    lastView='';
+    return true;
+  }
   // Smooth wall-sliding movement: if diagonal step hits an obstacle, slide along X or Z independently.
   function step(metres, side=0){
+    if(routeAuto)stopRouteWalk(true);
     const dx=Math.sin(walk.yaw)*metres+Math.cos(walk.yaw)*side;
     const dz=-Math.cos(walk.yaw)*metres+Math.sin(walk.yaw)*side;
     const n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.18));
@@ -837,6 +921,7 @@ export function createModel(stage,data,onFrame,options={}){
     updateShadowFrustum(false);
   }
   function enterWalk(x,z,yaw,pitch=.005,fov=65,lens=null){
+    stopRouteWalk(true);
     controls.enabled=false;
     controls.autoRotate=false;
     tween=null;
@@ -854,6 +939,7 @@ export function createModel(stage,data,onFrame,options={}){
   }
   function teleportWalk(x,z){
     if(!walk.active)return false;
+    stopRouteWalk(true);
     // If clicked spot is obstructed, spiral out gently up to 24m to find nearest walkable spot
     let tx=T.MathUtils.clamp(x,-extent,extent), tz=T.MathUtils.clamp(z,-extent,extent);
     if(obstructed(tx,tz)){
@@ -873,6 +959,7 @@ export function createModel(stage,data,onFrame,options={}){
     return true;
   }
   function exitWalk(preserveSpot=false){
+    stopRouteWalk(true);
     if(!walk.active)return;
     const wx=walk.position.x, wz=walk.position.z, wyaw=walk.yaw;
     walk.active=false;
@@ -899,6 +986,7 @@ export function createModel(stage,data,onFrame,options={}){
       tapStart={id:event.pointerId,x:event.clientX,y:event.clientY,t:performance.now()};
     }
     if(!walk.active||event.button!==0)return;
+    if(routeAuto)stopRouteWalk(true);
     drag={id:event.pointerId,x:event.clientX,y:event.clientY};
     stage.setPointerCapture(event.pointerId);
   });
@@ -977,11 +1065,40 @@ export function createModel(stage,data,onFrame,options={}){
       let move=Number(has('w','arrowup'))-Number(has('s','arrowdown'))+walkDrive;
       let side=Number(has('d','arrowright'))-Number(has('a','arrowleft'));
       const turn=Number(keys.has('e'))-Number(keys.has('q'))+walkTurn;
-      if(turn)walk.yaw+=turn*dt*1.65;
-      const mag=Math.hypot(move,side);
-      if(mag>1){move/=mag;side/=mag;}
-      const speed=keys.has('shift')?24:13;
-      if(move||side)step(move*dt*speed,side*dt*speed);
+      if(routeAuto&&(move||side||turn))stopRouteWalk(true);
+      if(routeAuto){
+        const nextDist=Math.min(routeAuto.total,routeAuto.dist+dt*routeAuto.speed);
+        const [nx,nz]=samplePolyline(routeAuto.points,routeAuto.cum,nextDist);
+        const nearEnd=routeAuto.total-nextDist<=18;
+        if(nearEnd&&(routeAuto.total-nextDist<=1.5||obstructed(nx,nz))){
+          const endPt=routeAuto.points[routeAuto.points.length-1];
+          if(Math.hypot(endPt[0]-walk.position.x,endPt[1]-walk.position.z)>1){
+            walk.yaw=Math.atan2(endPt[0]-walk.position.x,-(endPt[1]-walk.position.z));
+          }
+          const cb=routeAuto.onArrive;
+          stopRouteWalk(true);
+          cb?.();
+        }else{
+          routeAuto.dist=nextDist;
+          if(!obstructed(nx,nz)){
+            walk.position.set(nx,eye(nx,nz),nz);
+            updateShadowFrustum(false);
+          }
+          const [lx,lz]=samplePolyline(routeAuto.points,routeAuto.cum,Math.min(routeAuto.total,nextDist+14));
+          if(Math.hypot(lx-walk.position.x,lz-walk.position.z)>.5){
+            const targetYaw=Math.atan2(lx-walk.position.x,-(lz-walk.position.z));
+            const diff=Math.atan2(Math.sin(targetYaw-walk.yaw),Math.cos(targetYaw-walk.yaw));
+            walk.yaw+=diff*Math.min(1,dt*6.5);
+          }
+          walk.pitch+=(-.01-walk.pitch)*Math.min(1,dt*3.5);
+        }
+      }else{
+        if(turn)walk.yaw+=turn*dt*1.65;
+        const mag=Math.hypot(move,side);
+        if(mag>1){move/=mag;side/=mag;}
+        const speed=keys.has('shift')?24:13;
+        if(move||side)step(move*dt*speed,side*dt*speed);
+      }
       face();
     }else{
       if(tween){
@@ -1022,9 +1139,10 @@ export function createModel(stage,data,onFrame,options={}){
   home(false);
   renderer.setAnimationLoop(frame);
   return {focus,lookFrom,setOrbitPose,flyTo,stopDrift,home,zoom,north,enterWalk,exitWalk,step,teleportWalk,
+    routeStartPose,startRouteWalk,stopRouteWalk,isRouteWalking(){return Boolean(routeAuto);},
     setLighting,setWaterMotion(on){waterMotion=Boolean(on);lastView='';},
     // dir: forward/back drive (-1..1); turn: yaw rate (-1..1) for the touch joystick.
-    setWalkDrive(dir,turn=0){walkDrive=dir;walkTurn=turn;},
+    setWalkDrive(dir,turn=0){walkDrive=dir;walkTurn=turn;if((dir||turn)&&routeAuto)stopRouteWalk(true);},
     highlightBuilding,setRoute,getView,
     getDiagnostics(){
       let vertices=0,invalid=0;
@@ -1041,6 +1159,6 @@ export function createModel(stage,data,onFrame,options={}){
         buildings:details?.buildingDetails?.stats,landscape:details?.landscapeDetails?.stats,
         drawCalls:renderer.info?.render.calls,triangles:renderer.info?.render.triangles};
     },
-    setVisible(value){visible=value;keys.clear();walkDrive=0;walkTurn=0;if(value){lastView='';resize();}}
+    setVisible(value){visible=value;keys.clear();walkDrive=0;walkTurn=0;if(!value)stopRouteWalk(true);if(value){lastView='';resize();}}
   };
 }

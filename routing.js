@@ -363,3 +363,61 @@ export function createCampusRouter(data) {
 
   return { findRoute, streetPoseFor };
 }
+
+// Project a walking pose onto a planned polyline to drive live turn guidance and progress.
+export function routeProgress(points, x, z, yaw = 0) {
+  if (!points || points.length < 2) return null;
+  const n = points.length;
+  const cum = new Float64Array(n);
+  for (let i = 1; i < n; i++) {
+    cum[i] = cum[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  }
+  const total = cum[n - 1];
+  let bestSeg = 0, bestProj = { x: points[0][0], z: points[0][1], t: 0, d2: Infinity };
+  for (let i = 0; i < n - 1; i++) {
+    const pr = pointToSeg(x, z, points[i][0], points[i][1], points[i + 1][0], points[i + 1][1]);
+    if (pr.d2 < bestProj.d2) { bestProj = pr; bestSeg = i; }
+  }
+  const segLen = cum[bestSeg + 1] - cum[bestSeg];
+  const traveled = cum[bestSeg] + bestProj.t * segLen;
+  const remaining = Math.max(0, total - traveled);
+  const end = points[n - 1];
+  const directEnd = Math.hypot(end[0] - x, end[1] - z);
+  const arrived = remaining <= 16 || directEnd <= 18;
+
+  // Sample a lookahead target ~14m ahead along the route for stable directional arrows.
+  const lookDist = Math.min(total, traveled + 14);
+  let lx = end[0], lz = end[1];
+  for (let i = 0; i < n - 1; i++) {
+    if (cum[i + 1] >= lookDist) {
+      const len = cum[i + 1] - cum[i];
+      const u = len > 1e-6 ? (lookDist - cum[i]) / len : 0;
+      lx = points[i][0] + (points[i + 1][0] - points[i][0]) * u;
+      lz = points[i][1] + (points[i + 1][1] - points[i][1]) * u;
+      break;
+    }
+  }
+  if (Math.hypot(lx - x, lz - z) < 1.5) { lx = end[0]; lz = end[1]; }
+  const targetYaw = Math.atan2(lx - x, -(lz - z));
+  const rel = Math.atan2(Math.sin(targetYaw - yaw), Math.cos(targetYaw - yaw));
+  let hint;
+  if (arrived) hint = '已到达附近';
+  else if (Math.abs(rel) < 0.38) hint = '沿路直行';
+  else if (rel >= 0.38 && rel < 1.35) hint = '向右前方';
+  else if (rel >= 1.35 && rel < 2.35) hint = '向右转';
+  else if (rel <= -0.38 && rel > -1.35) hint = '向左前方';
+  else if (rel <= -1.35 && rel > -2.35) hint = '向左转';
+  else hint = '请掉头';
+
+  return {
+    remaining: Math.round(remaining),
+    minutes: remaining < 38 ? 0 : Math.max(1, Math.round(remaining / 75)),
+    progress: total > 0 ? Math.min(1, Math.max(0, traveled / total)) : 1,
+    relDeg: Number((rel * 180 / Math.PI).toFixed(1)),
+    hint,
+    arrived,
+    offRoute: Math.round(Math.sqrt(bestProj.d2)),
+    traveled,
+    total
+  };
+}
