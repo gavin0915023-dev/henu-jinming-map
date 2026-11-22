@@ -244,6 +244,42 @@ input::-webkit-search-cancel-button { cursor: pointer; }
   overflow: hidden;
 }
 
+/* Minimalist dynamic FPS crosshair in first-person free walk */
+.fps-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: .72;
+  transition: opacity .15s;
+}
+.fps-crosshair.locked { opacity: .94; }
+.fps-crosshair span {
+  position: absolute;
+  left: -1.5px;
+  top: -1.5px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #ffffffeb;
+  box-shadow: 0 0 0 1px #14281eb8;
+}
+.fps-crosshair i {
+  position: absolute;
+  background: #ffffffdc;
+  box-shadow: 0 0 2px #14281ec4;
+  border-radius: 1px;
+  transition: transform .08s ease-out;
+}
+.fps-crosshair i:nth-of-type(1) { width: 1.5px; height: 6px; left: -.75px; top: -6px; transform: translateY(calc(var(--spread, 5px) * -1)); }
+.fps-crosshair i:nth-of-type(2) { width: 1.5px; height: 6px; left: -.75px; top: 0; transform: translateY(var(--spread, 5px)); }
+.fps-crosshair i:nth-of-type(3) { width: 6px; height: 1.5px; top: -.75px; left: -6px; transform: translateX(calc(var(--spread, 5px) * -1)); }
+.fps-crosshair i:nth-of-type(4) { width: 6px; height: 1.5px; top: -.75px; left: 0; transform: translateX(var(--spread, 5px)); }
+
 .viewport-top {
   position: absolute;
   left: 25px;
@@ -668,6 +704,12 @@ input::-webkit-search-cancel-button { cursor: pointer; }
   user-select: none;
 }
 .street-help button:hover { background: #e2ecdb; }
+.street-help button[aria-pressed="true"] {
+  background: var(--green);
+  border-color: var(--green);
+  color: #f4f7eb;
+}
+.street-help button[aria-pressed="true"]:hover { background: #2f604e; }
 .walk-touch-hint { display: none; }
 #walk-route {
   display: flex;
@@ -730,8 +772,13 @@ input::-webkit-search-cancel-button { cursor: pointer; }
   color: #f4fbf8;
 }
 .viewport[data-lighting="night"] .detail-walk:hover,
-.viewport[data-lighting="night"] .street-help button:hover,
+.viewport[data-lighting="night"] .street-help button:not([aria-pressed="true"]):hover,
 .viewport[data-lighting="night"] .env-presets button:hover:not(.active) { background: #2d435a; }
+.viewport[data-lighting="night"] .street-help button[aria-pressed="true"] {
+  background: #2f7d61;
+  border-color: #3d9a78;
+  color: #f4fbf8;
+}
 .viewport[data-lighting="night"] .street-help {
   background: #182330eb;
   border-color: #4e6b854d;
@@ -1228,17 +1275,20 @@ dialog a { color: #466d4b; text-underline-offset: 4px; }
   .walk-key-hint { display: none; }
   .walk-touch-hint { display: inline; }
   .street-help {
-    padding: 8px 12px;
+    padding: 8px 10px;
     bottom: max(12px, env(safe-area-inset-bottom));
+    max-width: calc(100% - 16px);
   }
   .street-help > span { font-size: 11px; }
-  .street-help > div { margin-top: 6px; }
+  .street-help > div { margin-top: 6px; gap: 5px; }
   .street-help button {
     min-height: 44px;
-    min-width: 48px;
-    font-size: 12px;
+    min-width: 44px;
+    padding: 6px 8px;
+    font-size: 11px;
     touch-action: manipulation;
   }
+  #walk-fps { display: none; }
   .mode-switch button { min-width: 44px; min-height: 44px; }
   .joystick {
     display: block;

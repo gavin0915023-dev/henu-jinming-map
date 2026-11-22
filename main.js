@@ -378,6 +378,17 @@ function updateLabels(project, bearing, mpp, { w, h }, walking = false, walkPose
   }
   if (walking && walkPose && minimap) minimap.update(walkPose);
   updateRouteNav(walking ? walkPose : null);
+  const reticle = $('#fps-crosshair');
+  if (reticle) {
+    const showFps = walking && walkPose?.cameraMode === 'fps' && !activeView;
+    reticle.hidden = !showFps;
+    if (showFps) {
+      const spread = 5 + Math.min(4, (walkPose.speed ?? 0) * .28) + (walkPose.sprinting ? 3.5 : 0) + (walkPose.grounded === false ? 6 : 0);
+      reticle.style.setProperty('--spread', spread.toFixed(1) + 'px');
+      reticle.dataset.airborne = String(walkPose.grounded === false);
+    }
+    stage.dataset.jumpY = walking ? (walkPose?.jumpY ?? 0).toFixed(2) : '0.00';
+  }
   const occupied = [];
   for (const p of [...places].sort((a, b) => +(b === active) - +(a === active))) {
     const pin = pinMap.get(p.id);
@@ -506,6 +517,7 @@ function setMode(next, walkPose, item = null) {
   resetJoystick?.();
   $('#map-photos').hidden = mode !== 'walk';
   $('#minimap').hidden = mode !== 'walk' || !minimap;
+  syncWalkHud();
   if (mode !== 'walk') updateRouteNav(null);
   $('#notice').hidden = true;
   pinMap.forEach(pin => pin.hidden = true);
@@ -880,10 +892,22 @@ function setSheetCollapsed(collapsed) {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+  if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
     e.preventDefault();
     if (sidebarEl.classList.contains('collapsed')) setSheetCollapsed(false);
     search.focus();
+    return;
+  }
+  if (mode === 'walk' && !tourCtl?.active && !document.querySelector('dialog[open]')) {
+    if ((e.code === 'Space' || e.key === ' ') && !(e.target instanceof HTMLButtonElement)) {
+      e.preventDefault();
+      model?.jump();
+    } else if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      $('#walk-cam').click();
+    } else if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      $('#walk-fps').click();
+    }
   }
 });
 
@@ -926,6 +950,47 @@ function bindWalkButton(selector, dir) {
 bindWalkButton('#walk-forward', 1);
 bindWalkButton('#walk-back', -1);
 
+function syncWalkHud() {
+  const cam = model?.getWalkCamera?.() ?? 'fps';
+  const locked = Boolean(model?.isPointerLocked?.());
+  stage.dataset.walkCamera = cam;
+  const camBtn = $('#walk-cam');
+  camBtn.setAttribute('aria-pressed', String(cam === 'third'));
+  camBtn.textContent = cam === 'third' ? '第一人称' : '第三人称';
+  const fpsBtn = $('#walk-fps');
+  fpsBtn.setAttribute('aria-pressed', String(locked));
+  fpsBtn.textContent = locked ? '退出锁定' : 'FPS 锁定';
+  const reticle = $('#fps-crosshair');
+  reticle.classList.toggle('locked', locked);
+  reticle.hidden = mode !== 'walk' || cam !== 'fps' || Boolean(activeView);
+  if (mode === 'walk' && !activeView && !activeRoute) {
+    $('#mode-note').textContent = cam === 'third' ? '第三人称 · 校园漫步' : '第一人称 · 模拟街景';
+  }
+}
+$('#walk-jump').onclick = () => {
+  model?.jump();
+  stage.focus({ preventScroll: true });
+};
+$('#walk-cam').onclick = () => {
+  if (!model || mode !== 'walk') return;
+  const next = model.getWalkCamera() === 'fps' ? 'third' : 'fps';
+  model.setWalkCamera(next);
+  syncWalkHud();
+  stage.focus({ preventScroll: true });
+};
+$('#walk-fps').onclick = () => {
+  if (!model || mode !== 'walk') return;
+  if (model.isPointerLocked()) { model.setPointerLock(false); return; }
+  if (model.getWalkCamera() !== 'fps') model.setWalkCamera('fps');
+  if (stage.requestPointerLock) {
+    model.setPointerLock(true);
+    notice('已进入 FPS 鼠标自由视角，移动鼠标环顾，按 Esc 退出锁定', 2800);
+  } else {
+    notice('当前浏览器不支持鼠标锁定，可直接拖动画面环顾');
+  }
+  stage.focus({ preventScroll: true });
+};
+
 $('#fullscreen').onclick = async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -960,6 +1025,7 @@ function visitView(item) {
   renderPlaces();
   if (item.orbit) setMode('model', null, item);
   else {
+    model?.setWalkCamera('fps');
     const [x, z, bearing, pitch] = item.camera;
     setMode('walk', [x, z, bearing * Math.PI / 180, pitch * Math.PI / 180, 78, item.lens], item);
   }
@@ -1127,8 +1193,13 @@ try {
     stage,
     campus,
     (...args) => { if (mode !== 'satellite') updateLabels(...args); },
-    { onPickBuilding: handlePickBuilding }
+    {
+      onPickBuilding: handlePickBuilding,
+      onWalkCamera: () => syncWalkHud(),
+      onPointerLock: () => syncWalkHud()
+    }
   );
+  syncWalkHud();
 
   const params = new URLSearchParams(location.search);
   const reqLight = params.get('light');

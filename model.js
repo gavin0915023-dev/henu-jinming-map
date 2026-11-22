@@ -17,6 +17,7 @@ import { stadiumSign, standId, teachingId, eastGateBlockers, hasEastGate, bounda
 import {standHeight,canStepOnStand,stadiumFence} from './stadium-bowl.js';
 import { campusSky, shadeGround, LIGHTING_PRESETS } from './daylight.js';
 import { applyGroundSurfaceTextures } from './ground-surfaces.js';
+import { createPlayerAvatar } from './avatar.js';
 
 const ground = 0;
 const extent = 1400;
@@ -505,7 +506,7 @@ function buildScene(scene, data, trees, anisotropy=1) {
 }
 
 export function createModel(stage,data,onFrame,options={}){
-  const {onPickBuilding}=options;
+  const {onPickBuilding,onWalkCamera,onPointerLock}=options;
   data=campusAvenueData(data);
   data={...data,field:fieldGround(data,contains)};
   const scene = new T.Scene();
@@ -546,6 +547,8 @@ export function createModel(stage,data,onFrame,options={}){
   scene.add(ambient,sun,sun.target);
   const anisotropy=context?Math.min(8,renderer.capabilities.getMaxAnisotropy()):1;
   const details=context?buildScene(scene,data,trees,anisotropy):null;
+  const avatar=context?createPlayerAvatar():null;
+  if(avatar)scene.add(avatar.root);
   let contextLost=false;
   if(context){
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;},false);
@@ -561,11 +564,16 @@ export function createModel(stage,data,onFrame,options={}){
   controls.minPolarAngle=.02;
   controls.maxPolarAngle=Math.PI*.48;
   const direction=new T.Vector3(), projection=new T.Vector3(), raycaster=new T.Raycaster(), ndc=new T.Vector2();
-  const walk={active:false,yaw:0,pitch:-.02,position:new T.Vector3(),fov:65,horizontal:0,eyeHeight:1.70};
+  const walk={
+    active:false,yaw:0,pitch:-.02,position:new T.Vector3(),fov:65,horizontal:0,eyeHeight:1.70,
+    jumpY:0,velY:0,grounded:true,coyote:0,jumpBuf:0,landDip:0,
+    bobPhase:0,bobAmp:0,fovKick:0,speed:0,sprinting:false,
+    cameraMode:'fps',avatarYaw:0
+  };
   const keys=new Set();
   let drag=null, tapStart=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
   let lightingName='noon', waterMotion=!matchMedia('(prefers-reduced-motion: reduce)').matches, lastWaterTick=0;
-  let shadowFocusCenter=null, walkDrive=0, walkTurn=0, routeAuto=null;
+  let shadowFocusCenter=null, walkDrive=0, walkTurn=0, routeAuto=null, avatarSettle=0;
 
   // Dynamic focused shadow frustum: 160m x 160m high-precision shadow box in walk mode (~4-8cm/texel),
   // full 1840m x 1900m campus coverage in orbit mode.
@@ -761,8 +769,9 @@ export function createModel(stage,data,onFrame,options={}){
   const {onDeck,waterBlocks}=walkingWater(data.field,data.water,contains,bounds),physics=data.building.some(b=>b[4]===labId);
   const obstructed=(x,z)=>footprints.some(([[a,b,c,d],ring])=>x>a&&x<c&&z>b&&z<d&&contains(x,z,ring))||waterBlocks(x,z);
   const facultyHeight=facultyHeights(data),hasStand=data.building.some(b=>b[4]===standId);
-  const eye=(x,z)=>walk.eyeHeight+((hasStand?standHeight(x,z):undefined)??(onDeck(x,z)?1.055:physics&&x>-125&&x<-55&&z>200&&z<256?
-    (physicsGroundHeight(x,z)??(contains(x,z,physicsCourt)?.94:.75)):(facultyHeight(x,z)??.75)));
+  const groundY=(x,z)=>(hasStand?standHeight(x,z):undefined)??(onDeck(x,z)?1.055:physics&&x>-125&&x<-55&&z>200&&z<256?
+    (physicsGroundHeight(x,z)??(contains(x,z,physicsCourt)?.94:.75)):(facultyHeight(x,z)??.75));
+  const eye=(x,z)=>walk.eyeHeight+groundY(x,z);
   const fromHorizontal=fov=>T.MathUtils.clamp(2*T.MathUtils.radToDeg(Math.atan(Math.tan(T.MathUtils.degToRad(fov)/2)/camera.aspect)),29,112);
 
   function resize(){
@@ -818,11 +827,100 @@ export function createModel(stage,data,onFrame,options={}){
     tween={from,fromTarget:controls.target.clone(),to,target:center,start:performance.now(),duration,lift:Math.min(260,from.distanceTo(to)*.22),drift};
   }
   function stopDrift(){controls.autoRotate=false;}
-  function face(){
-    direction.set(Math.sin(walk.yaw)*Math.cos(walk.pitch),Math.sin(walk.pitch),-Math.cos(walk.yaw)*Math.cos(walk.pitch));
-    camera.position.copy(walk.position);
-    camera.lookAt(camera.position.clone().add(direction));
+  function syncAvatar(dt=0){
+    const floor=groundY(walk.position.x,walk.position.z);
+    if(avatar){
+      avatar.setVisible(walk.active);
+      if(walk.active){
+        avatar.update({
+          x:walk.position.x,z:walk.position.z,groundY:floor,
+          jumpY:walk.jumpY,velY:walk.velY,landDip:walk.landDip,
+          yaw:walk.avatarYaw,speed:walk.speed,sprinting:walk.sprinting,
+          grounded:walk.grounded,dt
+        });
+      }
+    }else if(renderer.setAvatar){
+      renderer.setAvatar(walk.active?{
+        x:walk.position.x,z:walk.position.z,groundY:floor,
+        jumpY:walk.jumpY,yaw:walk.avatarYaw,speed:walk.speed,
+        grounded:walk.grounded,thirdPerson:walk.cameraMode==='third'
+      }:null);
+    }
   }
+  function face(){
+    const floor=groundY(walk.position.x,walk.position.z);
+    const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const bobOn=walk.cameraMode==='fps'&&!reduced;
+    const bobY=bobOn?Math.sin(walk.bobPhase)*(walk.sprinting?.062:.038)*walk.bobAmp:0;
+    const bobX=bobOn?Math.cos(walk.bobPhase*.5)*(walk.sprinting?.03:.016)*walk.bobAmp:0;
+    const eyeY=floor+walk.eyeHeight+walk.jumpY+walk.landDip+bobY;
+    direction.set(Math.sin(walk.yaw)*Math.cos(walk.pitch),Math.sin(walk.pitch),-Math.cos(walk.yaw)*Math.cos(walk.pitch));
+    if(walk.cameraMode==='third'){
+      const focusY=floor+walk.jumpY+walk.landDip*.65+1.46;
+      const pitch=T.MathUtils.clamp(walk.pitch,-.58,.82);
+      const idealDist=4.5;
+      const backX=-Math.sin(walk.yaw)*Math.cos(pitch);
+      const backZ=Math.cos(walk.yaw)*Math.cos(pitch);
+      const backY=-Math.sin(pitch);
+      let safeDist=idealDist;
+      for(let d=.8;d<=idealDist;d+=.35){
+        const cx=walk.position.x+backX*d, cz=walk.position.z+backZ*d;
+        if(obstructed(cx,cz)){safeDist=Math.max(.9,d-.45);break;}
+      }
+      const camX=walk.position.x+backX*safeDist;
+      const camZ=walk.position.z+backZ*safeDist;
+      const camY=Math.max(groundY(camX,camZ)+.45,focusY+backY*safeDist+.52);
+      camera.position.set(camX,camY,camZ);
+      camera.lookAt(walk.position.x+Math.sin(walk.yaw)*1.8,focusY+Math.sin(pitch)*1.4,walk.position.z-Math.cos(walk.yaw)*1.8);
+    }else{
+      const rightX=Math.cos(walk.yaw), rightZ=Math.sin(walk.yaw);
+      camera.position.set(walk.position.x+rightX*bobX,eyeY,walk.position.z+rightZ*bobX);
+      camera.lookAt(camera.position.x+direction.x,camera.position.y+direction.y,camera.position.z+direction.z);
+    }
+  }
+  function jump(){
+    if(!walk.active)return false;
+    walk.jumpBuf=.14;
+    if(walk.grounded||walk.coyote>0){
+      walk.velY=7.2;
+      walk.grounded=false;
+      walk.coyote=0;
+      walk.jumpBuf=0;
+      avatarSettle=.4;
+    }
+    lastView='';
+    return true;
+  }
+  function setWalkCamera(camMode){
+    const next=camMode==='third'?'third':'fps';
+    walk.cameraMode=next;
+    avatar?.setFirstPerson(next==='fps');
+    if(next==='third'&&document.pointerLockElement===stage)document.exitPointerLock?.();
+    if(walk.active){syncAvatar(0);face();}
+    lastView='';
+    onWalkCamera?.(next);
+    return next;
+  }
+  function setPointerLock(enable){
+    if(!walk.active||walk.cameraMode!=='fps')return false;
+    if(enable){
+      if(document.pointerLockElement!==stage)stage.requestPointerLock?.();
+      return true;
+    }
+    if(document.pointerLockElement===stage)document.exitPointerLock?.();
+    return false;
+  }
+  document.addEventListener('pointerlockchange',()=>{
+    const locked=document.pointerLockElement===stage;
+    stage.dataset.pointerLock=String(locked);
+    onPointerLock?.(locked);
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!walk.active||document.pointerLockElement!==stage)return;
+    if(routeAuto)stopRouteWalk(true);
+    walk.yaw+=e.movementX*.0022;
+    walk.pitch=T.MathUtils.clamp(walk.pitch-e.movementY*.0022,-1.32,1.32);
+  });
   function stopRouteWalk(notify=true){
     if(!routeAuto)return;
     const cb=routeAuto.onState;
@@ -909,6 +1007,7 @@ export function createModel(stage,data,onFrame,options={}){
   // Smooth wall-sliding movement: if diagonal step hits an obstacle, slide along X or Z independently.
   function step(metres, side=0){
     if(routeAuto)stopRouteWalk(true);
+    const prevFloor=groundY(walk.position.x,walk.position.z);
     const dx=Math.sin(walk.yaw)*metres+Math.cos(walk.yaw)*side;
     const dz=-Math.cos(walk.yaw)*metres+Math.sin(walk.yaw)*side;
     const n=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.18));
@@ -927,6 +1026,8 @@ export function createModel(stage,data,onFrame,options={}){
         break;
       }
     }
+    const nextFloor=groundY(walk.position.x,walk.position.z);
+    if(!walk.grounded&&nextFloor!==prevFloor)walk.jumpY=Math.max(0,walk.jumpY+(prevFloor-nextFloor));
     updateShadowFrustum(false);
   }
   function enterWalk(x,z,yaw,pitch=.005,fov=65,lens=null){
@@ -938,11 +1039,16 @@ export function createModel(stage,data,onFrame,options={}){
     walk.eyeHeight=lens?.eye??1.70;walk.horizontal=lens?.horizontal??0;
     walk.position.set(x,eye(x,z),z);
     walk.yaw=yaw;
+    walk.avatarYaw=yaw;
     walk.pitch=pitch;
+    walk.jumpY=0;walk.velY=0;walk.grounded=true;walk.coyote=.1;walk.jumpBuf=0;walk.landDip=0;
+    walk.bobPhase=0;walk.bobAmp=0;walk.fovKick=0;walk.speed=0;walk.sprinting=false;avatarSettle=0;
     walk.fov=walk.horizontal?fromHorizontal(walk.horizontal):fov;
     camera.fov=walk.fov;
     camera.updateProjectionMatrix();
     scene.fog=walkMist;
+    avatar?.setFirstPerson(walk.cameraMode==='fps');
+    syncAvatar(0);
     updateShadowFrustum(true);
     face();
   }
@@ -962,6 +1068,8 @@ export function createModel(stage,data,onFrame,options={}){
       if(!found)return false;
     }
     walk.position.set(tx,eye(tx,tz),tz);
+    walk.jumpY=0;walk.velY=0;walk.grounded=true;walk.landDip=0;
+    syncAvatar(0);
     updateShadowFrustum(true);
     face();
     lastView='';
@@ -969,12 +1077,15 @@ export function createModel(stage,data,onFrame,options={}){
   }
   function exitWalk(preserveSpot=false){
     stopRouteWalk(true);
+    if(document.pointerLockElement===stage)document.exitPointerLock?.();
     if(!walk.active)return;
     const wx=walk.position.x, wz=walk.position.z, wyaw=walk.yaw;
     walk.active=false;
+    walk.jumpY=0;walk.velY=0;walk.grounded=true;walk.landDip=0;walk.bobAmp=0;walk.fovKick=0;walk.speed=0;walk.sprinting=false;
     walkDrive=0;
     walkTurn=0;
     keys.clear();
+    syncAvatar(0);
     controls.enabled=true;
     camera.fov=46;
     camera.updateProjectionMatrix();
@@ -1018,6 +1129,11 @@ export function createModel(stage,data,onFrame,options={}){
   const walkingKeys=['w','s','a','d','q','e','shift','arrowup','arrowdown','arrowleft','arrowright'];
   stage.addEventListener('keydown',e=>{
     const key=e.key.toLowerCase();
+    if(walk.active&&(e.code==='Space'||key===' ')){
+      e.preventDefault();
+      jump();
+      return;
+    }
     if(walk.active&&walkingKeys.includes(key)){
       if(key!=='shift')e.preventDefault();
       keys.add(key);
@@ -1059,6 +1175,9 @@ export function createModel(stage,data,onFrame,options={}){
       z:walk.active?walk.position.z:controls.target.z,
       yaw:walk.yaw,
       pitch:walk.pitch,
+      jumpY:walk.jumpY,
+      grounded:walk.grounded,
+      cameraMode:walk.cameraMode,
       distance:camera.position.distanceTo(controls.target),
       camera:[camera.position.x,camera.position.y,camera.position.z],
       target:[controls.target.x,controls.target.y,controls.target.z],
@@ -1069,7 +1188,9 @@ export function createModel(stage,data,onFrame,options={}){
     const dt=Math.min(.05,(time-last)/1000);
     last=time;
     if(!visible||contextLost)return;
+    let avatarDirty=false;
     if(walk.active){
+      const prevX=walk.position.x, prevZ=walk.position.z;
       const has=(a,b)=>keys.has(a)||keys.has(b);
       let move=Number(has('w','arrowup'))-Number(has('s','arrowdown'))+walkDrive;
       let side=Number(has('d','arrowright'))-Number(has('a','arrowleft'));
@@ -1105,9 +1226,67 @@ export function createModel(stage,data,onFrame,options={}){
         if(turn)walk.yaw+=turn*dt*1.65;
         const mag=Math.hypot(move,side);
         if(mag>1){move/=mag;side/=mag;}
-        const speed=keys.has('shift')?24:13;
+        const speed=keys.has('shift')?22:12.5;
         if(move||side)step(move*dt*speed,side*dt*speed);
       }
+
+      // Jump physics: gravity, coyote time, input buffer, and tactile landing compression.
+      if(walk.jumpBuf>0)walk.jumpBuf=Math.max(0,walk.jumpBuf-dt);
+      if(walk.grounded){
+        walk.coyote=.10;
+        if(walk.jumpBuf>0){
+          walk.velY=7.2;
+          walk.grounded=false;
+          walk.coyote=0;
+          walk.jumpBuf=0;
+        }
+      }else{
+        walk.coyote=Math.max(0,walk.coyote-dt);
+        walk.velY-=21.5*dt;
+        walk.jumpY+=walk.velY*dt;
+        if(walk.jumpY<=0){
+          const impact=Math.min(1,Math.abs(walk.velY)/9);
+          walk.jumpY=0;
+          walk.velY=0;
+          walk.grounded=true;
+          walk.landDip=-.15*impact;
+        }
+      }
+      if(walk.grounded&&Math.abs(walk.landDip)>.0005){
+        walk.landDip*=Math.exp(-14*dt);
+        if(Math.abs(walk.landDip)<=.0005)walk.landDip=0;
+      }
+
+      // Compute real ground speed for stride head-bob, sprint FOV kick & avatar limb cycles.
+      const movedDist=Math.hypot(walk.position.x-prevX,walk.position.z-prevZ);
+      const instSpeed=dt>1e-4?movedDist/dt:0;
+      walk.speed+=(instSpeed-walk.speed)*Math.min(1,dt*14);
+      walk.sprinting=Boolean(!routeAuto&&keys.has('shift')&&instSpeed>8);
+      const moving=instSpeed>.4;
+      const targetBob=walk.grounded&&moving?Math.min(1,instSpeed/12):0;
+      walk.bobAmp+=(targetBob-walk.bobAmp)*Math.min(1,dt*10);
+      if(walk.grounded&&moving)walk.bobPhase+=dt*(walk.sprinting?11.4:8.2);
+
+      // Dynamic sprint FOV boost in FPS mode (preserves fixed panoramic horizontal lenses).
+      const targetKick=!walk.horizontal&&walk.cameraMode==='fps'&&walk.sprinting?5.5:0;
+      if(Math.abs(walk.fovKick-targetKick)>.02){
+        walk.fovKick+=(targetKick-walk.fovKick)*Math.min(1,dt*8);
+        camera.fov=walk.fov+walk.fovKick;
+        camera.updateProjectionMatrix();
+      }else if(walk.fovKick!==targetKick){
+        walk.fovKick=targetKick;
+        camera.fov=walk.fov+walk.fovKick;
+        camera.updateProjectionMatrix();
+      }
+
+      // Smoothly align character facing to walk heading (slight lag in third-person for natural turn look).
+      const yawDiff=Math.atan2(Math.sin(walk.yaw-walk.avatarYaw),Math.cos(walk.yaw-walk.avatarYaw));
+      walk.avatarYaw+=yawDiff*Math.min(1,dt*(walk.cameraMode==='fps'?28:12));
+
+      if(moving||!walk.grounded||Math.abs(walk.landDip)>.001||Math.abs(yawDiff)>.003)avatarSettle=.35;
+      else if(avatarSettle>0)avatarSettle=Math.max(0,avatarSettle-dt);
+      avatarDirty=avatarSettle>0;
+      if(avatarDirty)syncAvatar(dt);
       face();
     }else{
       if(tween){
@@ -1135,19 +1314,23 @@ export function createModel(stage,data,onFrame,options={}){
       waterDirty=true;
     }
     const view=[camera.position.x,camera.position.y,camera.position.z,camera.quaternion.x,camera.quaternion.y,camera.quaternion.z,camera.quaternion.w,camera.fov,camera.near,size.w,size.h].map(value=>value.toFixed(5)).join(',');
-    if(view===lastView && !waterDirty)return;
+    if(view===lastView && !waterDirty && !avatarDirty)return;
     const cameraMoved=view!==lastView;
     lastView=view;
     renderer.render(scene,camera);
-    if(cameraMoved){
+    if(cameraMoved||avatarDirty){
       const bearing=walk.active?-walk.yaw:Math.atan2(camera.position.x-controls.target.x,camera.position.z-controls.target.z);
       const metersPerPixel=2*Math.tan(T.MathUtils.degToRad(camera.fov/2))*camera.position.distanceTo(controls.target)/size.h;
-      onFrame(project,bearing,metersPerPixel,size,walk.active,walk.active?{x:walk.position.x,z:walk.position.z,yaw:walk.yaw}:null);
+      onFrame(project,bearing,metersPerPixel,size,walk.active,walk.active?{
+        x:walk.position.x,z:walk.position.z,yaw:walk.yaw,jumpY:walk.jumpY,
+        speed:walk.speed,sprinting:walk.sprinting,grounded:walk.grounded,cameraMode:walk.cameraMode
+      }:null);
     }
   }
   home(false);
   renderer.setAnimationLoop(frame);
   return {focus,lookFrom,setOrbitPose,flyTo,stopDrift,home,zoom,north,enterWalk,exitWalk,step,teleportWalk,
+    jump,setWalkCamera,getWalkCamera(){return walk.cameraMode;},setPointerLock,isPointerLocked(){return document.pointerLockElement===stage;},
     routeStartPose,startRouteWalk,stopRouteWalk,isRouteWalking(){return Boolean(routeAuto);},
     setLighting,setWaterMotion(on){waterMotion=Boolean(on);lastView='';},
     // dir: forward/back drive (-1..1); turn: yaw rate (-1..1) for the touch joystick.

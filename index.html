@@ -39,8 +39,9 @@
     </aside>
 
     <section class="viewport" aria-label="交互式校园地图">
-      <div id="stage" tabindex="0" aria-label="三维校园，拖动旋转，滚轮缩放；漫游时使用 W A S D 或方向键移动"></div>
+      <div id="stage" tabindex="0" aria-label="三维校园，拖动旋转，滚轮缩放；漫游时使用 W A S D 移动，Space 跳跃，V 切换人称"></div>
       <div id="labels" aria-label="地图地点"></div>
+      <div id="fps-crosshair" class="fps-crosshair" aria-hidden="true" hidden><span></span><i></i><i></i><i></i><i></i></div>
       <div class="viewport-top">
         <div class="mode-caption"><span class="live-dot"></span><div><strong id="mode-label">三维校园</strong><small id="mode-note">精细化模型 · 建筑高度估算</small></div></div>
         <div class="mode-switch" role="group" aria-label="查看模式">
@@ -101,9 +102,9 @@
       </article>
       <div id="joystick" class="joystick" role="application" aria-label="单手摇杆：上下推动前进后退，左右推动转向" hidden><span class="joystick-knob"></span></div>
       <div id="street-help" class="street-help" role="group" aria-label="漫游操控" hidden>
-        <span class="walk-key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · <kbd>Shift</kbd> 加速 · <kbd>Q</kbd><kbd>E</kbd> 转向 · 拖动环顾</span>
-        <span class="walk-touch-hint">滑动环顾 · 点按步进 / 长按连续移动</span>
-        <div><button type="button" id="walk-back" aria-label="后退五米">后退</button><button type="button" id="walk-forward" aria-label="前进五米">前进</button><button type="button" id="map-photos">实景参考</button></div>
+        <span class="walk-key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · <kbd>Shift</kbd> 疾跑 · <kbd>Space</kbd> 跳跃 · <kbd>V</kbd> 切换人称 · <kbd>F</kbd> 鼠标锁定</span>
+        <span class="walk-touch-hint">滑动环顾 · 摇杆移动 · 点按跳跃 / 切视角</span>
+        <div><button type="button" id="walk-back" aria-label="后退五米">后退</button><button type="button" id="walk-forward" aria-label="前进五米">前进</button><button type="button" id="walk-jump" aria-label="跳跃">跳跃</button><button type="button" id="walk-cam" aria-pressed="false" aria-label="切换第一人称与第三人称视角">第三人称</button><button type="button" id="walk-fps" aria-pressed="false" aria-label="切换鼠标锁定自由视角">FPS 锁定</button><button type="button" id="map-photos">实景参考</button></div>
         <nav id="walk-route" aria-label="沿路线换取景点" hidden><button type="button" id="route-prev">‹ 上一站</button><span id="route-position" aria-live="polite"></span><button type="button" id="route-next">下一站 ›</button></nav>
       </div>
       <div id="fallback" role="status">正在构建校园场景…</div>

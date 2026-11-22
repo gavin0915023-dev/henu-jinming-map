@@ -311,8 +311,25 @@ try {
   await evaluate("document.querySelector('[data-mode=walk]').click()");
   check('Walk mode activates', await evaluate("!document.querySelector('#street-help').hidden && document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true'"));
   await capture('walk');
+  {
+    const fpsReady=await evaluate("document.querySelector('#stage').dataset.walkCamera==='fps' && !document.querySelector('#fps-crosshair').hidden");
+    await evaluate("document.querySelector('#walk-jump').click()");
+    await evaluate("new Promise(r=>{let n=0;const f=()=>++n>=3?r():requestAnimationFrame(f);requestAnimationFrame(f)})");
+    const airborne=await evaluate("Number(document.querySelector('#stage').dataset.jumpY)>0.2 && document.querySelector('#fps-crosshair').dataset.airborne==='true'");
+    await evaluate("document.querySelector('#walk-cam').click()");
+    await settle();
+    const thirdAir=await evaluate("document.querySelector('#stage').dataset.walkCamera==='third' && document.querySelector('#fps-crosshair').hidden && document.querySelector('#walk-cam').getAttribute('aria-pressed')==='true' && Number(document.querySelector('#stage').dataset.jumpY)>0.2");
+    await capture('walk-jump');
+    await until(()=>evaluate("Number(document.querySelector('#stage').dataset.jumpY)===0"),'Walker lands cleanly',45000);
+    await settle();
+    await capture('walk-third');
+    await evaluate("document.querySelector('#walk-cam').click()");
+    await settle();
+    const backFps=await evaluate("document.querySelector('#stage').dataset.walkCamera==='fps' && !document.querySelector('#fps-crosshair').hidden");
+    check('FPS mode shows a dynamic reticle, jumps with gravity and toggles to the 3D student avatar',fpsReady&&airborne&&thirdAir&&backFps);
+  }
   await evaluate("document.querySelector('#walk-forward').click();document.querySelector('#walk-back').click();document.querySelector('#home').click()");
-  check('Home exits walk mode', await evaluate("document.querySelector('#street-help').hidden"));
+  check('Home exits walk mode', await evaluate("document.querySelector('#street-help').hidden && document.querySelector('#fps-crosshair').hidden"));
   await evaluate("document.querySelectorAll('#place-list .place')[4].click()");
   check('Existing walking directions can still route from the west gate to the stadium',await evaluate(`(()=>{
     document.querySelector('#detail [data-route]').click();

@@ -76,6 +76,7 @@
     "Walking viewpoint west-gate",
     "Reference panel selects the photo for the current viewpoint",
     "Walk mode activates",
+    "FPS mode shows a dynamic reticle, jumps with gravity and toggles to the 3D student avatar",
     "Home exits walk mode",
     "Existing walking directions can still route from the west gate to the stadium",
     "Category tabs filter every campus building and road, then restore the 26 featured places",
@@ -144,7 +145,7 @@
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1261848,
+    "vertices": 1266789,
     "invalid": 0,
     "trees": 999,
     "treeForms": {
@@ -172,7 +173,7 @@
     "drawCalls": 63,
     "triangles": 1210890
   },
-  "linkedPrograms": 248,
+  "linkedPrograms": 247,
   "shaderErrors": [],
   "failures": []
 }
