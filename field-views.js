@@ -57,6 +57,13 @@ export const fieldViews=[
   {id:'hoops-south',place:'east-courts',title:'东南运动区 · 篮球场南口',caption:'从路边朝北看，蓝色弯臂球架立在灰色场地边缘。近处是水泥矮基上的绿网，右边留有能直接走进球场的开口。',camera:[222.5,401.8,0,3],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011254430805G',12725987.43,4114726.17,0,3)},
   {id:'nanyuan-east',place:'nanyuan',title:'南苑餐厅 · 东侧餐厅名',caption:'前场上能读出二层长廊前的金字“南苑餐厅”。两侧的竖向墙板夹着内收的玻璃和折线屋顶。',camera:[-203.5,595,268,9],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011305475415G',12725468.55,4114488.07,268,9)},
   {id:'nanyuan-south',place:'nanyuan',title:'南苑餐厅 · 南侧弧檐',caption:'绕到南面，弧形白檐几乎占满视野。檐下有独立方柱，上方是露天的细钢架，和东侧的金字长廊不同。',camera:[-259.3,641.1,350,8],date:'2014年4月',source:'百度街景',url:baidu('01027700001404011306165575G',12725400.69,4114431.6,350,8)},
+  {id:'economics-west',place:'b-712688902',title:'经济学院 · 西端退台',caption:'从雪垠路向东看，左侧翼楼的白色窗廊逐层退后，红砖侧墙之间的高挑檐留着圆孔。右侧低砖楼是相邻建筑。',camera:[73.6,-394.6,89.4,11],lens:{horizontal:80,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011220505535G',12725804.6,4115689.82,89.4,11)},
+  {id:'economics-east',place:'b-712688902',title:'经济学院 · 东端玻璃立面',caption:'从院子向西回看，楼端高窗夹在两片红砖墙之间；此处没有西端的退台。',camera:[228.9,-376.6,272.4,9],lens:{horizontal:69,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011218425405G',12725993.95,4115669.54,272.4,9)},
+  {id:'math-lake',place:'b-712688900',title:'数学与信息科学学院 · 临水窗带',caption:'透过花树看南立面：中段是按层分开的浅色长窗，左边的暖黄色墙段只开短窗，最上面是一道红檐。',camera:[97.8,-241.4,23.1,9],lens:{horizontal:78,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011226255645G',12725834.38,4115504.47,23.1,9)},
+  {id:'math-west',place:'b-712688900',title:'数学与信息科学学院 · 水渠旁西端',caption:'换到西侧沿渠朝东看，近端的白色露台错开，后面是红墙和窄高的屋顶框架。',camera:[54,-295.3,87.1,12],lens:{horizontal:72,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011221155915G',12725780.94,4115569.3,87.1,12)},
+  {id:'life-door',place:'b-716761653',aliases:'生命科学学院',title:'生命科学院 · 西南侧门',caption:'台阶尽头的侧门退进浅色墙身，上方各层的楼梯间窗也在凹口里。门左是整片实墙，右面才是实验楼的窗列。',camera:[349.6,-485.3,10.9,16],lens:{horizontal:92,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011217545635G',12726140.76,4115802.39,10.9,16)},
+  {id:'life-wing',place:'b-716761653',title:'生命科学院 · 南翼沿路',caption:'向东沿楼看，浅色面砖上间隔开窗，窗下可见分散的设备挑板。楼角的入口和长墙的窗间距不同。',camera:[334.3,-484.7,64.1,11],lens:{horizontal:74,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011217585645G',12726122.2,4115801.45,64.1,11)},
+  {id:'huayuan-roof',place:'b-712688853',title:'华苑餐厅 · 屋面俯看',caption:'中央深色屋面、北侧浅色矩形和东侧窄长屋面在卫星影像上可分辨。附近街景被宿舍和商铺挡住，尚未核实餐厅的门窗。',orbit:[[192,102,504],[154.8,20,463.4]],action:'俯看餐厅模型',reference:'卫星对照',source:'Esri 卫星影像',url:'https://www.arcgis.com/apps/mapviewer/index.html?basemapUrl=https%3A%2F%2Fserver.arcgisonline.com%2FArcGIS%2Frest%2Fservices%2FWorld_Imagery%2FMapServer&center=114.305044,34.813887&level=18'},
   {id:'west-gate',place:'west',title:'西大门 · 校名墙',caption:'面向校园中轴。金明西门是低矮的校名石墙，两侧留出通道。',camera:[-485,-76,90,0],source:'校方照片',url:uni}
 ];
 
@@ -75,17 +82,18 @@ export const walks=[
   ['地理楼',['geography-south','geography-curve','geography-north']],
   ['北门内外',['north-gate','north-gate-in']],['粹庭湖岸',['cuiting-bank','cuiting-north']],
   ['办公楼两面',['office-north','office-south']],['东南运动区',['tennis-west','hoops-south']],
-  ['南苑餐厅',['nanyuan-east','nanyuan-south']]
+  ['南苑餐厅',['nanyuan-east','nanyuan-south']],
+  ['经济学院两端',['economics-west','economics-east']],['数学楼两面',['math-lake','math-west']],['生命科学院南翼',['life-door','life-wing']]
 ].map(([label,ids])=>({label,stops:ids.map(id=>fieldViews.find(v=>v.id===id))}));
 
 export function mountFieldViews(dialog,visit){
   const list=dialog.querySelector('.field-list'),select=dialog.querySelector('[data-region]');
   const areas=[
     ['中轴与校门',['west','north','east','library','marco','office']],
-    ['北部学院与湖区',['pharmacy','education','beiyuan','lake','campus-bridge']],
+    ['北部学院与湖区',['pharmacy','education','beiyuan','lake','campus-bridge','b-712688902','b-712688900','b-716761653']],
     ['文甫路与公共教学区',['cs','hall','software','teaching','autumn']],
     ['体育场与球场',['stadium','east-courts']],
-    ['南部学院与生活区',['physics','civil','geography','zeng','dorm17','clinic','jiaoyuan','nanyuan']]
+    ['南部学院与生活区',['physics','civil','geography','zeng','dorm17','clinic','jiaoyuan','nanyuan','b-712688853']]
   ];
   const area=v=>areas.find(([,ids])=>ids.includes(v.place))?.[0]??areas[0][0];
   for(const name of ['',...areas.map(a=>a[0])])select.add(new Option((name||'全校')+'（'+fieldViews.filter(v=>!name||name===area(v)).length+'）',name));
@@ -93,7 +101,7 @@ export function mountFieldViews(dialog,visit){
     const row=document.createElement('section'),title=document.createElement('h3'),note=document.createElement('p');
     title.textContent=item.title;note.textContent=item.caption;
     const go=document.createElement('button'),source=document.createElement('a');
-    row.dataset.area=area(item);go.type='button';go.dataset.view=item.id;go.textContent=item.orbit?'俯看广场模型':'到这里看模型';
+    row.dataset.area=area(item);go.type='button';go.dataset.view=item.id;go.textContent=item.action??(item.orbit?'俯看广场模型':'到这里看模型');
     go.onclick=()=>{dialog.close();visit(item);};
     source.textContent=item.source+(item.date?' · '+item.date:'')+' ↗';source.href=item.url;source.target='_blank';source.rel='noopener';
     row.append(title,note,go,source);list.append(row);

@@ -6,6 +6,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '../server.mjs';
 import { fieldViews } from '../field-views.js';
+import { createCampusRouter } from '../routing.js';
 
 const output = dirname(fileURLToPath(import.meta.url));
 const deployedSatellite = process.env.CHECK_SATELLITE === 'deployed';
@@ -34,7 +35,9 @@ async function until(fn, label, timeout = 90000) {
   throw Error(`Timed out: ${label}\n${log.slice(-1000)}`);
 }
 let socket;
-const failures = [], checks = [];
+const failures = [], checks = [], shaderErrors = new Set();
+let linkedPrograms = 0;
+const shaderError = /THREE\.WebGLProgram: Shader Error|VALIDATE_STATUS:\s*false|(?:shader|program).{0,45}(?:failed to (?:compile|link)|(?:compilation|link) failed)|ERROR:\s*0:\d+:/i;
 function check(name, value) { assert(value, name); checks.push(name); console.log(`PASS ${name}`); }
 try {
   const endpoint = await until(() => log.match(/DevTools listening on (ws:\/\/[^\s]+)/)?.[1], 'Browser debugging endpoint');
@@ -58,10 +61,15 @@ try {
       if (message.error) request.reject(Error(JSON.stringify(message.error))); else request.resolve(message.result);
     }
     if (message.method === 'Runtime.exceptionThrown') failures.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
-    if (message.method === 'Runtime.consoleAPICalled' && message.params.type==='error') {
-      const error=message.params.args.map(a=>a.value??a.description??'').join(' ');
-      if(/THREE\.WebGLProgram: Shader Error|VALIDATE_STATUS: false/.test(error))failures.push(error);
+    if (message.method === 'Runtime.bindingCalled' && message.params.name === '__verifyProgramLink') {
+      linkedPrograms++;
+      if (message.params.payload) shaderErrors.add(message.params.payload);
     }
+    if (message.method === 'Runtime.consoleAPICalled') {
+      const error=message.params.args.map(a=>a.value??a.description??'').join(' ');
+      if(shaderError.test(error))shaderErrors.add(error);
+    }
+    if(message.method==='Log.entryAdded' && shaderError.test(message.params.entry.text))shaderErrors.add(message.params.entry.text);
     if (message.method === 'Network.requestWillBeSent') {
       const { requestId, request } = message.params;
       const {hostname, pathname} = new URL(request.url);
@@ -96,6 +104,42 @@ try {
     return result.result.value;
   }
   const settle = () => evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  async function surveyCards(){
+    return evaluate(`(()=>{
+      const $=s=>document.querySelector(s),s=$('#search');
+      $('#home').click();
+      for(const [query,title,id,source] of [
+        ['华苑餐厅','华苑餐厅','huayuan-roof','www.arcgis.com'],
+        ['经济学院','经济学院','economics-west','01027700001404011220505535G'],
+        ['数学与信息科学学院','数学与信息科学学院','math-lake','01027700001404011226255645G'],
+        ['生命科学学院','生命科学院','life-door','01027700001404011217545635G']]){
+        s.value=query;s.dispatchEvent(new Event('input'));const row=[...document.querySelectorAll('#place-list .place')].find(b=>b.querySelector('b').textContent===title);
+        if(!row)throw Error('Missing survey place: '+query);
+        row.click();$('#detail [data-field-reference]').click();
+        const view=$('#field-dialog [data-current] [data-view]'),target=new URL(view.parentElement.querySelector('a').href);
+        if(!$('#field-dialog').open||view.dataset.view!==id||(target.hostname!==source&&new URLSearchParams(target.hash.slice(1)).get('panoid')!==source))return false;
+        view.click();if($('#mode-note').textContent!==view.parentElement.querySelector('h3').textContent)return false;
+        if(id!=='huayuan-roof'){$('#route-next').click();if(!$('#route-position').textContent.includes('2 / 2'))return false;}
+        $('[data-mode=model]').click();if($('#detail h2')?.textContent!==title)return false;
+        $('#home').click();
+      }
+      $('[data-cat=featured]').click();return true;
+    })()`);
+  }
+  async function sceneLuminance(){
+    await settle();
+    const clip=await evaluate(`(()=>{const r=document.querySelector('#stage').getBoundingClientRect();
+      return {x:Math.round(r.x+r.width/2-16),y:Math.round(r.y+r.height*.4-16),width:32,height:32,scale:1}})()`);
+    const {data}=await call('Page.captureScreenshot',{format:'png',clip});
+    return evaluate(`(async()=>{
+      const raw=Uint8Array.from(atob(${JSON.stringify(data)}),ch=>ch.charCodeAt(0));
+      const im=await createImageBitmap(new Blob([raw],{type:'image/png'}));
+      const c=new OffscreenCanvas(im.width,im.height),ctx=c.getContext('2d');ctx.drawImage(im,0,0);im.close();
+      const p=ctx.getImageData(0,0,c.width,c.height).data;let sum=0;
+      for(let i=0;i<p.length;i+=4)sum+=.2126*p[i]+.7152*p[i+1]+.0722*p[i+2];
+      return sum/(p.length/4);
+    })()`);
+  }
   const selectedCaptures=new Set((process.env.CAPTURE_VIEWS??'').split(',').filter(Boolean));
   async function capture(name) {
     if(selectedCaptures.size&&!selectedCaptures.has(name))return;
@@ -111,6 +155,22 @@ try {
   }
   await call('Page.enable');
   await call('Runtime.enable');
+  await call('Log.enable');
+  await call('Runtime.addBinding', {name:'__verifyProgramLink'});
+  // Observe actual driver link status once per program, including documents reloaded
+  // by share tests. Install only in this disposable browser, never in the viewer.
+  await call('Page.addScriptToEvaluateOnNewDocument', {source:`(() => {
+    const gl2=globalThis.WebGL2RenderingContext?.prototype;
+    if(gl2){
+      const link=gl2.linkProgram;
+      gl2.linkProgram=function(program){
+        link.call(this,program);
+        const ok=this.getProgramParameter(program,this.LINK_STATUS);
+        globalThis.__verifyProgramLink(ok?'':(this.getProgramInfoLog(program)||'Program failed to link'));
+      };
+    }
+    Object.defineProperty(navigator,'clipboard',{value:{writeText:async()=>{}}});
+  })()`});
   await call('Network.enable');
   await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
@@ -149,6 +209,7 @@ try {
     check('Published sports route reaches the basketball entrance',await evaluate("new URL(location.href).searchParams.get('view')==='hoops-south'"));
     await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=nanyuan-east]').click();document.querySelector('#route-next').click()");
     check('Published dining route reaches the curved south eave',await evaluate("new URL(location.href).searchParams.get('view')==='nanyuan-south' && document.querySelector('#route-position').textContent.includes('2 / 2')"));
+    check('Published catalog opens the four surveyed buildings and their original sources',await surveyCards());
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
     const getTiles=()=>evaluate("(()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return {loaded:tiles.filter(t=>t.complete&&t.naturalWidth>0).length,total:tiles.length,message:document.querySelector('#fallback').hidden?'':document.querySelector('#fallback').innerText}})()");
     try {
@@ -159,6 +220,7 @@ try {
       for(const {host,result} of imageryRequests.values()){const key=`${host}: ${result}`;requests[key]=(requests[key]??0)+1;}
       console.log(JSON.stringify({viewport:await getTiles(),elapsedSeconds:(Date.now()-start)/1000,requests,failures},null,2));
     }
+    check('Published scenes link WebGL programs without shader or browser errors',linkedPrograms>0&&shaderErrors.size===0&&failures.length===0);
   } else {
   await call('Page.navigate',{url:url+'/?view=boxiang'});
   await until(() => evaluate("document.querySelector('#stage')?.dataset.ready==='true'"), 'Model ready');
@@ -167,6 +229,8 @@ try {
   check('All generated geometry is finite', stats.invalid === 0 && stats.vertices > 10000);
   check('All three tree forms populate the model', ['shade','vase','spire'].every(form=>stats.treeForms?.[form]>0) &&
     Object.values(stats.treeForms).reduce((sum,n)=>sum+n,0)===stats.trees);
+  check('Default tab opens on exactly 26 featured landmarks before any search',await evaluate(
+    "document.querySelector('[data-cat=featured]').getAttribute('aria-selected')==='true' && document.querySelectorAll('#place-list .place').length===26 && document.querySelector('#place-count').textContent==='26 个地点'"));
   check('The featured list and the extended categorized catalog both load', await evaluate(`(()=>{
     const tab=name=>document.querySelector('[data-cat='+name+']'),count=()=>document.querySelectorAll('#place-list .place').length;
     const featured=count();tab('all').click();const all=count();tab('featured').click();
@@ -199,9 +263,11 @@ try {
   await capture('teaching-building');
   await evaluate("document.querySelector('#detail [data-field-reference]').click()");
   check('The catalog links to each distinct panorama and both university references',await evaluate(`(()=>{
-    const modal=document.querySelector('#field-dialog'),links=[...modal.querySelectorAll('.field-list a')].map(a=>new URL(a.href));
+    const modal=document.querySelector('#field-dialog'),all=[...modal.querySelectorAll('.field-list a')],links=all.map(a=>new URL(a.href));
+    const count=items=>new Set(items.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size;
+    const old=all.filter(a=>!['economics-west','economics-east','math-lake','math-west','life-door','life-wing','huayuan-roof'].includes(a.parentElement.querySelector('[data-view]').dataset.view));
     return modal.open && modal.querySelectorAll('[data-view]').length===${fieldViews.length} &&
-      new Set(links.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size===49 &&
+      count(old.map(a=>new URL(a.href)))===49 && count(links)===55 &&
       links.some(l=>l.hostname==='ganbu.henu.edu.cn') && links.some(l=>l.hostname==='zbcg.henu.edu.cn');
   })()`));
   check('The sports filter includes the four stadium positions and the outdoor courts',await evaluate(`(()=>{
@@ -276,6 +342,36 @@ try {
   check('Search reaches non-featured dormitories by name',await evaluate(`(()=>{const s=document.querySelector('#search');s.value='学十八';s.dispatchEvent(new Event('input'));
     const hit=[...document.querySelectorAll('#place-list .place')].map(b=>b.textContent);s.value='';s.dispatchEvent(new Event('input'));
     return hit.length===1&&hit[0].includes('学十八公寓')&&document.querySelectorAll('#place-list .place').length===26;})()`));
+  const categories=await evaluate(`(()=>{
+    const lists={};
+    for(const tab of document.querySelectorAll('[data-cat]')){
+      tab.click();
+      const names=[...document.querySelectorAll('#place-list .rowtext b')].map(b=>b.textContent);
+      if(tab.getAttribute('aria-selected')!=='true'||document.querySelectorAll('[data-cat][aria-selected=true]').length!==1||
+        document.querySelector('#place-count').textContent!==names.length+' 个地点')throw Error('Wrong selected tab or count: '+tab.textContent);
+      lists[tab.dataset.cat]=names;
+    }
+    return lists;
+  })()`);
+  const partition=['academic','dorm','life','outdoor'].flatMap(key=>categories[key]);
+  check('The four categories partition all 76 unique places and include the expected landmarks',
+    categories.all.length===76 && new Set(categories.all).size===76 && partition.length===76 && new Set(partition).size===76 &&
+    partition.every(n=>categories.all.includes(n)) && categories.featured.every(n=>categories.all.includes(n)) &&
+    categories.academic.includes('3号教学楼') && categories.dorm.includes('学五公寓') &&
+    categories.life.includes('华苑餐厅') && categories.outdoor.includes('志义体育场'));
+  for(const [tab,query] of [['academic','学五公寓'],['dorm','3号教学楼']]){
+    check('Campus-wide search opens '+query+' from a different category and restores that category on Escape',
+      await evaluate(`(()=>{
+        const tab=document.querySelector('[data-cat=${tab}]'),s=document.querySelector('#search'),names=()=>[...document.querySelectorAll('#place-list .rowtext b')].map(b=>b.textContent);
+        tab.click();const before=names();s.value=${JSON.stringify(query)};s.dispatchEvent(new Event('input'));
+        const hits=names();s.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+        const card=document.querySelector('#detail'),ok=!card.hidden&&card.querySelector('h2').textContent===s.value&&Boolean(card.querySelector('[data-route]'));
+        card.querySelector('[data-close]')?.click();s.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        return !before.includes(${JSON.stringify(query)})&&hits.length===1&&hits[0]===${JSON.stringify(query)}&&ok&&s.value===''&&tab.getAttribute('aria-selected')==='true'&&before.join('|')===names().join('|');
+      })()`));
+  }
+  await evaluate("document.querySelector('[data-cat=featured]').click()");
+  check('All four non-featured landmarks open their own reference, model and return card',await surveyCards());
   await evaluate("document.querySelector('#place-list .place').click();document.querySelector('#detail [data-close]').click()");
   await settle();
   const [stageX,stageY]=await centerOf('#stage');
@@ -290,6 +386,16 @@ try {
     const n=document.querySelector('#route-summary').textContent.match(/步行约 (\\d+) 米/);
     return +m[1]>300&&+m[1]<900&&+m[2]>=1&&n&&+n[1]>+m[1]+150;
   })()`));
+  // The short road costs more on foot than the longer, quieter right-angle path.
+  const junction=createCampusRouter({road:[
+    [[[0,0],[180,0]],12,'','trunk'], [[[0,0],[0,30],[180,30],[180,0]],3,'','footway']
+  ]}).findRoute([0,0],[180,0]);
+  check('A* prefers the pedestrian detour, returns its bends and times the walked distance',
+    junction?.distance===240 && junction.minutes===3 && junction.points.some(([x,z])=>x===0&&z===30) && junction.points.some(([x,z])=>x===180&&z===30));
+  const itinerary=await evaluate("document.querySelector('#route-summary').textContent");
+  const duration=itinerary.match(/^步行约 (\d+) 米 · 约 (\d+) 分钟$/);
+  check('The cross-campus route card shows walking time consistent with its distance',
+    duration && Number(duration[1])>Math.hypot(153.3,527.8) && Number(duration[2])===Math.max(1,Math.round(Number(duration[1])/75)));
   await capture('route');
   await evaluate("document.querySelector('#route-walk').click()");
   await settle();
@@ -332,19 +438,50 @@ try {
   const restoredPos=new URL(await evaluate("(document.querySelector('#share').click(),location.href)")).searchParams.get('pos')?.split(',').map(Number);
   check('Opening a shared walking link restores the walker position and heading',sharedPos?.length===4&&restoredPos?.length===4&&restoredPos.every((v,i)=>Math.abs(v-sharedPos[i])<.05)&&
     await evaluate("document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && !new URL(location.href).searchParams.has('light')"));
+  // Target the middle of a non-featured roof. No prior selection, sidebar action
+  // or pin can supply the identity: the actual pointer event must hit the stage.
+  await readyAt(url+'/?cam=-108,98,582,-108,19,578');
+  await evaluate("document.querySelector('[data-cat=dorm]').click()");
+  const [roofX,roofY]=await centerOf('#stage');
+  assert(await evaluate(`Boolean(document.elementFromPoint(${roofX},${roofY})?.closest('#stage')) && document.querySelector('#detail').hidden`));
+  await clickAt(roofX,roofY);
+  check('A real canvas click on the unlabelled dorm roof opens the correct non-featured detail',
+    await evaluate("!document.querySelector('#detail').hidden && document.querySelector('#detail h2').textContent==='学五公寓' && document.querySelector('.place[aria-current=true] .rowtext b')?.textContent==='学五公寓'"));
+
+  const pose=[-287.24,24.36,1.43,1.04]; // A clear piece of Boxiang Road, looking up at the sky.
+  await readyAt(url+'/?pos='+pose.join(',')+'&light=sunset');
+  const dusk=await sceneLuminance();
+  await evaluate("document.querySelector('#lighting').click();document.querySelector('[data-light=night]').click();document.querySelector('#lighting').click()");
+  const night=await sceneLuminance();
+  check('Changing sunset to night visibly darkens the rendered scene at the same position',night+25<dusk);
+  const combined=new URL(await evaluate("(document.querySelector('#share').click(),location.href)"));
+  check('A walking share contains all four pose values and the non-default light together',
+    combined.searchParams.get('pos')===pose.join(',') && combined.searchParams.get('light')==='night' && !combined.searchParams.has('view') && !combined.searchParams.has('cam'));
+  await readyAt(combined.href);
+  const roundTrip=new URL(await evaluate(`(()=>{
+    history.replaceState(null,'',location.pathname); // Re-serialize the live camera, not the incoming query.
+    document.querySelector('#share').click();return location.href;
+  })()`));
+  check('Reopening the combined link restores position, heading, pitch, night lighting and the walking minimap',
+    roundTrip.searchParams.get('pos')===pose.join(',') && roundTrip.searchParams.get('light')==='night' &&
+    await evaluate("document.querySelector('[data-mode=walk]').getAttribute('aria-pressed')==='true' && !document.querySelector('#minimap').hidden && document.querySelector('.viewport').dataset.lighting==='night' && document.querySelector('[data-light=night]').getAttribute('aria-pressed')==='true'"));
+  await evaluate("document.querySelector('[data-light=noon]').click();document.querySelector('#notice').hidden=true");
   await evaluate("document.querySelector('#home').click();document.querySelector('#tour').click()");
   check('Tour picker offers three story routes from the toolbar and the sidebar',await evaluate(`(()=>{const d=document.querySelector('#tour-dialog'),ids=[...d.querySelectorAll('[data-tour]')].map(b=>b.dataset.tour);
     return d.open&&ids.join(',')==='axis,life,lake'&&document.querySelectorAll('[data-open-tour]').length===2&&[...d.querySelectorAll('[data-tour]')].every(b=>/\\d+ 站/.test(b.textContent));})()`));
-  await evaluate("document.querySelector('#tour-dialog [data-tour=axis]').click()");
-  await settle();
-  check('Starting the axis tour flies to West Gate with a caption card in morning light',await evaluate(`(()=>{const c=document.querySelector('#tour-card'),u=new URL(location.href).searchParams;
-    return !document.querySelector('#tour-dialog').open&&!c.hidden&&c.dataset.stop==='1'&&c.dataset.playing==='true'&&document.querySelector('#tour-step').textContent==='1 / 7'&&
+  check('Starting the axis tour flies to West Gate with a caption card in morning light',await evaluate(`(()=>{
+    document.querySelector('#tour-dialog [data-tour=axis]').click();
+    const c=document.querySelector('#tour-card'),u=new URL(location.href).searchParams;
+    const started=!document.querySelector('#tour-dialog').open&&!c.hidden&&c.dataset.stop==='1'&&c.dataset.playing==='true'&&document.querySelector('#tour-step').textContent==='1 / 7'&&
       document.querySelector('#tour-title').textContent.includes('西大门')&&document.querySelector('#tour-caption').textContent.length>20&&document.querySelector('#tour-prev').disabled&&
       document.querySelector('#mode-label').textContent==='校园云游'&&document.querySelector('#detail').hidden&&u.get('tour')==='axis'&&u.get('stop')==='1'&&
-      document.querySelector('.viewport').dataset.lighting==='morning'&&(document.querySelector('#place-list .place[aria-current=true]')?.textContent.includes('西大门')??false);})()`));
+      document.querySelector('.viewport').dataset.lighting==='morning'&&(document.querySelector('#place-list .place[aria-current=true]')?.textContent.includes('西大门')??false);
+    document.querySelector('#tour-toggle').click();return started;})()`));
+  // Capturing a frame on a software GPU may take longer than a tour stop.
+  // Resume only when the manual navigation assertions are ready to run.
   await capture('tour-axis');
   check('Next and previous move between tour stops and keep the link in step',await evaluate(`(()=>{const n=document.querySelector('#tour-next'),p=document.querySelector('#tour-prev'),c=document.querySelector('#tour-card');
-    n.click();n.click();const third=c.dataset.stop==='3'&&document.querySelector('#tour-title').textContent.includes('图书馆')&&new URL(location.href).searchParams.get('stop')==='3';
+    document.querySelector('#tour-toggle').click();n.click();n.click();const third=c.dataset.stop==='3'&&document.querySelector('#tour-title').textContent.includes('图书馆')&&new URL(location.href).searchParams.get('stop')==='3';
     p.click();return third&&c.dataset.stop==='2'&&document.querySelector('#tour-dots .current')===document.querySelectorAll('#tour-dots i')[1];})()`));
   check('Pause and continue toggle the tour',await evaluate(`(()=>{const t=document.querySelector('#tour-toggle'),c=document.querySelector('#tour-card');
     t.click();const paused=c.dataset.playing==='false'&&t.textContent==='继续';t.click();return paused&&c.dataset.playing==='true'&&t.textContent==='暂停';})()`));
@@ -546,9 +683,12 @@ try {
   await evaluate("document.querySelector('#field-dialog [data-close]').click()");
   await evaluate("document.querySelector('#home').click()");
   await capture('fallback');
+  if(failures.length||shaderErrors.size)console.error({failures,shaderErrors:[...shaderErrors]});
   check('No uncaught browser exceptions', failures.length === 0);
-  await writeFile(join(output, 'results.json'), JSON.stringify({ checks, stats, failures }, null, 2) + '\n');
-  console.log(JSON.stringify({ checks: checks.length, stats }, null, 2));
+  check('WebGL programs actually linked, with no shader errors across all viewpoints', linkedPrograms>0 && shaderErrors.size===0);
+  const diagnostics={linkedPrograms,shaderErrors:[...shaderErrors],failures};
+  await writeFile(join(output, 'results.json'), JSON.stringify({ checks, stats, ...diagnostics }, null, 2) + '\n');
+  console.log(JSON.stringify({ checks: checks.length, stats, ...diagnostics }, null, 2));
   }
 } finally {
   socket?.close();

@@ -3,6 +3,7 @@
     "WebGL model starts",
     "All generated geometry is finite",
     "All three tree forms populate the model",
+    "Default tab opens on exactly 26 featured landmarks before any search",
     "The featured list and the extended categorized catalog both load",
     "Beiyuan search has one entrance and the two waterside places remain distinct",
     "Model error panel is hidden",
@@ -65,6 +66,13 @@
     "Walking viewpoint hoops-south",
     "Walking viewpoint nanyuan-east",
     "Walking viewpoint nanyuan-south",
+    "Walking viewpoint economics-west",
+    "Walking viewpoint economics-east",
+    "Walking viewpoint math-lake",
+    "Walking viewpoint math-west",
+    "Walking viewpoint life-door",
+    "Walking viewpoint life-wing",
+    "Aerial viewpoint huayuan-roof",
     "Walking viewpoint west-gate",
     "Reference panel selects the photo for the current viewpoint",
     "Walk mode activates",
@@ -72,8 +80,14 @@
     "Existing walking directions can still route from the west gate to the stadium",
     "Category tabs filter every campus building and road, then restore the 26 featured places",
     "Search reaches non-featured dormitories by name",
+    "The four categories partition all 76 unique places and include the expected landmarks",
+    "Campus-wide search opens 学五公寓 from a different category and restores that category on Escape",
+    "Campus-wide search opens 3号教学楼 from a different category and restores that category on Escape",
+    "All four non-featured landmarks open their own reference, model and return card",
     "Clicking a 3D building picks it, opens its card and marks it in the list",
     "A* routing plans West Gate to the library and re-plans a longer route from the North Gate",
+    "A* prefers the pedestrian detour, returns its bends and times the walked distance",
+    "The cross-campus route card shows walking time consistent with its distance",
     "A route can be walked from its start with the radar minimap",
     "Live walking navigation shows remaining distance and a directional arrow",
     "Auto-walk advances along the A* route and pauses cleanly on manual takeover",
@@ -82,6 +96,10 @@
     "Share link records the orbit camera and the night lighting",
     "Opening a shared orbit link restores the same camera and lighting",
     "Opening a shared walking link restores the walker position and heading",
+    "A real canvas click on the unlabelled dorm roof opens the correct non-featured detail",
+    "Changing sunset to night visibly darkens the rendered scene at the same position",
+    "A walking share contains all four pose values and the non-default light together",
+    "Reopening the combined link restores position, heading, pitch, night lighting and the walking minimap",
     "Tour picker offers three story routes from the toolbar and the sidebar",
     "Starting the axis tour flies to West Gate with a caption card in morning light",
     "Next and previous move between tour stops and keep the link in step",
@@ -121,24 +139,25 @@
     "Canvas reaches the stand at track level and identifies it as a model viewpoint",
     "Both courts are linked in the original mobile walking controls",
     "Mobile Canvas opens the plaza aerial and can descend to the ground",
-    "No uncaught browser exceptions"
+    "No uncaught browser exceptions",
+    "WebGL programs actually linked, with no shader errors across all viewpoints"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1281808,
+    "vertices": 1261848,
     "invalid": 0,
-    "trees": 1001,
+    "trees": 999,
     "treeForms": {
-      "shade": 519,
+      "shade": 517,
       "vase": 372,
       "spire": 110
     },
     "buildings": {
       "buildings": 113,
-      "windows": 12557,
-      "entrances": 90,
-      "rooftopUnits": 102,
-      "triangles": 501404
+      "windows": 11826,
+      "entrances": 83,
+      "rooftopUnits": 93,
+      "triangles": 491214
     },
     "landscape": {
       "courts": 103,
@@ -151,7 +170,9 @@
       "tracks": 2
     },
     "drawCalls": 63,
-    "triangles": 1221916
+    "triangles": 1210890
   },
+  "linkedPrograms": 248,
+  "shaderErrors": [],
   "failures": []
 }

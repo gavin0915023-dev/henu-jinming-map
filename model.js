@@ -9,6 +9,7 @@ import { addWestGate } from './west-gate.js';
 import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
 import { fieldGround, entryGap, putFieldTrees, walkingWater } from './field-ground.js';
 import { buildingSolids, hallId } from './wenfu.js';
+import { steppedIds } from './landmark-wings.js';
 import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.js';
 import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
 import { publicBlockers,hasMarco,isMarcoRing,marcoHole } from './campus-commons.js';
@@ -630,11 +631,13 @@ export function createModel(stage,data,onFrame,options={}){
   }
 
   // Exact ray-vs-extruded-polygon picking for all inside campus buildings (<0.2ms, zero triangle scan).
-  const pickTargets=data.building.filter(b=>b[5]).map(record=>{
-    const [ring,height]=record;
+  const campusSolids=[...buildingSolids(data.building)];
+  const pickBody=(record,ring,height,base=0)=>{
     const [minX,minZ,maxX,maxZ]=bounds(ring);
-    return {record,ring,height,box:new T.Box3(new T.Vector3(minX,0,minZ),new T.Vector3(maxX,height+.2,maxZ))};
-  });
+    return {record,ring,height,base,box:new T.Box3(new T.Vector3(minX,base,minZ),new T.Vector3(maxX,height+.2,maxZ))};
+  };
+  const pickTargets=data.building.filter(b=>b[5]&&!steppedIds.has(b[4])).map(r=>pickBody(r,r[0],r[1]));
+  for(const {record,p,top,base} of campusSolids)if(record[5]&&steppedIds.has(record[4]))pickTargets.push(pickBody(record,p,top,base));
   function pickBuilding(clientX,clientY){
     const rect=stage.getBoundingClientRect();
     if(!rect.width||!rect.height)return null;
@@ -659,7 +662,7 @@ export function createModel(stage,data,onFrame,options={}){
         const t=(rx*sz-rz*sx)/denom,u=(rx*d.z-rz*d.x)/denom;
         if(t>0&&t<bestT&&u>=0&&u<=1){
           const y=o.y+t*d.y;
-          if(y>=0&&y<=height+.2){bestT=t;best=item.record;}
+          if(y>=item.base&&y<=height+.2){bestT=t;best=item.record;}
         }
       }
     }
@@ -679,10 +682,16 @@ export function createModel(stage,data,onFrame,options={}){
     if(!matches.length){lastView='';return;}
     highlightGroup=new T.Group();
     highlightGroup.name='Selected building highlight';
-    for(const [ring,height] of matches){
-      const pts=ring.map(([x,z])=>new T.Vector3(x,height+.35,z));
+    for(const record of matches){
+      const [ring,height]=record;
+      const sections=steppedIds.has(id)?pickTargets.filter(p=>p.record===record):[{ring,height}];
+      const pts=[];
+      for(const section of sections){
+        const p=section.ring,y=section.height+.35;
+        for(let i=1;i<p.length;i++)pts.push(new T.Vector3(p[i-1][0],y,p[i-1][1]),new T.Vector3(p[i][0],y,p[i][1]));
+      }
       const topGeo=new T.BufferGeometry().setFromPoints(pts);
-      const topLine=new T.Line(topGeo,new T.LineBasicMaterial({color:'#39c996'}));
+      const topLine=new T.LineSegments(topGeo,new T.LineBasicMaterial({color:'#39c996'}));
       const basePts=ring.map(([x,z])=>new T.Vector3(x,.96,z));
       const baseGeo=new T.BufferGeometry().setFromPoints(basePts);
       const baseLine=new T.Line(baseGeo,new T.LineBasicMaterial({color:'#39c996',transparent:true,opacity:.65}));
@@ -744,7 +753,7 @@ export function createModel(stage,data,onFrame,options={}){
     lastView='';
   }
 
-  const footprints=[...buildingSolids(data.building)].filter(s=>s.base<2.45&&!s.walkSurface).map(({p})=>[bounds(p),p]);
+  const footprints=campusSolids.filter(s=>s.base<2.45&&!s.walkSurface).map(({p})=>[bounds(p),p]);
   if(hasEastGate(data))for(const p of eastGateBlockers())footprints.push([bounds(p),p]);
   for(const p of publicBlockers(data))footprints.push([bounds(p),p]);
   const fence=data.building.some(b=>b[4]===standId)&&stadiumFence(data);

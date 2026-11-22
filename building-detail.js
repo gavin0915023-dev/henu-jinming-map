@@ -270,6 +270,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   const masonry = new SpatialFacadeBatch(360), glass = new SpatialFacadeBatch(360);
   const brick = new FacadeBatch(), canopy = new FacadeBatch(), silhouettes = new FacadeBatch();
   const plazaGround = new FacadeBatch(), foliage = new FacadeBatch(), fence = new FacadeBatch();
+  const railBases=[];
   const fittings = new Batch();
   const shadeCache = new Map();
   const shadedHex = (hex, factor) => {
@@ -369,11 +370,15 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
 
   for(const g of [...physicsModel(data.building),...eastModels(data),...centralModels(data),...facultyModels(data)])for(const [points,color,material,fine] of g.parts){
     const target=material==='brick'?brick:material==='glass'?glass:material==='canopy'?canopy:
-      material==='ground'?plazaGround:material==='foliage'?foliage:material==='fence'?fence:masonry;
+      material==='ground'?plazaGround:material==='foliage'?foliage:material==='fence'||material==='rail'?fence:masonry;
     target.quad(...points,color);
+    if(target===fence){
+      const y=material==='rail'?Math.min(...points.map(p=>p[1])):-1;
+      railBases.push(y,y,y,y);
+    }
     // Only the broad new surfaces cast shadows: the canopy, curved hall and
     // piers should shade the court without adding every window bar to its map.
-    if(material!=='brick'&&material!=='canopy'&&material!=='ground'&&material!=='foliage'&&material!=='fence'&&material!=='terrace'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
+    if(material!=='brick'&&material!=='canopy'&&material!=='ground'&&material!=='foliage'&&target!==fence&&material!=='terrace'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
       silhouettes.quad(...points,'#ffffff');
   }
 
@@ -552,11 +557,12 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   if (fence.positions.length) {
     const enclosure = fence.mesh({ roughness: .72, metalness: .15, transparent: true, depthWrite: false });
     enclosure.name = 'Court chain-link enclosures';
-    enclosure.material.customProgramCacheKey = () => 'campus-chainlink-fence-v1';
+    enclosure.geometry.setAttribute('railBase',new T.Float32BufferAttribute(railBases,1));
+    enclosure.material.customProgramCacheKey = () => 'campus-chainlink-and-terrace-v2';
     enclosure.material.onBeforeCompile = shader => {
-      shader.vertexShader = 'varying vec3 fencePoint;varying vec3 fenceNormal;\n' + shader.vertexShader
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nfencePoint=position;fenceNormal=normal;');
-      shader.fragmentShader = 'varying vec3 fencePoint;varying vec3 fenceNormal;\n' + shader.fragmentShader
+      shader.vertexShader = 'attribute float railBase;varying float railDatum;varying vec3 fencePoint;varying vec3 fenceNormal;\n' + shader.vertexShader
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nrailDatum=railBase;fencePoint=position;fenceNormal=normal;');
+      shader.fragmentShader = 'varying float railDatum;varying vec3 fencePoint;varying vec3 fenceNormal;\n' + shader.fragmentShader
         .replace('#include <color_fragment>', `#include <color_fragment>
         vec2 fn = normalize(fenceNormal.xz + vec2(1e-5, 0.0));
         vec2 ft = vec2(-fn.y, fn.x);
@@ -574,6 +580,13 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
         float wire = max(w1, w2);
         float farFade = smoothstep(0.32, 0.95, max(aa1, aa2));
         float coverage = mix(wire, 0.24, farFade);
+        if(railDatum >= 0.0){
+          // One rectangular panel per terrace edge, with horizontal rails and posts.
+          vec2 grid=vec2(fu/1.62,(fv-railDatum-.055)/.28);
+          vec2 aa=max(fwidth(grid),vec2(.002));
+          vec2 bars=1.0-smoothstep(vec2(.019,.065),vec2(.019,.065)+aa*.78,abs(fract(grid+.5)-.5));
+          coverage=mix(max(bars.x,bars.y),.17,smoothstep(.32,1.0,max(aa.x,aa.y)));
+        }
         if (coverage < 0.06) discard;
         diffuseColor.a *= coverage;`);
     };

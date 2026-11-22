@@ -150,6 +150,16 @@ function enrichCampusPlaces(data) {
       item.note = court.id === 'teaching-23' ? '南院口 · 红砖楼梯塔在右' : '北院口 · 红砖楼梯塔在左';
       item.desc = name + '位于综合教学楼建筑群。' + court.caption;
     }
+    const survey = fieldViews.find(v => v.place === item.id);
+    if (survey) {
+      item.note = survey.title.split(' · ')[1];
+      item.desc = survey.caption;
+      item.aliases = survey.aliases;
+      if (survey.camera) {
+        const [x, z, bearing, pitch] = survey.camera;
+        item.walk = [x, z, bearing * Math.PI / 180, pitch * Math.PI / 180, 78, survey.lens];
+      }
+    }
     extra.push(item);
     osmPlaceMap.set(id, item);
   }
@@ -236,12 +246,13 @@ function renderDetail() {
   detail.querySelector('.detail-walk:not([data-photo]):not([data-route]):not([data-field-reference])')?.addEventListener('click', () => setMode('walk'));
   detail.querySelector('[data-route]')?.addEventListener('click', () => openRouteTo(active));
   detail.querySelector('[data-photo]')?.addEventListener('click', () => showPhotos(photo));
-  if (fieldViews.some(v => v.place === active.id || v.wings?.includes(active.id))) {
+  const reference = fieldViews.find(v => v.place === active.id || v.wings?.includes(active.id));
+  if (reference) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'detail-walk';
     b.dataset.fieldReference = '';
-    b.textContent = '街景对照';
+    b.textContent = reference.reference ?? '街景对照';
     b.onclick = () => openViews(active.id);
     detail.append(b);
   }
@@ -943,7 +954,7 @@ function showPhotos(index = 0) {
 }
 function visitView(item) {
   if (!model) { notice('三维场景暂未就绪，可以先打开实拍。'); return; }
-  active = places.find(p => p.id === item.place) ?? null;
+  active = allPlaces.find(p => p.id === item.place) ?? null;
   if (!active || !placeMatches(active, search.value.trim().toLowerCase())) search.value = '';
   model?.highlightBuilding(null);
   renderPlaces();

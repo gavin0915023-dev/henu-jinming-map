@@ -14,6 +14,7 @@ import { cuitingCenter, isMarcoRing, marcoHole, publicBlockers, surveyedCourtPla
 import { nanyuanId,officeId } from '../round-buildings.js';
 import {standId,standFrame,standHeight,canStepOnStand,stadiumFieldModel,stadiumFence} from '../stadium-bowl.js';
 import {runningTracks} from '../running-tracks.js';
+import {economicsId,mathsId,lifeId,huayuanId,landmarkModels} from '../landmark-wings.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -22,6 +23,16 @@ const start = modelSource.indexOf('const closed =');
 const end = modelSource.indexOf('\nfunction seeded()', start);
 assert(start >= 0 && end > start, 'Cannot locate the model geometry helpers');
 const toolkit = new Function('T', `${modelSource.slice(start, end)}\nreturn { Batch, contains, bounds, groundShape };`)(T);
+// Two indexed quads must still share each quad's corners after merging. An
+// identity index on an expanded triangle stream is not the same optimisation.
+{
+  const mergeProbe=new toolkit.Batch();
+  for(const x of [0,3])mergeProbe.add(new T.PlaneGeometry(1,1).translate(x,0,0),'#ffffff');
+  const merged=mergeProbe.mesh(),pos=merged.geometry.getAttribute('position'),idx=merged.geometry.getIndex();
+  assert(pos.count===8&&idx?.count===12&&Array.from(idx.array.slice(0,6)).every(i=>pos.getX(i)<1)&&
+    Array.from(idx.array.slice(6)).every(i=>pos.getX(i)>2),'Merging two indexed planes retains shared vertices and offsets the second index');
+  merged.geometry.dispose();merged.material.dispose();
+}
 
 // Browser import maps are unavailable in Node; substitute the same bundled Three.js.
 const vendorURL = new URL('assets/three.module.min.js', root).href;
@@ -139,6 +150,27 @@ assert(spin.every(v=>v.camera[0]===spin[0].camera[0]&&v.camera[1]===spin[0].came
   spin[0].camera[2]===357.77&&spin[1].camera[2]===195.8,'Both user bearings must stay at one real station; the third looks directly at 17');
 const education=orientedFrame(238.4,-288.5,-.965,-.262),beiyuan=orientedFrame(329.75,-409.15,-.612,.791);
 const occupiedLocal=(d,id,u,y,v)=>{const [x,z]=d.world([u,v]);return solidAt(x,y,z,id);};
+for(const [id,x,z] of [[economicsId,102.8,-398.2],[mathsId,78.1,-302.75]]){
+  const d=orientedFrame(x,z,-.25,.968);
+  assert(occupiedLocal(d,id,3,5,0)&&!occupiedLocal(d,id,3,10,0)&&occupiedLocal(d,id,10,9,0)&&
+    !occupiedLocal(d,id,10,13,0)&&occupiedLocal(d,id,22,15,0),'Both college ends must step back in section');
+  const v=id===mathsId?-8.2:8.2,bridge=id===mathsId?id:'712688897',[laneX,laneZ]=d.world([14.25,v]);
+  assert(!solidAt(laneX,2.45,laneZ)&&solidAt(laneX,5.4,laneZ,bridge)&&details.forecourts.some(p=>on(laneX,laneZ,p)),
+    'The surveyed courtyard lane passes under the low enclosed bridge');
+  const panels=landmarkModels(data.building.find(b=>b[4]===id)).flatMap(g=>g.parts);
+  const roof=Math.max(...panels.flatMap(([q])=>q.map(p=>p[1])));
+  const lid=panels.filter(([q])=>q.every(p=>Math.abs(p[1]-roof)<.001)).map(([q])=>q.map(([x,,z])=>[x,z]));
+  assert(lid.some(p=>on(...d.world([6.5,1.46]),p))&&!lid.some(p=>on(...d.world([6.5,0]),p)),
+    'The roof blade has material around its oculus but none through its centre');
+}
+assert(!solidAt(351.65,2.4,-496.6,lifeId)&&solidAt(351.65,2.4,-498.4,lifeId)&&solidAt(347.2,2.4,-496.6,lifeId),
+  'The life sciences stair door is set back between real solid jambs');
+const labSteps=[-493.05,-493.5,-493.95,-494.4,-494.9].map(z=>heightAt(351.65,z));
+assert(labSteps.every((h,i)=>h>.75&&(!i||h>labSteps[i-1])),'The five entrance treads rise towards the inset door');
+assert(details.forecourts.some(p=>on(351.65,-491.4,p)),'The lab entrance opens onto pavement rather than lawn or a generated tree');
+const diningRoof=landmarkModels(data.building.find(b=>b[4]===huayuanId)).flatMap(g=>g.parts);
+assert(diningRoof.some(([p])=>p.every(q=>q[1]>23.8))&&!diningRoof.some(([, ,kind])=>kind==='glass'),
+  'Huayuan models the roof relief without inventing street-facing glazing');
 for(const u of [-9.0,10.7])for(let v=-26;v<2.6;v+=1.35){
   const [x,z]=education.world([u,v]);assert(!solidAt(x,2.45,z),'Visitors must be able to cross on either side of the brick tower');}
 assert(!occupiedLocal(education,eduId,3.25,13.8,-11.9)&&occupiedLocal(education,eduId,-8.0,13.8,-11.9),'The roof must surround a real hole at its centre');
@@ -181,6 +213,23 @@ for (const [name, result] of results) {
       bytes += attribute.array.byteLength;
     }
     const index = geometry.getIndex();
+    if(name==='buildings'){
+      assert(index,`${object.name}: architectural batches must retain indices`);
+      if(/^(?:window-frames-and-storey-bands|recessed-window-glazing) \[/.test(object.name)){
+        const cell=object.name.match(/\[(-?\d+),(-?\d+)\]$/).slice(1).map(Number);
+        assert.equal(index.count*2,position.count*3,`${object.name}: four vertices per facade quad`);
+        for(let i=0;i<position.count;i+=4){
+          let x=0,z=0;for(let j=i;j<i+4;j++){x+=position.getX(j);z+=position.getZ(j);}
+          // Rounded GPU floats can straddle a cell boundary by a few micrometres.
+          assert(x/4>=cell[0]*360-.001&&x/4<=(cell[0]+1)*360+.001&&z/4>=cell[1]*360-.001&&z/4<=(cell[1]+1)*360+.001,
+            `${object.name}: quad lies outside its 360 m cell`);
+        }
+      }
+      if(object.name==='Court chain-link enclosures'){
+        const base=geometry.getAttribute('railBase').array;
+        assert(base.some(y=>y<0)&&base.some(y=>y>5)&&base.filter(y=>y>=0).length<=96,'Terrace rails share the original court shader in whole indexed panels');
+      }
+    }
     if (index) {
       for (const i of index.array) assert(Number.isInteger(i) && i >= 0 && i < position.count, `${object.name}: index outside vertex buffer`);
       bytes += index.array.byteLength;
@@ -198,6 +247,10 @@ for (const [name, result] of results) {
   report[name] = { stats: result.stats, meshes, vertices, triangles, bufferMiB: +(bytes / 1024 ** 2).toFixed(2), geometryFinite: true, meshReport };
 }
 assert.equal(report.buildings.stats.triangles, report.buildings.triangles, 'Building triangle statistics disagree with actual buffers');
+assert(report.buildings.meshes<=42&&report.buildings.triangles<510_000,'Architecture exceeds its mesh or triangle budget');
+for(const prefix of ['window-frames-and-storey-bands [','recessed-window-glazing [','Court chain-link enclosures']){
+  assert(report.buildings.meshReport.some(m=>m.name.startsWith(prefix)),prefix+' must be present in the rendered scene');
+}
 assert.equal(report.landscape.stats.tracks, 2, 'Both running tracks must be generated');
 assert.equal(report.landscape.stats.shores, data.water.length, 'All lake shores must be generated');
 assert(report.landscape.triangles < 150_000, 'Landscape exceeds its 150,000 triangle budget');

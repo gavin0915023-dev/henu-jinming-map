@@ -361,7 +361,10 @@ export function softwareRenderer(data,palette,trees,inside){
         else if(obj.parts){
           if(obj.southFace&&cam.position.z<obj.center[2])continue;
           if(obj.normal&&obj.normal[0]*(cam.position.x-obj.center[0])+obj.normal[1]*(cam.position.y-obj.center[1])+obj.normal[2]*(cam.position.z-obj.center[2])<0)continue;
-          for(const [points,color,material,detail] of obj.parts)if(!detail||w<160)path(points,material==='canopy'?color+'50':material==='fence'?color+'28':color,material==='fence'?color:null);
+          for(const [points,color,material,detail] of obj.parts)if(!detail||w<160){
+            const openwork=material==='fence'||material==='rail';
+            path(points,material==='canopy'?color+'50':openwork?color+'28':color,openwork?color:null);
+          }
           obj.sign?.();
         }
         else building(obj,w);

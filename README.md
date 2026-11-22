@@ -14,12 +14,12 @@ node server.mjs
 
 ## 查看细节
 
-- 在左侧可按分类（重点 / 全部 / 教学 / 宿舍 / 生活 / 室外）浏览或搜索全校 58 栋命名楼宇与道路，也可在三维画面中直接点击任意建筑查看并高亮轮廓。
+- 地点列表默认显示 26 个重点地标；“全部”收录全校 76 个地点，包括楼宇、校门、广场、水域和道路。教学、宿舍、生活和室外四类可分别浏览。在任一分类输入楼名都能搜索全校，也可以直接点三维建筑查看详情。
 - 按住鼠标左键旋转，右键平移，滚轮缩放；工具栏支持回到全景、切换清晨 / 正午 / 黄昏 / 夜景时段光照与湖面微风水波，以及一键复制当前任意视角分享链接。
 - 点击“校园主题云游”（侧边栏入口或地图工具栏播放按钮），可选择中轴经典线、南北生活线、湖畔学院线 3 条故事路线自动运镜游览与解说，支持随时拖动接管、切站、分享站点链接以及保留当前时段光照“下到地面”步行。
 - 点击“地面漫游”，拖动视野，用 WASD / 方向键移动（按住 Shift 加速，Q/E 转向，支持贴墙滑行），移动端可使用左下角单手虚拟摇杆与底部可折叠/上下拖拽地点抽屉，也可点按或长按屏幕前进/后退按钮；小地图实时显示位置、朝向并支持点击快速跳转。
 - 在地点详情卡片点击“步行导航”，基于校园路网自动规划 A* 步行路线并在三维场景、小地图与卫星底图中高亮显示；进入漫游后实时显示方向箭头、剩余距离、进度条与抵达提示，并支持“自动沿路走”（手动操作随时接管暂停）。
-- 点击地图右侧的相机，可按区域筛选 54 个取景视角，对照 49 个不同的百度全景和两处校方照片来源。选“上一站 / 下一站”可沿夷山大街从两个角度望向志义体育场，再到跑道边和西侧正门；也可从 2、3 号教学楼的院口走到 5、6 号楼一侧。
+- 点击地图右侧的相机，可按区域筛选 61 个取景视角，对照 55 个不同的百度全景、两处校方照片来源及华苑餐厅的卫星屋面。选“上一站 / 下一站”可沿夷山大街看志义体育场，或绕到同一栋学院楼的另一面。
 - [俯看马可广场](https://gavin0915023-dev.github.io/henu-jinming-map/?view=marco-bowl)会打开可旋转的三维俯视图；选“从这里漫游”从东侧台阶下到中央。地面实拍可从[西侧步道](https://gavin0915023-dev.github.io/henu-jinming-map/?view=marco-approach)对照。
 - 在图书馆前可看两侧内收的玻璃幕墙、雨棚和上方的金色馆名，并与“实景参考”里的校方照片对照。明德广场中轴按原始道路数据作为步行铺地，不设机动车中心线。
 - 搜“粹庭湖”到经济学院北侧看柳岸；搜“九章路石桥”到教学区看石栏。两者位于不同水面，旧石桥分享链接继续有效。也可单独打开[三种常用校园树形对照](https://gavin0915023-dev.github.io/henu-jinming-map/verification/tree-study.html)。岸柳另建；树形和种植位置不是逐株测绘。
@@ -44,6 +44,7 @@ node server.mjs
 - `college-courts.js`：教苑餐厅、北苑餐厅、田家炳教育书院和地理楼。每处有独立的窗墙和体量设计；两家餐厅不共用一套立面，书院的通路和顶板开口在几何中实际留空。
 - `campus-commons.js`：马可广场的下沉地面与可行走台阶、北大门、粹庭湖岸和东南球场。球场设施的朝向、不同高度的围网和入口按对应街景绘制。
 - `round-buildings.js`：办公楼两面的窗廊、南门雨棚，南苑餐厅内收的东面门廊和南边带钢架的白檐。
+- `landmark-wings.js`：经济学院、数学楼、生命科学院和华苑餐厅。使用原轮廓裁切退台和门洞，两种渲染器共用同一组表面。露台栏杆与球场围网共用一个索引网格，每段栏板只占一个四边形。
 - `routing.js` / `minimap.js` / `tour.js`：校园路网 A* 步行寻路、漫游模式 2D 雷达小地图（支持点击跳转与路线绘制）与 3 条校园主题云游故事路线控制器。
 - `assets/`：原始校园 JSON、Three.js、OrbitControls 与按需加载的 Leaflet 依赖。
 - `index.html` / `viewer.css` / `main.js`：完整的本地查看界面。
@@ -51,6 +52,17 @@ node server.mjs
 若将改动接入原页面，请将上述场景模块与 `model.js` 放在同一目录，并保留 `assets/OrbitControls.js` 和 `three` 的 import map。
 
 ## 实拍参考细化
+
+![经济学院西端、数学楼临水面、生命科学院侧门及华苑餐厅屋面的模型截图](verification/landmark-wings-preview.webp)
+
+| 地点与模型视角 | 证据与还原范围 |
+| --- | --- |
+| 经济学院：[西端退台](https://gavin0915023-dev.github.io/henu-jinming-map/?view=economics-west) · [东端玻璃](https://gavin0915023-dev.github.io/henu-jinming-map/?view=economics-east) | [西端街景](https://map.baidu.com/#panoid=01027700001404011220505535G&panotype=street&heading=89.4&pitch=11)可见逐层内退的白色窗廊和带圆孔的高檐；[东端街景](https://map.baidu.com/#panoid=01027700001404011218425405G&panotype=street&heading=272.4&pitch=9)是两道红砖侧墙夹着高玻璃。 |
+| 数学与信息科学学院：[临水南面](https://gavin0915023-dev.github.io/henu-jinming-map/?view=math-lake) · [西端](https://gavin0915023-dev.github.io/henu-jinming-map/?view=math-west) | [临水街景](https://map.baidu.com/#panoid=01027700001404011226255645G&panotype=street&heading=23.1&pitch=9)能区分暖黄色短窗墙、白色长窗和上方红檐；[水渠旁机位](https://map.baidu.com/#panoid=01027700001404011221155915G&panotype=street&heading=87.1&pitch=12)用于核对西端退台，而未把邻楼连廊当作它的入口。 |
+| 生命科学院：[西南侧门](https://gavin0915023-dev.github.io/henu-jinming-map/?view=life-door) · [南翼沿路](https://gavin0915023-dev.github.io/henu-jinming-map/?view=life-wing) | [侧门近景](https://map.baidu.com/#panoid=01027700001404011217545635G&panotype=street&heading=10.9&pitch=16)可见台阶、门左实墙和后退的楼梯间窗；[沿路斜看](https://map.baidu.com/#panoid=01027700001404011217585645G&panotype=street&heading=64.1&pitch=11)核对南翼分散开窗及小挑板。“生命科学学院”也能搜到原地图中的“生命科学院”。 |
+| [华苑餐厅 · 屋面俯看](https://gavin0915023-dev.github.io/henu-jinming-map/?view=huayuan-roof) | [Esri 卫星影像，18 级](https://www.arcgis.com/apps/mapviewer/index.html?basemapUrl=https%3A%2F%2Fserver.arcgisonline.com%2FArcGIS%2Frest%2Fservices%2FWorld_Imagery%2FMapServer&center=114.305044,34.813887&level=18)可区分深色主屋面、北部浅色矩形和东侧窄带。围合院内的餐厅被临街宿舍和商铺遮挡，未将它们的店招、阳台或窗排画到餐厅上。 |
+
+三栋学院楼的上述街景均拍于 2014 年 4 月。屋顶开孔、退台、窗扇和踏步尺寸为估计；照片与卫星切片均未打包到查看器。
 
 ![志义体育场模型：从夷山大街隔场望向看台，在跑道边看步阶，以及从中州路看西门](verification/stadium-preview.webp)
 
@@ -116,11 +128,12 @@ node server.mjs
 卫星图直接请求 Esri 影像瓦片，单张失败或超时后尝试备用地址，缩放与拖动后仍会自动重试缺失瓦片。缺图区域显示校园平面示意，可继续查询地点；两个地址均失败时可点击“重试影像”。正常网络检查可执行 `$env:CHECK_SATELLITE='1'; node verification/verify.mjs`；将值改为 `faults` 可模拟单个地址失败、部分缺图和服务断开，改为 `deployed` 可检查已发布页面的真实影像请求。
 
 ```powershell
-node verification/verify.mjs
+node verification/geometry-check.mjs
+$env:CHECK_SATELLITE='faults'; node verification/verify.mjs
 ```
 
 验证脚本使用本机 Chrome 或 Edge 的无界面模式，不需要安装 npm 依赖。结果与全景、建筑近景、漫游、移动端截图保存在 `verification/`。也可通过 `CHROME_PATH` 指定浏览器路径。
 
 浏览器自动检查需要 Node.js 22 或更新版本。只运行查看器可使用 Node.js 18 或更新版本。纯几何检查可单独执行 `node verification/geometry-check.mjs`。
 
-浏览器检查覆盖 WebGL 启动、几何有效性、三种树形、地点搜索、漫游、返回全景、手机控件，以及无 WebGL 时的兼容渲染。可用 `$env:TREE_STUDY='1'; node verification/verify.mjs` 单独生成树形对照图。
+浏览器检查覆盖 26 / 76 个地点、分类隔离与跨类检索、鼠标点选未标注的楼顶、A* 路径与步行分钟数、小地图、导览、自动步行、手机控件与 Canvas 兼容渲染。光照测试在固定视角对比黄昏和夜景的画面亮度，并重新打开带 `pos` 和 `light` 的分享链接，从相机读回位置、朝向和仰角。验证器同时记录真实 WebGL 程序的链接结果和浏览器异常。可用 `$env:TREE_STUDY='1'; node verification/verify.mjs` 单独生成树形对照图。

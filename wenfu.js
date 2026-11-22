@@ -9,6 +9,7 @@ import { libraryId, librarySolids } from './central-axis.js';
 import { civilId, zengId, clinicId, facultySolids } from './faculty-sites.js';
 import { courtSolidIds, courtSolids } from './college-courts.js';
 import { officeId,officeSolids,nanyuanId,diningSolids } from './round-buildings.js';
+import { steppedIds,landmarkSolids } from './landmark-wings.js';
 export const hallId='712688908',softwareId='712688905';
 export const passage={left:15.0,right:23.5,clear:4.85,front:-205.15,rear:-251,frontTop:12.5,setback:-231};
 
@@ -30,6 +31,7 @@ function clip(poly,axis,limit,lower){
 export function* buildingSolids(records){
   for(const record of records){
     const [p,h,,,id]=record;
+    if(steppedIds.has(id)){yield* landmarkSolids(record);continue;}
     if(id===standId){yield* standSolids(record);continue;}
     if(id===officeId){yield* officeSolids(record);continue;}
     if(id===nanyuanId){yield* diningSolids(record);continue;}
