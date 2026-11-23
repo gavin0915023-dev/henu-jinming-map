@@ -4,6 +4,7 @@ import { imageryLayer, addCampusBasemap } from './satellite.js';
 import { cuitingCenter } from './campus-commons.js';
 import { createCampusRouter, routeProgress } from './routing.js';
 import { createMinimap } from './minimap.js';
+import { residences } from './dongyuan.js';
 import { tours, createTourController, DWELL } from './tour.js';
 
 const $ = selector => document.querySelector(selector);
@@ -121,7 +122,8 @@ function enrichCampusPlaces(data) {
   const extra = [];
   for (const record of data.building) {
     const [ring, height, rawType, name, id, inside] = record;
-    if (!inside || !name || osmPlaceMap.has(id) || seenNames.has(name)) continue;
+    const residence = residences.get(id);
+    if ((!inside && !residence) || !name || osmPlaceMap.has(id) || seenNames.has(name)) continue;
     seenNames.add(name);
     const xs = ring.map(q => q[0]), zs = ring.map(q => q[1]);
     const cx = Number(((Math.min(...xs) + Math.max(...xs)) / 2).toFixed(1));
@@ -159,6 +161,15 @@ function enrichCampusPlaces(data) {
         const [x, z, bearing, pitch] = survey.camera;
         item.walk = [x, z, bearing * Math.PI / 180, pitch * Math.PI / 180, 78, survey.lens];
       }
+    }
+    if (residence) {
+      const n = residence.number, cn = name.slice(1, -2);
+      item.note = '东苑学生公寓 · ' + n + ' 号楼';
+      item.aliases = ['东苑', '东苑学生宿舍楼', '东苑宿舍', '东苑公寓', '东苑' + n + '号楼', '东苑' + cn + '号楼', n + '号宿舍楼', n + '号公寓', '学' + n + '公寓'].join(' ');
+      if (!survey) item.desc = '小东门外的东苑' + n + '号楼。楼间的位置和屋面按地图轮廓与卫星影像核对；院内门窗为估计。';
+      // A photo can be taken across the avenue. Always end walking routes
+      // on the lane alongside this particular block, not at the photo or in a room.
+      item.routePoint = router.streetPoseFor(cx, cz, ring).slice(0, 2);
     }
     extra.push(item);
     osmPlaceMap.set(id, item);
@@ -246,14 +257,15 @@ function renderDetail() {
   detail.querySelector('.detail-walk:not([data-photo]):not([data-route]):not([data-field-reference])')?.addEventListener('click', () => setMode('walk'));
   detail.querySelector('[data-route]')?.addEventListener('click', () => openRouteTo(active));
   detail.querySelector('[data-photo]')?.addEventListener('click', () => showPhotos(photo));
-  const reference = fieldViews.find(v => v.place === active.id || v.wings?.includes(active.id));
+  const reference = fieldViews.find(v => v.place === active.id || v.wings?.includes(active.id)) ??
+    (residences.has(active.osmId) ? fieldViews.find(v => v.id === 'dongyuan-courts') : null);
   if (reference) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'detail-walk';
     b.dataset.fieldReference = '';
     b.textContent = reference.reference ?? '街景对照';
-    b.onclick = () => openViews(active.id);
+    b.onclick = () => openViews(active.id, reference.id);
     detail.append(b);
   }
 }
@@ -610,7 +622,8 @@ function resolveRouteEndpoint(val) {
     const v = model.getView();
     return { x: v.x, z: v.z, name: '当前位置' };
   }
-  return allPlaces.find(p => p.id === val) ?? null;
+  const p = allPlaces.find(p => p.id === val);
+  return p?.routePoint ? { ...p, x: p.routePoint[0], z: p.routePoint[1] } : (p ?? null);
 }
 
 function syncAutoWalkButton(running) {

@@ -15,6 +15,8 @@ import { nanyuanId,officeId } from '../round-buildings.js';
 import {standId,standFrame,standHeight,canStepOnStand,stadiumFieldModel,stadiumFence} from '../stadium-bowl.js';
 import {runningTracks} from '../running-tracks.js';
 import {economicsId,mathsId,lifeId,huayuanId,landmarkModels} from '../landmark-wings.js';
+import {residences,residenceModel} from '../dongyuan.js';
+import {createCampusRouter} from '../routing.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -66,6 +68,34 @@ assert(plantings.some(z=>z<north)&&plantings.some(z=>z>south)&&plantings.every(z
 const details=rendered.field;
 const bodies3d=[...buildingSolids(data.building)];
 const solidAt=(x,y,z,id)=>bodies3d.some(s=>(!id||s.record[4]===id)&&s.base<y&&y<s.top&&toolkit.contains(x,z,s.p));
+const eastern=data.building.filter(r=>residences.has(r[4]));
+assert.deepEqual(eastern.map(r=>r[3]).sort(),['十九','二十','二十一','二十二','二十三','二十四','二十五','二十六'].map(s=>'学'+s+'公寓').sort());
+const eastRouter=createCampusRouter(data),inSolid=(x,z)=>bodies3d.some(s=>s.base<2 && x>500 && toolkit.contains(x,z,s.p));
+for(const record of eastern){
+  const [ring,h,,,id,inside]=record,[minX,minZ,maxX,maxZ]=toolkit.bounds(ring);
+  const own=bodies3d.filter(s=>s.record===record),source=own.filter(s=>s.base<1);
+  assert(!inside&&source.length===1&&source[0].p===ring&&own.some(s=>s.base>=h&&s.top>h+.8),id+': retain real ground footprint and raised stair heads');
+  const surfaces=residenceModel(record),ends=surfaces.filter(g=>g.normal?.[0]<-.97),side=surfaces.filter(g=>Math.abs(g.normal?.[2])>.97);
+  const panes=groups=>groups.flatMap(g=>g.parts.filter(p=>p[2]==='glass').map(([p])=>p));
+  assert(panes(side).length>panes(ends).length*4,id+': long fronts and short ends must not share a window grid');
+  if(residences.get(id).number<=22){
+    const west=panes(ends).filter(p=>p[0][0]<minX+1&&p.every(q=>q[1]>h*.48));
+    assert(west.length>=3&&west.every(p=>Math.abs(p.reduce((s,q)=>s+q[2]/4,0)-west[0].reduce((s,q)=>s+q[2]/4,0))<.15),id+': street gable has just one upper window axis');
+  }
+  const roofs=surfaces.flatMap(g=>g.parts.filter(p=>p[2]==='terrace'));
+  assert(roofs.length>0&&roofs.every(([p])=>toolkit.contains(p.reduce((s,q)=>s+q[0]/4,0),p.reduce((s,q)=>s+q[2]/4,0),ring)),id+': roof finish must stay on its own wing');
+  const dest=eastRouter.streetPoseFor((minX+maxX)/2,(minZ+maxZ)/2,ring).slice(0,2);
+  const route=eastRouter.findRoute([507.9,249.5],dest);
+  assert(route&&route.points.at(-1).every((x,i)=>Math.abs(x-dest[i])<.25)&&!inSolid(...dest),id+': route must stop on the adjacent lane');
+  for(let i=1;i<route.points.length;i++){
+    const [a,b]=route.points.slice(i-1,i+1),n=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/2);
+    for(let j=0;j<=n;j++)assert(!inSolid(a[0]+(b[0]-a[0])*j/n,a[1]+(b[1]-a[1])*j/n),id+': route cuts through a building');
+    if(i>1){
+      const [x,z]=route.points[i-2],dx=a[0]-x,dz=a[1]-z,ex=b[0]-a[0],ez=b[1]-a[1];
+      assert(dx*ex+dz*ez>-.98*Math.hypot(dx,dz)*Math.hypot(ex,ez),id+': route overshoots the doorway lane and doubles back');
+    }
+  }
+}
 for(const v of fieldViews.filter(v=>v.date)){
   const [x,z]=v.camera;assert(!solidAt(x,2.45,z),v.id+': field camera starts inside a wall');
 }
@@ -221,7 +251,7 @@ for (const [name, result] of results) {
         for(let i=0;i<position.count;i+=4){
           let x=0,z=0;for(let j=i;j<i+4;j++){x+=position.getX(j);z+=position.getZ(j);}
           // Rounded GPU floats can straddle a cell boundary by a few micrometres.
-          assert(x/4>=cell[0]*360-.001&&x/4<=(cell[0]+1)*360+.001&&z/4>=cell[1]*360-.001&&z/4<=(cell[1]+1)*360+.001,
+          assert(Math.abs(x/4-cell[0]*360)<=180.001&&Math.abs(z/4-cell[1]*360)<=180.001,
             `${object.name}: quad lies outside its 360 m cell`);
         }
       }

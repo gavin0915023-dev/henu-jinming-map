@@ -73,6 +73,10 @@
     "Walking viewpoint life-door",
     "Walking viewpoint life-wing",
     "Aerial viewpoint huayuan-roof",
+    "Walking viewpoint dongyuan-22",
+    "Walking viewpoint dongyuan-20",
+    "Walking viewpoint dongyuan-19",
+    "Aerial viewpoint dongyuan-courts",
     "Walking viewpoint west-gate",
     "Reference panel selects the photo for the current viewpoint",
     "Walk mode activates",
@@ -82,6 +86,8 @@
     "Category tabs filter every campus building and road, then restore the 26 featured places",
     "Search reaches non-featured dormitories by name",
     "The four categories partition all 76 unique places and include the expected landmarks",
+    "Exactly eight Dongyuan residences join the original 76 places, all under Dorms",
+    "Dongyuan search across categories distinguishes numbered buildings and their source cards",
     "Campus-wide search opens 学五公寓 from a different category and restores that category on Escape",
     "Campus-wide search opens 3号教学楼 from a different category and restores that category on Escape",
     "All four non-featured landmarks open their own reference, model and return card",
@@ -98,6 +104,7 @@
     "Opening a shared orbit link restores the same camera and lighting",
     "Opening a shared walking link restores the walker position and heading",
     "A real canvas click on the unlabelled dorm roof opens the correct non-featured detail",
+    "Picking the detached east-row roof opens building 25 and routes to its courtyard",
     "Changing sunset to night visibly darkens the rendered scene at the same position",
     "A walking share contains all four pose values and the non-default light together",
     "Reopening the combined link restores position, heading, pitch, night lighting and the walking minimap",
@@ -139,26 +146,27 @@
     "Mobile Canvas crosses to the opposite side of the education court",
     "Canvas reaches the stand at track level and identifies it as a model viewpoint",
     "Both courts are linked in the original mobile walking controls",
+    "Mobile Canvas follows all three Dongyuan street positions into the aerial overview",
     "Mobile Canvas opens the plaza aerial and can descend to the ground",
     "No uncaught browser exceptions",
     "WebGL programs actually linked, with no shader errors across all viewpoints"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1266789,
+    "vertices": 1305215,
     "invalid": 0,
-    "trees": 999,
+    "trees": 1007,
     "treeForms": {
-      "shade": 517,
-      "vase": 372,
+      "shade": 520,
+      "vase": 377,
       "spire": 110
     },
     "buildings": {
-      "buildings": 113,
+      "buildings": 121,
       "windows": 11826,
       "entrances": 83,
       "rooftopUnits": 93,
-      "triangles": 491214
+      "triangles": 509518
     },
     "landscape": {
       "courts": 103,
@@ -170,10 +178,10 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 63,
-    "triangles": 1210890
+    "drawCalls": 66,
+    "triangles": 1245092
   },
-  "linkedPrograms": 247,
+  "linkedPrograms": 273,
   "shaderErrors": [],
   "failures": []
 }

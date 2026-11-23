@@ -10,6 +10,7 @@ import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
 import { fieldGround, entryGap, putFieldTrees, walkingWater } from './field-ground.js';
 import { buildingSolids, hallId } from './wenfu.js';
 import { steppedIds } from './landmark-wings.js';
+import { residences } from './dongyuan.js';
 import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.js';
 import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
 import { publicBlockers,hasMarco,isMarcoRing,marcoHole } from './campus-commons.js';
@@ -638,14 +639,14 @@ export function createModel(stage,data,onFrame,options={}){
     lastView='';
   }
 
-  // Exact ray-vs-extruded-polygon picking for all inside campus buildings (<0.2ms, zero triangle scan).
+  // Pick named buildings from solid footprints, including detached residences.
   const campusSolids=[...buildingSolids(data.building)];
   const pickBody=(record,ring,height,base=0)=>{
     const [minX,minZ,maxX,maxZ]=bounds(ring);
     return {record,ring,height,base,box:new T.Box3(new T.Vector3(minX,base,minZ),new T.Vector3(maxX,height+.2,maxZ))};
   };
   const pickTargets=data.building.filter(b=>b[5]&&!steppedIds.has(b[4])).map(r=>pickBody(r,r[0],r[1]));
-  for(const {record,p,top,base} of campusSolids)if(record[5]&&steppedIds.has(record[4]))pickTargets.push(pickBody(record,p,top,base));
+  for(const {record,p,top,base} of campusSolids)if(residences.has(record[4])||(record[5]&&steppedIds.has(record[4])))pickTargets.push(pickBody(record,p,top,base));
   function pickBuilding(clientX,clientY){
     const rect=stage.getBoundingClientRect();
     if(!rect.width||!rect.height)return null;
@@ -692,7 +693,7 @@ export function createModel(stage,data,onFrame,options={}){
     highlightGroup.name='Selected building highlight';
     for(const record of matches){
       const [ring,height]=record;
-      const sections=steppedIds.has(id)?pickTargets.filter(p=>p.record===record):[{ring,height}];
+      const sections=steppedIds.has(id)||residences.has(id)?pickTargets.filter(p=>p.record===record):[{ring,height}];
       const pts=[];
       for(const section of sections){
         const p=section.ring,y=section.height+.35;

@@ -64,6 +64,10 @@ export const fieldViews=[
   {id:'life-door',place:'b-716761653',aliases:'生命科学学院',title:'生命科学院 · 西南侧门',caption:'台阶尽头的侧门退进浅色墙身，上方各层的楼梯间窗也在凹口里。门左是整片实墙，右面才是实验楼的窗列。',camera:[349.6,-485.3,10.9,16],lens:{horizontal:92,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011217545635G',12726140.76,4115802.39,10.9,16)},
   {id:'life-wing',place:'b-716761653',title:'生命科学院 · 南翼沿路',caption:'向东沿楼看，浅色面砖上间隔开窗，窗下可见分散的设备挑板。楼角的入口和长墙的窗间距不同。',camera:[334.3,-484.7,64.1,11],lens:{horizontal:74,eye:2.32},date:'2014年4月',source:'百度街景',url:baidu('01027700001404011217585645G',12726122.2,4115801.45,64.1,11)},
   {id:'huayuan-roof',place:'b-712688853',title:'华苑餐厅 · 屋面俯看',caption:'中央深色屋面、北侧浅色矩形和东侧窄长屋面在卫星影像上可分辨。附近街景被宿舍和商铺挡住，尚未核实餐厅的门窗。',orbit:[[192,102,504],[154.8,20,463.4]],action:'俯看餐厅模型',reference:'卫星对照',source:'Esri 卫星影像',url:'https://www.arcgis.com/apps/mapviewer/index.html?basemapUrl=https%3A%2F%2Fserver.arcgisonline.com%2FArcGIS%2Frest%2Fservices%2FWorld_Imagery%2FMapServer&center=114.305044,34.813887&level=18'},
+  {id:'dongyuan-22',place:'b-712688795',title:'东苑学二十二公寓 · 南侧转角',caption:'从夷山大街向东北看。灰褐色山墙只开一列白框窗；转过楼角，宽阳台窗与带小窗的凸墙交替，楼梯间伸出一片薄顶。前面的低层铺面不是宿舍阳台。',camera:[503.9,301.6,54,23],lens:{horizontal:68,eye:2.32},date:'2022年6月',source:'百度街景',url:baidu('09027700122206231400097765A',12726330.18,4114850.31,54,23)},
+  {id:'dongyuan-20',place:'b-712688787',title:'东苑学二十公寓 · 临街山墙',caption:'正对夷山大街的一端，两大片实墙夹着一列窗。沿街店面只占下部，上层外墙没有连成一片的窗带。',camera:[500.7,364.9,78,13],lens:{horizontal:72,eye:2.32},date:'2022年6月',source:'百度街景',url:baidu('09027700122206231400032595A',12726326.39,4114773.5,78,13)},
+  {id:'dongyuan-19',place:'b-712688783',title:'东苑学十九公寓 · 北侧窗间',caption:'从街口越过低层铺面，可辨认浅弧形挑檐、成组的阳台窗和中间的窄窗。此处为2014年早春街景；模型的灰褐色外墙参照2022年沿街影像。',camera:[498.7,365.4,127,17],lens:{horizontal:70,eye:2.32},date:'2014年3月',source:'百度街景',url:baidu('01027700001403281306443605N',12726323.93,4114772.92,127,17)},
+  {id:'dongyuan-courts',place:'b-712688794',title:'东苑学生公寓 · 两列八栋',caption:'西侧从南往北是学十九至学二十二公寓，东侧是学二十三至学二十六公寓。北排两栋各有错开的两翼；其余楼之间留着横巷。东排屋面的深浅分区可从卫星影像核对，院内立面为近似。',orbit:[[551,204,568],[631,8,338]],action:'俯看东苑八栋',reference:'卫星对照',source:'Esri 卫星影像',url:'https://www.arcgis.com/apps/mapviewer/index.html?basemapUrl=https%3A%2F%2Fserver.arcgisonline.com%2FArcGIS%2Frest%2Fservices%2FWorld_Imagery%2FMapServer&center=114.31025,34.8150&level=18'},
   {id:'west-gate',place:'west',title:'西大门 · 校名墙',caption:'面向校园中轴。金明西门是低矮的校名石墙，两侧留出通道。',camera:[-485,-76,90,0],source:'校方照片',url:uni}
 ];
 
@@ -83,7 +87,8 @@ export const walks=[
   ['北门内外',['north-gate','north-gate-in']],['粹庭湖岸',['cuiting-bank','cuiting-north']],
   ['办公楼两面',['office-north','office-south']],['东南运动区',['tennis-west','hoops-south']],
   ['南苑餐厅',['nanyuan-east','nanyuan-south']],
-  ['经济学院两端',['economics-west','economics-east']],['数学楼两面',['math-lake','math-west']],['生命科学院南翼',['life-door','life-wing']]
+  ['经济学院两端',['economics-west','economics-east']],['数学楼两面',['math-lake','math-west']],['生命科学院南翼',['life-door','life-wing']],
+  ['东苑公寓',['dongyuan-22','dongyuan-20','dongyuan-19','dongyuan-courts']]
 ].map(([label,ids])=>({label,stops:ids.map(id=>fieldViews.find(v=>v.id===id))}));
 
 export function mountFieldViews(dialog,visit){
@@ -93,7 +98,8 @@ export function mountFieldViews(dialog,visit){
     ['北部学院与湖区',['pharmacy','education','beiyuan','lake','campus-bridge','b-712688902','b-712688900','b-716761653']],
     ['文甫路与公共教学区',['cs','hall','software','teaching','autumn']],
     ['体育场与球场',['stadium','east-courts']],
-    ['南部学院与生活区',['physics','civil','geography','zeng','dorm17','clinic','jiaoyuan','nanyuan','b-712688853']]
+    ['南部学院与生活区',['physics','civil','geography','zeng','dorm17','clinic','jiaoyuan','nanyuan','b-712688853']],
+    ['东苑学生公寓',['b-712688795','b-712688787','b-712688783','b-712688794']]
   ];
   const area=v=>areas.find(([,ids])=>ids.includes(v.place))?.[0]??areas[0][0];
   for(const name of ['',...areas.map(a=>a[0])])select.add(new Option((name||'全校')+'（'+fieldViews.filter(v=>!name||name===area(v)).length+'）',name));

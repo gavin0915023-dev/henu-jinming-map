@@ -5,6 +5,7 @@ import { rearCourt, libraryId, teachingFrontId, plantSquare } from './central-ax
 import { facultyGround } from './faculty-sites.js';
 import { stadiumGround } from './stadium-bowl.js';
 import { teachingCourtGround } from './teaching-courts.js';
+import { residenceGround } from './dongyuan.js';
 
 // Local observations only: the entrance forecourt on Wenfu Road, the grove
 // on Fangqiu Lake's north side, and the tree-planted verge beside Jiuzhang Bridge.
@@ -50,6 +51,7 @@ export function fieldGround(data,inside){
   }
   // Keep the established Wenfu/lakeside planting independent of the new courts.
   facultyGround(data,{surfaces,forecourts,shrubs},tree);
+  residenceGround(data,{surfaces,forecourts,trees},inside);
   seed=18273;
   if(data.building.some(b=>b[4]==='712688906')){
     const court=data.building.some(b=>b[4]===hallId)&&data.building.some(b=>b[4]===softwareId);

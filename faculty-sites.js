@@ -1,4 +1,5 @@
 import {orientedFrame as frame,clip,panel,panelWindow} from './survey-mesh.js';
+import {residences,residenceColors,residenceModel,streetPlinths,plinthModel} from './dongyuan.js';
 import {courtColors,courtModels,courtSigns,courtGround,courtHeights,courtEdge} from './college-courts.js';
 import {roundModels,roundColors,roundSigns,officeId,officeHeight,roundGround} from './round-buildings.js';
 import {publicModels,publicGround,squareHeight,hasMarco,hasNorth,northSign} from './campus-commons.js';
@@ -9,7 +10,7 @@ import {landmarkColors,landmarkModels,landmarkEdge,landmarkGround,lifeId,lifeSte
 export const pharmacyId='716761664',civilId='712688937',zengId='712688948',dormId='712688830',clinicId='716822582';
 const wings=['712688938','712688939'],nextDorm='712735067';
 export const facultyColors={
-  ...courtColors,...roundColors,...landmarkColors,
+  ...courtColors,...roundColors,...landmarkColors,...residenceColors,
   [pharmacyId]:['#d9d3bb','#b8b6a7'],[civilId]:['#ac6955','#b6ada0'],
   [wings[0]]:['#a05f50','#a99d92'],[wings[1]]:['#a2604d','#a99d92'],
   [zengId]:['#e0dfd2','#c8c7b9'],[dormId]:['#e1dfd3','#c3c2b4'],[nextDorm]:['#dcdcd3','#bfbfb3'],
@@ -56,6 +57,7 @@ function edgeFrame(e){
   return frame(e.ax+e.tx*e.length/2,e.az+e.tz*e.length/2,e.nx,e.nz);
 }
 export function facultyEdge(id,e){
+  if(residences.has(id))return true;
   if(landmarkColors[id])return landmarkEdge(id,e);
   if(roundColors[id])return true;
   if(courtColors[id])return courtEdge(id,e);
@@ -247,6 +249,8 @@ export function facultyModels(data){
   const all=[...courtModels(data),...roundModels(data.building),...publicModels(data)];
   for(const record of data.building){
     const [p,h,,,id]=record;
+    if(streetPlinths.has(id)){all.push(...plinthModel(record));continue;}
+    if(residences.has(id)){all.push(...residenceModel(record));continue;}
     if(landmarkColors[id]){all.push(...landmarkModels(record));continue;}
     if(!facultyColors[id]||courtColors[id]||roundColors[id])continue;
     if(id===pharmacyId)all.push(...pharmacyFront());

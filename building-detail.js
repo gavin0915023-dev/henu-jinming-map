@@ -5,6 +5,7 @@ import { eastModels, protectedTeachingEdge, teachingId, standId } from './east-c
 import { teachingWingEdge } from './teaching-courts.js';
 import { centralModels, axisCustomEdge, teachingFrontId } from './central-axis.js';
 import { facultyModels, facultyColors, facultyEdge, civilId } from './faculty-sites.js';
+import { residences } from './dongyuan.js';
 
 // Architectural embellishments use the supplied footprints and heights. Window
 // spacing and rooftop fittings are procedural, rather than surveyed details.
@@ -63,7 +64,9 @@ class SpatialFacadeBatch {
   quad(a, b, c, d, color) {
     const cx = (a[0] + b[0] + c[0] + d[0]) * .25;
     const cz = (a[2] + b[2] + c[2] + d[2]) * .25;
-    const key = `${Math.floor(cx / this.cellSize)},${Math.floor(cz / this.cellSize)}`;
+    // Centre cell [0,0] on the map origin. This keeps the detached east
+    // residence courts in fewer occupied cells without changing the 360 m size.
+    const key = `${Math.floor(cx / this.cellSize + .5)},${Math.floor(cz / this.cellSize + .5)}`;
     let cell = this.cells.get(key);
     if (!cell) {
       cell = new FacadeBatch();
@@ -378,11 +381,12 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     }
     // Only the broad new surfaces cast shadows: the canopy, curved hall and
     // piers should shade the court without adding every window bar to its map.
-    if(material!=='brick'&&material!=='canopy'&&material!=='ground'&&material!=='foliage'&&target!==fence&&material!=='terrace'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
+    if(g.castSilhouette!==false&&material!=='brick'&&material!=='canopy'&&material!=='ground'&&material!=='foliage'&&target!==fence&&material!=='terrace'&&!fine&&Math.hypot(...points[1].map((n,i)=>n-points[0][i]))*Math.hypot(...points[3].map((n,i)=>n-points[0][i]))>3.4)
       silhouettes.quad(...points,'#ffffff');
   }
 
   for (const [ring, height, type, , id, campus] of data.building) {
+    if(!campus && residences.has(id)){stats.buildings++;continue;}
     if (!campus || height < 4) continue;
     stats.buildings++;
     if(id===labId||id===coneId||id===civilId||id===standId){ stats.entrances++;continue; }

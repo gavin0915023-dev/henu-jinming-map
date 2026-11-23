@@ -1,5 +1,6 @@
 // Lightweight 2D campus radar minimap for first-person walking mode.
 // Pre-renders campus geometry once onto an offscreen canvas; click anywhere to teleport.
+import { residences } from './dongyuan.js';
 
 export function createMinimap(container, campus, onTeleport) {
   const canvas = document.createElement('canvas');
@@ -10,7 +11,8 @@ export function createMinimap(container, campus, onTeleport) {
 
   // Compute campus bounding square from boundary ring
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const [x, z] of campus.boundary) {
+  const detached = campus.building.filter(r => residences.has(r[4])).flatMap(r => r[0]);
+  for (const [x, z] of [...campus.boundary, ...detached]) {
     if (x < minX) minX = x;
     if (x > maxX) maxX = x;
     if (z < minZ) minZ = z;
@@ -67,8 +69,8 @@ export function createMinimap(container, campus, onTeleport) {
       c.stroke();
     }
 
-    for (const [ring, , type, , , inside] of campus.building) {
-      if (!inside) continue;
+    for (const [ring, , type, , id, inside] of campus.building) {
+      if (!inside && !residences.has(id)) continue;
       fillPoly(
         ring,
         type === 'library'

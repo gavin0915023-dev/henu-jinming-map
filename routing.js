@@ -99,7 +99,9 @@ export function createCampusRouter(data) {
       const weight = WALK_WEIGHT[kind] ?? 1.15;
       for (let i = 1; i < line.length; i++) {
         const a = line[i - 1], b = line[i];
-        if (Math.min(a[0], b[0]) > 650 || Math.max(a[0], b[0]) < -650 ||
+        // The eastern halves of the Dongyuan lanes are outside the main box.
+        const inResidenceCourt = [a,b].every(([x,z]) => x>=500 && x<=780 && z>=245 && z<=425);
+        if ((!inResidenceCourt && Math.min(a[0], b[0]) > 650) || Math.max(a[0], b[0]) < -650 ||
             Math.min(a[1], b[1]) > 920 || Math.max(a[1], b[1]) < -760) continue;
         if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.2) continue;
         rawSegs.push({ a, b, weight, splits: [0, 1] });
@@ -320,6 +322,12 @@ export function createCampusRouter(data) {
     for (const p of chain) raw.push(p);
     const last = chain[chain.length - 1];
     if (Math.hypot(to[0] - last[0], to[1] - last[1]) > 2) raw.push([to[0], to[1]]);
+
+    // A mid-block destination can snap to the far end of its own segment.
+    // If the route actually passes over the endpoint, stop there on that lane.
+    const onSegment = (p,a,b) => pointToSeg(...p,...a,...b).d2 < .16;
+    if(raw.length>=3 && onSegment(raw[0],raw[1],raw[2]))raw.splice(1,1);
+    if(raw.length>=3 && onSegment(raw.at(-1),raw.at(-2),raw.at(-3)))raw.splice(-2,1);
 
     const points = simplifyPath(raw);
     let distance = 0;

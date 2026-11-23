@@ -46,6 +46,8 @@ export function imageryLayer(L) {
   return layer;
 }
 
+import { residences } from './dongyuan.js';
+
 export function addCampusBasemap(L, map, campus, toLatLng) {
   const pane = map.createPane('campus-outline');
   pane.style.zIndex = '180';
@@ -62,7 +64,7 @@ export function addCampusBasemap(L, map, campus, toLatLng) {
   for (const [line,width] of campus.road) L.polyline(line.map(point), {
     renderer, color:width > 8 ? '#faf3de' : '#f5f2e5', weight:width > 8 ? 4 : 2, interactive:false
   }).addTo(map);
-  for (const [ring,,type,,,inside] of campus.building) {
-    if (inside) polygon(ring, type === 'library' ? '#c1aa87' : '#c5bdac', '#948c7a', .8);
+  for (const [ring,,type,,id,inside] of campus.building) {
+    if (inside || residences.has(id)) polygon(ring, type === 'library' ? '#c1aa87' : '#c5bdac', '#948c7a', .8);
   }
 }

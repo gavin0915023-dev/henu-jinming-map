@@ -104,6 +104,24 @@ try {
     return result.result.value;
   }
   const settle = () => evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  const eastDormNames=['十九','二十','二十一','二十二','二十三','二十四','二十五','二十六'].map(n=>'学'+n+'公寓');
+  async function eastDormCards(){
+    return evaluate(`(()=>{
+      const $=s=>document.querySelector(s),s=$('#search'),names=()=>[...document.querySelectorAll('#place-list .rowtext b')].map(e=>e.textContent);
+      const search=q=>{s.value=q;s.dispatchEvent(new Event('input'));return names()};
+      $('#home').click();$('[data-cat=academic]').click();
+      if(search('东苑').sort().join()!==${JSON.stringify([...eastDormNames].sort().join())})return false;
+      if(search('东苑25号楼').join()!=='学二十五公寓')return false;
+      $('#place-list .place').click();$('#detail [data-field-reference]').click();
+      let row=$('#field-dialog [data-current]');const aerial=row?.querySelector('[data-view]').dataset.view==='dongyuan-courts'&&new URL(row.querySelector('a').href).hostname==='www.arcgis.com';
+      $('#field-dialog [data-close]').click();search('东苑22号楼');$('#place-list .place').click();
+      $('#detail [data-field-reference]').click();row=$('#field-dialog [data-current]');
+      const h=new URLSearchParams(new URL(row.querySelector('a').href).hash.slice(1));
+      const street=row.querySelector('[data-view]').dataset.view==='dongyuan-22'&&h.get('panoid')==='09027700122206231400097765A'&&h.get('heading')==='54';
+      $('#field-dialog [data-close]').click();$('#home').click();search('');$('[data-cat=featured]').click();
+      return aerial&&street;
+    })()`);
+  }
   async function surveyCards(){
     return evaluate(`(()=>{
       const $=s=>document.querySelector(s),s=$('#search');
@@ -210,6 +228,7 @@ try {
     await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=nanyuan-east]').click();document.querySelector('#route-next').click()");
     check('Published dining route reaches the curved south eave',await evaluate("new URL(location.href).searchParams.get('view')==='nanyuan-south' && document.querySelector('#route-position').textContent.includes('2 / 2')"));
     check('Published catalog opens the four surveyed buildings and their original sources',await surveyCards());
+    check('Published Dongyuan search opens the correct street photo or courtyard aerial',await eastDormCards());
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
     const getTiles=()=>evaluate("(()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return {loaded:tiles.filter(t=>t.complete&&t.naturalWidth>0).length,total:tiles.length,message:document.querySelector('#fallback').hidden?'':document.querySelector('#fallback').innerText}})()");
     try {
@@ -265,9 +284,10 @@ try {
   check('The catalog links to each distinct panorama and both university references',await evaluate(`(()=>{
     const modal=document.querySelector('#field-dialog'),all=[...modal.querySelectorAll('.field-list a')],links=all.map(a=>new URL(a.href));
     const count=items=>new Set(items.filter(l=>l.hostname==='map.baidu.com').map(l=>new URLSearchParams(l.hash.slice(1)).get('panoid')).filter(Boolean)).size;
-    const old=all.filter(a=>!['economics-west','economics-east','math-lake','math-west','life-door','life-wing','huayuan-roof'].includes(a.parentElement.querySelector('[data-view]').dataset.view));
+    const prior=all.filter(a=>a.parentElement.dataset.area!=='东苑学生公寓');
+    const old=prior.filter(a=>!['economics-west','economics-east','math-lake','math-west','life-door','life-wing','huayuan-roof'].includes(a.parentElement.querySelector('[data-view]').dataset.view));
     return modal.open && modal.querySelectorAll('[data-view]').length===${fieldViews.length} &&
-      count(old.map(a=>new URL(a.href)))===49 && count(links)===55 &&
+      count(old.map(a=>new URL(a.href)))===49 && count(prior.map(a=>new URL(a.href)))===55 && count(links)===58 &&
       links.some(l=>l.hostname==='ganbu.henu.edu.cn') && links.some(l=>l.hostname==='zbcg.henu.edu.cn');
   })()`));
   check('The sports filter includes the four stadium positions and the outdoor courts',await evaluate(`(()=>{
@@ -371,11 +391,16 @@ try {
     return lists;
   })()`);
   const partition=['academic','dorm','life','outdoor'].flatMap(key=>categories[key]);
+  const original=categories.all.filter(n=>!eastDormNames.includes(n)),originalPartition=partition.filter(n=>!eastDormNames.includes(n));
   check('The four categories partition all 76 unique places and include the expected landmarks',
-    categories.all.length===76 && new Set(categories.all).size===76 && partition.length===76 && new Set(partition).size===76 &&
-    partition.every(n=>categories.all.includes(n)) && categories.featured.every(n=>categories.all.includes(n)) &&
+    original.length===76 && new Set(original).size===76 && originalPartition.length===76 && new Set(originalPartition).size===76 &&
+    originalPartition.every(n=>original.includes(n)) && categories.featured.every(n=>original.includes(n)) &&
     categories.academic.includes('3号教学楼') && categories.dorm.includes('学五公寓') &&
     categories.life.includes('华苑餐厅') && categories.outdoor.includes('志义体育场'));
+  check('Exactly eight Dongyuan residences join the original 76 places, all under Dorms',
+    categories.all.length===84 && new Set(partition).size===84 && partition.length===84 &&
+    eastDormNames.every(n=>categories.dorm.includes(n)&&categories.all.includes(n)&&!categories.featured.includes(n)));
+  check('Dongyuan search across categories distinguishes numbered buildings and their source cards',await eastDormCards());
   for(const [tab,query] of [['academic','学五公寓'],['dorm','3号教学楼']]){
     check('Campus-wide search opens '+query+' from a different category and restores that category on Escape',
       await evaluate(`(()=>{
@@ -464,6 +489,14 @@ try {
   await clickAt(roofX,roofY);
   check('A real canvas click on the unlabelled dorm roof opens the correct non-featured detail',
     await evaluate("!document.querySelector('#detail').hidden && document.querySelector('#detail h2').textContent==='学五公寓' && document.querySelector('.place[aria-current=true] .rowtext b')?.textContent==='学五公寓'"));
+
+  await readyAt(url+'/?cam=700,97,322,700,18,318');
+  await clickAt(...await centerOf('#stage'));
+  check('Picking the detached east-row roof opens building 25 and routes to its courtyard',
+    await evaluate(`(()=>{const d=document.querySelector('#detail');if(d.hidden||d.querySelector('h2').textContent!=='学二十五公寓')return false;
+      d.querySelector('[data-route]').click();const summary=document.querySelector('#route-summary').textContent;
+      return document.querySelector('#route-to').value==='b-712688793'&&/^步行约 [1-9][0-9]+ 米 · 约 [1-9][0-9]* 分钟$/.test(summary);
+    })()`));
 
   const pose=[-287.24,24.36,1.43,1.04]; // A clear piece of Boxiang Road, looking up at the sky.
   await readyAt(url+'/?pos='+pose.join(',')+'&light=sunset');
@@ -689,6 +722,14 @@ try {
   check('Both courts are linked in the original mobile walking controls',await evaluate(`(()=>{
     const next=document.querySelector('#route-next');next.click();next.click();
     return new URL(location.href).searchParams.get('view')==='teaching-56'&&document.querySelector('#stage').dataset.renderer==='canvas'&&next.disabled;
+  })()`));
+  await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=dongyuan-22]').click()");
+  await capture('field-fallback-dongyuan');
+  check('Mobile Canvas follows all three Dongyuan street positions into the aerial overview',await evaluate(`(()=>{
+    const next=document.querySelector('#route-next'),at=()=>new URL(location.href).searchParams.get('view');
+    const stops=[at()];for(let i=0;i<3;i++){next.click();stops.push(at());}
+    return stops.join() === 'dongyuan-22,dongyuan-20,dongyuan-19,dongyuan-courts' && next.disabled &&
+      document.querySelector('#stage').dataset.renderer==='canvas' && document.querySelector('[data-mode=model]').getAttribute('aria-pressed')==='true';
   })()`));
   await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=marco-bowl]').click()");
   check('Mobile Canvas opens the plaza aerial and can descend to the ground',await evaluate(`(()=>{
