@@ -77,6 +77,8 @@
     "Walking viewpoint dongyuan-20",
     "Walking viewpoint dongyuan-19",
     "Aerial viewpoint dongyuan-courts",
+    "Walking viewpoint software-portal",
+    "Walking viewpoint teaching-library",
     "Walking viewpoint west-gate",
     "Reference panel selects the photo for the current viewpoint",
     "Walk mode activates",
@@ -147,13 +149,14 @@
     "Canvas reaches the stand at track level and identifies it as a model viewpoint",
     "Both courts are linked in the original mobile walking controls",
     "Mobile Canvas follows all three Dongyuan street positions into the aerial overview",
+    "Mobile Canvas restores the photo view at sunset and follows it to the software letter wall",
     "Mobile Canvas opens the plaza aerial and can descend to the ground",
     "No uncaught browser exceptions",
     "WebGL programs actually linked, with no shader errors across all viewpoints"
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1305215,
+    "vertices": 1302267,
     "invalid": 0,
     "trees": 1007,
     "treeForms": {
@@ -163,10 +166,10 @@
     },
     "buildings": {
       "buildings": 121,
-      "windows": 11826,
-      "entrances": 83,
-      "rooftopUnits": 93,
-      "triangles": 509518
+      "windows": 11750,
+      "entrances": 82,
+      "rooftopUnits": 92,
+      "triangles": 507990
     },
     "landscape": {
       "courts": 103,
@@ -178,10 +181,10 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 66,
-    "triangles": 1245092
+    "drawCalls": 69,
+    "triangles": 1243668
   },
-  "linkedPrograms": 273,
+  "linkedPrograms": 266,
   "shaderErrors": [],
   "failures": []
 }

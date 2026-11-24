@@ -1,7 +1,9 @@
 import { frame, patch, clip, panel, panelWindow } from './survey-mesh.js';
+import {photoFrontModels,photoCustomEdge} from './photo-fronts.js';
+export {teachingFrontId} from './photo-fronts.js';
 
-const library={x:-101.0,z:-73.0,out:1},teaching={x:93.05,z:-73.8,out:-1};
-export const libraryId='plan-library', teachingFrontId='712688928';
+const library={x:-101.0,z:-73.0,out:1};
+export const libraryId='plan-library';
 export const rearCourt=patch(library,-19.1,19.25,1.0,34.6);
 const grey='#c9c8c0',joint='#9f9f99',stone='#d5d3ca',glass='#536671';
 // Reduce only the middle of the east entrance. The two tall outer wings
@@ -22,7 +24,7 @@ export function* librarySolids(record){
   for(const u of [-13,-4.65,4.65,13])yield* body(patch(library,u-.25,u+.25,2.99,3.51),.90,13.72,true);
 }
 export const axisCustomEdge=(id,e)=>id===libraryId?e.ax>-115.3&&e.ax+e.tx*e.length>-115.3:
-  id===teachingFrontId&&e.nx<-.85;
+  photoCustomEdge(id,e);
 
 function rear(){
   const d=frame(library),{box,group,quad}=d;
@@ -102,30 +104,9 @@ function rear(){
   }
   return d.groups;
 }
-function squareElevation(){
-  const d=frame(teaching),{box}=d;
-  // Distinct from the east stair tower: the west front has a broad glass grid
-  // framed by red bookends. Keep the original footprint of the teaching group.
-  for(let j=0;j<16;j++){
-    const l=-25.15+j*3.13,r=l+3.13;
-    panel(d,l,r,.17,17.08,.29,'#9da9a8');
-    for(let k=0;k<4;k++){
-      const y=1.38+k*3.76;
-      panelWindow(d,l+.08,r-.08,y,y+2.66,.36,k===0?2:3);
-      panel(d,l,r,y+2.70,y+3.11,.405,'#7c898d');
-    }
-  }
-  for(const [l,r] of [[-29.4,-25.15],[24.91,29.36]]){
-    box(l,r,4.96,19.07,-.15,.52,'#9b5748','brick');
-    box(l-.28,r+.28,4.56,4.91,-.10,.83,stone);
-  }
-  for(let k=0;k<4;k++)box(-25.15,24.93,1.02+k*.135,1.15+k*.135,0,4.9-k*.66,'#b8b0a3');
-  return d.groups;
-}
 export function centralModels(data){
-  const groups=[];
+  const groups=photoFrontModels(data);
   if(data.building.some(b=>b[4]===libraryId))groups.push(...rear());
-  if(data.building.some(b=>b[4]===teachingFrontId))groups.push(...squareElevation());
   return groups;
 }
 

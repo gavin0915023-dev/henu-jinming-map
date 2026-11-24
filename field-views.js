@@ -68,6 +68,8 @@ export const fieldViews=[
   {id:'dongyuan-20',place:'b-712688787',title:'东苑学二十公寓 · 临街山墙',caption:'正对夷山大街的一端，两大片实墙夹着一列窗。沿街店面只占下部，上层外墙没有连成一片的窗带。',camera:[500.7,364.9,78,13],lens:{horizontal:72,eye:2.32},date:'2022年6月',source:'百度街景',url:baidu('09027700122206231400032595A',12726326.39,4114773.5,78,13)},
   {id:'dongyuan-19',place:'b-712688783',title:'东苑学十九公寓 · 北侧窗间',caption:'从街口越过低层铺面，可辨认浅弧形挑檐、成组的阳台窗和中间的窄窗。此处为2014年早春街景；模型的灰褐色外墙参照2022年沿街影像。',camera:[498.7,365.4,127,17],lens:{horizontal:70,eye:2.32},date:'2014年3月',source:'百度街景',url:baidu('01027700001403281306443605N',12726323.93,4114772.92,127,17)},
   {id:'dongyuan-courts',place:'b-712688794',title:'东苑学生公寓 · 两列八栋',caption:'西侧从南往北是学十九至学二十二公寓，东侧是学二十三至学二十六公寓。北排两栋各有错开的两翼；其余楼之间留着横巷。东排屋面的深浅分区可从卫星影像核对，院内立面为近似。',orbit:[[551,204,568],[631,8,338]],action:'俯看东苑八栋',reference:'卫星对照',source:'Esri 卫星影像',url:'https://www.arcgis.com/apps/mapviewer/index.html?basemapUrl=https%3A%2F%2Fserver.arcgisonline.com%2FArcGIS%2Frest%2Fservices%2FWorld_Imagery%2FMapServer&center=114.31025,34.8150&level=18'},
+  {id:'software-portal',place:'software',title:'软件学院 · 字墙与敞廊',caption:'从文甫路看入口：四层敞廊在左，中间的实墙上有两列金色竖字，右边是窄窗与深窗洞。门前花坛边的独立立牌已拆除。',camera:[45.5,-171.8,14,24],lens:{horizontal:65,eye:1.65},source:'使用者提供的现场照片'},
+  {id:'teaching-library',place:'teaching',title:'综合教学楼 · 面向图书馆',caption:'从图书馆一侧向东看，整片玻璃幕墙上方立着“综合教学楼”五个字，后面是白色屋顶体量和局部露空的方框。黄昏时分可看幕墙的暖色变化。',camera:[58,-102,123.7,13],lens:{horizontal:69,eye:1.65},source:'使用者提供的现场照片'},
   {id:'west-gate',place:'west',title:'西大门 · 校名墙',caption:'面向校园中轴。金明西门是低矮的校名石墙，两侧留出通道。',camera:[-485,-76,90,0],source:'校方照片',url:uni}
 ];
 
@@ -75,6 +77,7 @@ export const fieldViews=[
 // camera at the last station looks back over the route, not into a new road.
 export const walks=[
   ['文甫路',['cs-south','cs-entry','wenfu-hall','software-entry','software-south','software-return']],
+  ['两处实拍立面',['software-portal','teaching-library']],
   ['物理实验楼',['physics-entry','physics-court','physics-cone','physics-north']],
   ['志义体育场',['stadium-field-north','stadium-field','stadium-track','stadium-west']],
   ['教学楼东院',['teaching-23','teaching-stair','teaching-56']],
@@ -106,10 +109,11 @@ export function mountFieldViews(dialog,visit){
   for(const item of fieldViews){
     const row=document.createElement('section'),title=document.createElement('h3'),note=document.createElement('p');
     title.textContent=item.title;note.textContent=item.caption;
-    const go=document.createElement('button'),source=document.createElement('a');
+    const go=document.createElement('button'),source=document.createElement(item.url?'a':'small');
     row.dataset.area=area(item);go.type='button';go.dataset.view=item.id;go.textContent=item.action??(item.orbit?'俯看广场模型':'到这里看模型');
     go.onclick=()=>{dialog.close();visit(item);};
-    source.textContent=item.source+(item.date?' · '+item.date:'')+' ↗';source.href=item.url;source.target='_blank';source.rel='noopener';
+    source.textContent=item.source+(item.date?' · '+item.date:'')+(item.url?' ↗':'');
+    if(item.url){source.href=item.url;source.target='_blank';source.rel='noopener';}
     row.append(title,note,go,source);list.append(row);
   }
   const filter=()=>{for(const row of list.children)row.hidden=Boolean(select.value)&&select.value!==row.dataset.area;list.scrollTop=0;};

@@ -57,11 +57,12 @@ class FacadeBatch {
 }
 
 class SpatialFacadeBatch {
-  constructor(cellSize = 360) {
+  constructor(cellSize = 360,glazing=false) {
     this.cellSize = cellSize;
     this.cells = new Map();
+    this.glazing=glazing;
   }
-  quad(a, b, c, d, color) {
+  quad(a, b, c, d, color,roomGlow=1) {
     const cx = (a[0] + b[0] + c[0] + d[0]) * .25;
     const cz = (a[2] + b[2] + c[2] + d[2]) * .25;
     // Centre cell [0,0] on the map origin. This keeps the detached east
@@ -72,6 +73,7 @@ class SpatialFacadeBatch {
       cell = new FacadeBatch();
       this.cells.set(key, cell);
     }
+    if(this.glazing&&roomGlow!==1)(cell.glowOverrides??=[]).push([cell.positions.length/3,roomGlow]);
     cell.quad(a, b, c, d, color);
   }
   meshes(baseName, options = {}) {
@@ -84,6 +86,11 @@ class SpatialFacadeBatch {
     for (const [key, cell] of this.cells) {
       if (!cell.positions.length) continue;
       const m = cell.mesh(options, shared);
+      if(this.glazing){
+        const glow=new Uint8Array(cell.positions.length/3).fill(255);
+        for(const [i,value] of cell.glowOverrides??[])glow.fill(Math.round(value*255),i,i+4);
+        m.geometry.setAttribute('roomGlow',new T.Uint8BufferAttribute(glow,1,true));
+      }
       m.name = `${baseName} [${key}]`;
       out.push(m);
     }
@@ -104,14 +111,9 @@ export function observedTeachingFace(id,e){
   if(id==='712688906'){
     const kind=computingFace(e);return kind?{edge:e,kind,software:false}:null;
   }
-  if(id!==softwareId)return null;
-  // The software entrance is at the WEST end. Measure the west and south
-  // bays from the doorway; reverse the winding while keeping the outer normal.
-  const kind=e.nz>.99&&e.length>40?'south':e.nx<-.99&&e.ax<42&&e.length>10?'east':
-    e.nx>.55&&e.nz<-.72&&e.length>60?'northwest':null;
-  if(!kind)return null;
-  return {kind,software:true,edge:kind==='northwest'?e:{...e,ax:e.ax+e.tx*e.length,
-    az:e.az+e.tz*e.length,tx:-e.tx,tz:-e.tz,sign:-e.sign}};
+  // The Xueyin Road wing retains its 2014 survey. The Wenfu Road entrance
+  // now has its own measured recesses and is shared with the Canvas renderer.
+  return id===softwareId&&e.nx>.55&&e.nz<-.72&&e.length>60?{kind:'northwest',software:true,edge:e}:null;
 }
 export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,recessedOpening,stats},software=false) {
   const angle=-Math.atan2(e.tz,e.tx);
@@ -244,11 +246,6 @@ export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,r
   solid(stoneA,stoneB,lower+.08,height,.8,.86,'#e3dfd2');
   for(let f=0;f<4;f++){
     const y=lower+f*fh;
-    if(software){
-      // The pale wall here has one slim inset opening on each level; the
-      // college name is on the freestanding sign, not lettered on the wall.
-      rect(glass,stoneB-1.52,stoneB-.85,y+.52,y+fh-.48,.90,'#72838a');
-    }
     rect(glass,.58,stoneA,y+.18,y+fh-.27,.06,'#52646b');
     rect(glass,stoneB,start,y+.30,y+fh-.24,.075,'#73848a');
     solid(.03,.56,y,y+fh,.84,.88,cream);
@@ -270,10 +267,13 @@ export function computingElevation(e,height,face,{masonry,glass,wall,ledge,box,r
 export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   const group = new T.Group();
   group.name = 'campus-architectural-details';
-  const masonry = new SpatialFacadeBatch(360), glass = new SpatialFacadeBatch(360);
+  const masonry = new SpatialFacadeBatch(360), glass = new SpatialFacadeBatch(360,true);
   const brick = new FacadeBatch(), canopy = new FacadeBatch(), silhouettes = new FacadeBatch();
   const plazaGround = new FacadeBatch(), foliage = new FacadeBatch(), fence = new FacadeBatch();
   const railBases=[];
+  // Negative values select a whole-panel pattern; nonnegative values retain
+  // the actual floor datum of the stadium terrace rails.
+  const pattern={fence:-1,baluster:-2,screen:-3,louver:-4};
   const fittings = new Batch();
   const shadeCache = new Map();
   const shadedHex = (hex, factor) => {
@@ -372,11 +372,13 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   }
 
   for(const g of [...physicsModel(data.building),...eastModels(data),...centralModels(data),...facultyModels(data)])for(const [points,color,material,fine] of g.parts){
-    const target=material==='brick'?brick:material==='glass'?glass:material==='canopy'?canopy:
-      material==='ground'?plazaGround:material==='foliage'?foliage:material==='fence'||material==='rail'?fence:masonry;
-    target.quad(...points,color);
+    if(material==='exposed-body')continue; // Already supplied by the extruded solid in WebGL.
+    const target=material==='brick'?brick:material==='glass'||material==='curtain'?glass:material==='canopy'?canopy:
+      material==='ground'?plazaGround:material==='foliage'?foliage:material==='rail'||Object.hasOwn(pattern,material)?fence:masonry;
+    // A continuous reflective curtain does not light up like a grid of rooms.
+    target.quad(...points,color,material==='curtain'?.06:1);
     if(target===fence){
-      const y=material==='rail'?Math.min(...points.map(p=>p[1])):-1;
+      const y=material==='rail'?Math.min(...points.map(p=>p[1])):pattern[material];
       railBases.push(y,y,y,y);
     }
     // Only the broad new surfaces cast shadows: the canopy, curved hall and
@@ -523,19 +525,19 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   const nightGlowUniform = { value: 0 };
   if (windowChunks.length) {
     const winMat = windowChunks[0].material;
-    winMat.customProgramCacheKey = () => 'campus-window-glaze-v1';
+    winMat.customProgramCacheKey = () => 'campus-window-glaze-v2';
     winMat.onBeforeCompile = shader => {
       shader.uniforms.uNightGlow = nightGlowUniform;
-      shader.vertexShader = 'varying vec3 vWinPos;\n' + shader.vertexShader
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWinPos=position;');
-      shader.fragmentShader = 'uniform float uNightGlow;\nvarying vec3 vWinPos;\n' + shader.fragmentShader
+      shader.vertexShader = 'attribute float roomGlow;varying float vRoomGlow;varying vec3 vWinPos;\n' + shader.vertexShader
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWinPos=position;vRoomGlow=roomGlow;');
+      shader.fragmentShader = 'uniform float uNightGlow;varying float vRoomGlow;varying vec3 vWinPos;\n' + shader.fragmentShader
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         if (uNightGlow > 0.01) {
           vec3 cell = floor(vec3(vWinPos.x / 3.8 + vWinPos.z * 0.13, vWinPos.y / 3.45, vWinPos.z / 3.8 - vWinPos.x * 0.11));
           float h = fract(sin(dot(cell, vec3(127.1, 311.7, 74.7))) * 43758.5453);
           float lit = step(0.54, h);
           vec3 warmTone = mix(vec3(1.0, 0.78, 0.45), vec3(0.95, 0.91, 0.80), fract(h * 19.3));
-          totalEmissiveRadiance += warmTone * lit * (0.45 + 0.65 * fract(h * 7.7)) * uNightGlow;
+          totalEmissiveRadiance += warmTone * lit * (0.45 + 0.65 * fract(h * 7.7)) * uNightGlow * vRoomGlow;
         }`);
     };
   }
@@ -562,7 +564,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     const enclosure = fence.mesh({ roughness: .72, metalness: .15, transparent: true, depthWrite: false });
     enclosure.name = 'Court chain-link enclosures';
     enclosure.geometry.setAttribute('railBase',new T.Float32BufferAttribute(railBases,1));
-    enclosure.material.customProgramCacheKey = () => 'campus-chainlink-and-terrace-v2';
+    enclosure.material.customProgramCacheKey = () => 'campus-fence-and-facade-screens-v3';
     enclosure.material.onBeforeCompile = shader => {
       shader.vertexShader = 'attribute float railBase;varying float railDatum;varying vec3 fencePoint;varying vec3 fenceNormal;\n' + shader.vertexShader
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nrailDatum=railBase;fencePoint=position;fenceNormal=normal;');
@@ -584,7 +586,14 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
         float wire = max(w1, w2);
         float farFade = smoothstep(0.32, 0.95, max(aa1, aa2));
         float coverage = mix(wire, 0.24, farFade);
-        if(railDatum >= 0.0){
+        if(railDatum < -1.5){
+          // Vertical balcony pickets, rectangular equipment mesh, or eave louvers.
+          vec2 grid=vec2(fu/.16,fv/(railDatum < -3.5 ? .17 : .12));
+          vec2 aa=max(fwidth(grid),vec2(.002));
+          vec2 bars=mix(1.0-smoothstep(vec2(.07),vec2(.07)+aa*.62,abs(fract(grid+.5)-.5)),
+                        vec2(.18),smoothstep(vec2(.22),vec2(.95),aa));
+          coverage=railDatum < -3.5 ? bars.y : (railDatum < -2.5 ? max(bars.x,bars.y) : bars.x);
+        }else if(railDatum >= 0.0){
           // One rectangular panel per terrace edge, with horizontal rails and posts.
           vec2 grid=vec2(fu/1.62,(fv-railDatum-.055)/.28);
           vec2 aa=max(fwidth(grid),vec2(.002));

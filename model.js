@@ -10,6 +10,7 @@ import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
 import { fieldGround, entryGap, putFieldTrees, walkingWater } from './field-ground.js';
 import { buildingSolids, hallId } from './wenfu.js';
 import { steppedIds } from './landmark-wings.js';
+import {photoFrontIds} from './photo-fronts.js';
 import { residences } from './dongyuan.js';
 import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.js';
 import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
@@ -351,10 +352,14 @@ function librarySign(anisotropy=1) {
 }
 function buildScene(scene, data, trees, anisotropy=1) {
   addWestGate(scene,data,anisotropy);
-  for(const {text,width,height,point,yaw,color,horizontal} of visibleSigns(data)){
-    const cv=document.createElement('canvas');cv.width=120*(horizontal?text.length:1);cv.height=120*(horizontal?1:text.length);
+  for(const {text,width,height,point,yaw,color,horizontal,spaced} of visibleSigns(data)){
+    // Keep the photographed characters square; extra width/height belongs
+    // between glyphs, rather than stretching the strokes across the facade.
+    const cellW=spaced&&horizontal?Math.round(120*width/(text.length*height)):120;
+    const cellH=spaced&&!horizontal?Math.round(120*height/(text.length*width)):120;
+    const cv=document.createElement('canvas');cv.width=cellW*(horizontal?text.length:1);cv.height=cellH*(horizontal?1:text.length);
     const ctx=cv.getContext('2d');ctx.font='bold 92px KaiTi,STKaiti,SimSun,serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    [...text].forEach((ch,i)=>{const x=horizontal?(i+.5)*120:60,y=horizontal?60:(i+.5)*120;
+    [...text].forEach((ch,i)=>{const x=horizontal?(i+.5)*cellW:cellW/2,y=horizontal?cellH/2:(i+.5)*cellH;
       ctx.fillStyle='#6a5b50';ctx.fillText(ch,x+2,y+2);ctx.fillStyle=color;ctx.fillText(ch,x,y);});
     const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
     const sign=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,alphaTest:.20,roughness:.76}));
@@ -572,7 +577,7 @@ export function createModel(stage,data,onFrame,options={}){
     cameraMode:'fps',avatarYaw:0
   };
   const keys=new Set();
-  let drag=null, tapStart=null, tween=null, visible=true, size={w:1,h:1}, last=performance.now(), lastView='';
+  let drag=null, tapStart=null, tween=null, visible=true, size={w:0,h:0}, last=performance.now(), lastView='';
   let lightingName='noon', waterMotion=!matchMedia('(prefers-reduced-motion: reduce)').matches, lastWaterTick=0;
   let shadowFocusCenter=null, walkDrive=0, walkTurn=0, routeAuto=null, avatarSettle=0;
 
@@ -645,8 +650,9 @@ export function createModel(stage,data,onFrame,options={}){
     const [minX,minZ,maxX,maxZ]=bounds(ring);
     return {record,ring,height,base,box:new T.Box3(new T.Vector3(minX,base,minZ),new T.Vector3(maxX,height+.2,maxZ))};
   };
-  const pickTargets=data.building.filter(b=>b[5]&&!steppedIds.has(b[4])).map(r=>pickBody(r,r[0],r[1]));
-  for(const {record,p,top,base} of campusSolids)if(residences.has(record[4])||(record[5]&&steppedIds.has(record[4])))pickTargets.push(pickBody(record,p,top,base));
+  const segmented=id=>steppedIds.has(id)||photoFrontIds.has(id)||residences.has(id);
+  const pickTargets=data.building.filter(b=>b[5]&&!segmented(b[4])).map(r=>pickBody(r,r[0],r[1]));
+  for(const {record,p,top,base} of campusSolids)if(segmented(record[4])&&(record[5]||residences.has(record[4])))pickTargets.push(pickBody(record,p,top,base));
   function pickBuilding(clientX,clientY){
     const rect=stage.getBoundingClientRect();
     if(!rect.width||!rect.height)return null;
@@ -693,7 +699,7 @@ export function createModel(stage,data,onFrame,options={}){
     highlightGroup.name='Selected building highlight';
     for(const record of matches){
       const [ring,height]=record;
-      const sections=steppedIds.has(id)||residences.has(id)?pickTargets.filter(p=>p.record===record):[{ring,height}];
+      const sections=segmented(id)?pickTargets.filter(p=>p.record===record):[{ring,height}];
       const pts=[];
       for(const section of sections){
         const p=section.ring,y=section.height+.35;
@@ -776,7 +782,11 @@ export function createModel(stage,data,onFrame,options={}){
   const fromHorizontal=fov=>T.MathUtils.clamp(2*T.MathUtils.radToDeg(Math.atan(Math.tan(T.MathUtils.degToRad(fov)/2)/camera.aspect)),29,112);
 
   function resize(){
-    size={w:Math.max(1,stage.clientWidth),h:Math.max(1,stage.clientHeight)};
+    const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight);
+    // ResizeObserver can repeat the startup size after the initial frame.
+    // Reassigning canvas.width then clears a stationary Canvas view.
+    if(w===size.w&&h===size.h)return;
+    size={w,h};
     camera.aspect=size.w/size.h;
     if(walk.active&&walk.horizontal)camera.fov=walk.fov=fromHorizontal(walk.horizontal);
     camera.updateProjectionMatrix();
@@ -1284,11 +1294,12 @@ export function createModel(stage,data,onFrame,options={}){
       const yawDiff=Math.atan2(Math.sin(walk.yaw-walk.avatarYaw),Math.cos(walk.yaw-walk.avatarYaw));
       walk.avatarYaw+=yawDiff*Math.min(1,dt*(walk.cameraMode==='fps'?28:12));
 
-      if(moving||!walk.grounded||Math.abs(walk.landDip)>.001||Math.abs(yawDiff)>.003)avatarSettle=.35;
+      if(moving||!walk.grounded||walk.jumpY>0||Math.abs(walk.landDip)>.001||Math.abs(yawDiff)>.003)avatarSettle=.35;
       else if(avatarSettle>0)avatarSettle=Math.max(0,avatarSettle-dt);
       avatarDirty=avatarSettle>0;
       if(avatarDirty)syncAvatar(dt);
       face();
+      stage.dataset.jumpY=walk.jumpY.toFixed(2);
     }else{
       if(tween){
         const p=Math.min(1,(time-tween.start)/(tween.duration??540));

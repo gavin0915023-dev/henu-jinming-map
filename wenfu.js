@@ -11,7 +11,9 @@ import { courtSolidIds, courtSolids } from './college-courts.js';
 import { officeId,officeSolids,nanyuanId,diningSolids } from './round-buildings.js';
 import { steppedIds,landmarkSolids } from './landmark-wings.js';
 import { residences,residenceSolids,streetPlinths } from './dongyuan.js';
-export const hallId='712688908',softwareId='712688905';
+import {photoFrontIds,photoFrontSolids} from './photo-fronts.js';
+export {softwareId} from './photo-fronts.js';
+export const hallId='712688908';
 export const passage={left:15.0,right:23.5,clear:4.85,front:-205.15,rear:-251,frontTop:12.5,setback:-231};
 
 function clip(poly,axis,limit,lower){
@@ -32,6 +34,7 @@ function clip(poly,axis,limit,lower){
 export function* buildingSolids(records){
   for(const record of records){
     const [p,h,,,id]=record;
+    if(photoFrontIds.has(id)){yield* photoFrontSolids(record);continue;}
     if(residences.has(id)){yield* residenceSolids(record);continue;}
     if(streetPlinths.has(id)){yield {record,p,base:.08,top:streetPlinths.get(id)};continue;}
     if(steppedIds.has(id)){yield* landmarkSolids(record);continue;}

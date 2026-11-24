@@ -104,6 +104,30 @@ try {
     return result.result.value;
   }
   const settle = () => evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  async function photoFrontViews(base,renderer){
+    await call('Page.navigate',{url:base+'?view=teaching-library&light=sunset'});
+    await until(()=>evaluate("document.querySelector('#stage')?.dataset.ready==='true' && document.querySelector('#mode-note')?.textContent.includes('面向图书馆')"),'Library-facing photo view restored');
+    const painted=()=>renderer!=='canvas'||evaluate(`(()=>{
+      const mini=new OffscreenCanvas(16,16),ctx=mini.getContext('2d');
+      ctx.drawImage(document.querySelector('#stage canvas'),0,0,16,16);
+      const p=ctx.getImageData(0,0,16,16).data,colors=new Set();
+      for(let i=0;i<p.length;i+=4)colors.add((p[i]<<16)|(p[i+1]<<8)|p[i+2]);
+      return colors.size>8;
+    })()`);
+    await settle();if(!await painted())return false;
+    const restored=await evaluate(`(() => {
+      const $=s=>document.querySelector(s);
+      if($('#stage').dataset.renderer!==${JSON.stringify(renderer)}||$('.viewport').dataset.lighting!=='sunset'||!$('#route-next').disabled)return false;
+      $('#route-prev').click();
+      if(!$('#mode-note').textContent.includes('字墙与敞廊')||!$('#route-prev').disabled)return false;
+      $('#map-photos').click();const row=$('#field-dialog [data-current]');
+      const ok=row.querySelector('[data-view]').dataset.view==='software-portal'&&row.textContent.includes('独立立牌已拆除')&&
+        row.textContent.includes('现场照片')&&!row.querySelector('a');
+      $('#field-dialog [data-close]').click();return ok;
+    })()`);
+    await settle();
+    return restored&&await painted()&&await evaluate("new URL(location.href).searchParams.get('view')==='software-portal'");
+  }
   const eastDormNames=['十九','二十','二十一','二十二','二十三','二十四','二十五','二十六'].map(n=>'学'+n+'公寓');
   async function eastDormCards(){
     return evaluate(`(()=>{
@@ -229,6 +253,7 @@ try {
     check('Published dining route reaches the curved south eave',await evaluate("new URL(location.href).searchParams.get('view')==='nanyuan-south' && document.querySelector('#route-position').textContent.includes('2 / 2')"));
     check('Published catalog opens the four surveyed buildings and their original sources',await surveyCards());
     check('Published Dongyuan search opens the correct street photo or courtyard aerial',await eastDormCards());
+    check('Published photo views restore the library side at sunset and the current software entrance',await photoFrontViews(satelliteUrl,'webgl'));
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
     const getTiles=()=>evaluate("(()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return {loaded:tiles.filter(t=>t.complete&&t.naturalWidth>0).length,total:tiles.length,message:document.querySelector('#fallback').hidden?'':document.querySelector('#fallback').innerText}})()");
     try {
@@ -731,6 +756,7 @@ try {
     return stops.join() === 'dongyuan-22,dongyuan-20,dongyuan-19,dongyuan-courts' && next.disabled &&
       document.querySelector('#stage').dataset.renderer==='canvas' && document.querySelector('[data-mode=model]').getAttribute('aria-pressed')==='true';
   })()`));
+  check('Mobile Canvas restores the photo view at sunset and follows it to the software letter wall',await photoFrontViews(url+'/','canvas'));
   await evaluate("document.querySelector('#map-photos').click();document.querySelector('[data-view=marco-bowl]').click()");
   check('Mobile Canvas opens the plaza aerial and can descend to the ground',await evaluate(`(()=>{
     if(document.querySelector('[data-mode=model]').getAttribute('aria-pressed')!=='true'||!document.querySelector('#mode-note').textContent.includes('东侧俯看'))return false;

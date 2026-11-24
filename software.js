@@ -5,6 +5,7 @@ import { buildingSolids, hallId, reportFacade } from './wenfu.js';
 import { physicsModel, labId, labPlaque } from './physics.js';
 import { eastModels, protectedTeachingEdge, teachingId, stadiumSign, standId, boundaryLines } from './east-campus.js';
 import { centralModels, axisCustomEdge } from './central-axis.js';
+import {behindCurtain} from './photo-fronts.js';
 import { facultyModels, facultyColors, facultyEdge, visibleSigns } from './faculty-sites.js';
 import { hasMarco,isMarcoRing,marcoHole,surveyedCourtPlan } from './campus-commons.js';
 import { westGatePlacement } from './west-gate.js';
@@ -161,8 +162,8 @@ export function softwareRenderer(data,palette,trees,inside){
   if(hall)for(const bay of reportFacade(hall[0]))objects.push({center:bay.center,parts:bay.parts,southFace:true});
   if(data.building.some(b=>b[2]==='library'))objects.push({center:[-181,16,-73],normal:[-1,0,0],parts:libraryFacade});
   for(const g of [...physicsModel(data.building),...eastModels(data),...centralModels(data),...facultyModels(data)])objects.push(g);
-  for(const {text,point:[x,y,z],height,width,yaw,color,horizontal} of visibleSigns(data))
-    objects.push({center:[x,y,z],normal:[Math.sin(yaw),0,Math.cos(yaw)],parts:[],sign:()=>{
+  for(const {text,point:[x,y,z],paintAnchor,height,width,yaw,color,horizontal} of visibleSigns(data))
+    objects.push({center:paintAnchor??[x,y,z],normal:[Math.sin(yaw),0,Math.cos(yaw)],parts:[],sign:()=>{
       [...text].forEach((ch,i)=>{const t=(i+.5)/text.length-.5;glyph(ch,horizontal?[x+width*t*Math.cos(yaw),y,z-width*t*Math.sin(yaw)]:[x,y-height*t,z],(horizontal?height:width)*.83,color);});
     }});
   if(data.building.some(b=>b[4]===standId)){
@@ -192,6 +193,7 @@ export function softwareRenderer(data,palette,trees,inside){
       if(len<.4)continue;
       const shade=.76+.23*(1+(-normal[0]-.6*normal[1])/len)/2;
       const edge={ax:x,az:z,nx:normal[0]/len,nz:normal[1]/len,tx:(a-x)/len,tz:(b-z)/len,length:len,sign:orientationSign};
+      if(behindCurtain(id,edge))continue;
       const obs=observedTeachingFace(id,edge);
       faces.push({normal,points:[base[i-1],base[i],top[i],top[i-1]],color:tint(wall,shade),len,
         plain:id===standId||facultyEdge(id,edge)||axisCustomEdge(id,edge)||teachingWingEdge(id,edge)||id===teachingId&&protectedTeachingEdge(x,z,a,b),
@@ -291,6 +293,39 @@ export function softwareRenderer(data,palette,trees,inside){
     const sx=(.5+x/(2*w))*width,sy=(.5-y/(2*w))*height;
     ctx.fillStyle='#785a32';ctx.fillText(ch,sx+.8,sy+.8);ctx.fillStyle=ink;ctx.fillText(ch,sx,sy);
   }
+  function facadeScreen(p,color,kind,w){
+    path(p,color+'35');
+    if(w>100)return;
+    // Screen-space strokes only; stop drawing individual lines when the
+    // corresponding openings would be smaller than two pixels.
+    const line=(a,b,c,d,pitch)=>{
+      const len=Math.hypot(...b.map((v,i)=>v-a[i]));
+      const count=Math.floor(Math.min(len/pitch,len*height*cam.projectionMatrix.elements[5]/(4*Math.max(2,w))));
+      const projected=(a,b,t)=>point(a.map((v,i)=>v+t*(b[i]-v)));
+      for(let i=1;i<count;i++){
+        const t=i/count,[x,y,z]=projected(a,b,t),[j,k,s]=projected(c,d,t);
+        if(z<.65||s<.65)continue;
+        ctx.moveTo((.5+x/(2*z))*width,(.5-y/(2*z))*height);
+        ctx.lineTo((.5+j/(2*s))*width,(.5-k/(2*s))*height);
+      }
+    };
+    ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=.8;
+    if(kind!=='louver')line(p[0],p[1],p[3],p[2],.16);
+    if(kind!=='baluster')line(p[0],p[3],p[1],p[2],kind==='louver'?.17:.12);
+    ctx.stroke();
+  }
+  // WebGL gets reflections from the sky; the flat painter can use its
+  // current light colour without baking sunset into the curtain material.
+  const glassColors=new Map(),reflections={morning:[196,178,152,.24],sunset:[219,157,96,.62],night:[28,40,58,.83]};
+  function skyGlass(base){
+    const light=reflections[lighting];if(!light)return base;
+    const key=lighting+base;
+    if(!glassColors.has(key)){
+      const n=parseInt(base.slice(1),16),rgb=[n>>16,(n>>8)&255,n&255];
+      glassColors.set(key,'rgb('+rgb.map((v,i)=>Math.round(v+(light[i]-v)*light[3])).join(',')+')');
+    }
+    return glassColors.get(key);
+  }
   function building(obj,distance){
     for(const face of obj.faces){
       const [x,,z]=face.points[0], [nx,nz]=face.normal;
@@ -364,8 +399,9 @@ export function softwareRenderer(data,palette,trees,inside){
           if(obj.southFace&&cam.position.z<obj.center[2])continue;
           if(obj.normal&&obj.normal[0]*(cam.position.x-obj.center[0])+obj.normal[1]*(cam.position.y-obj.center[1])+obj.normal[2]*(cam.position.z-obj.center[2])<0)continue;
           for(const [points,color,material,detail] of obj.parts)if(!detail||w<160){
+            if(material==='baluster'||material==='screen'||material==='louver'){facadeScreen(points,color,material,w);continue;}
             const openwork=material==='fence'||material==='rail';
-            path(points,material==='canopy'?color+'50':openwork?color+'28':color,openwork?color:null);
+            path(points,material==='canopy'?color+'50':openwork?color+'28':material==='curtain'?skyGlass(color):color,openwork?color:null);
           }
           obj.sign?.();
         }

@@ -7,9 +7,10 @@ import { buildingSolids, hallId, passage, reportFacade } from '../wenfu.js';
 import { fieldViews } from '../field-views.js';
 import { eastGateBlockers, teachingId } from '../east-campus.js';
 import { libraryId } from '../central-axis.js';
-import { civilId, zengId, clinicId, facultyHeights } from '../faculty-sites.js';
+import { civilId, zengId, clinicId, facultyHeights, visibleSigns } from '../faculty-sites.js';
 import { eduId, beiId, courtSigns } from '../college-courts.js';
 import { orientedFrame } from '../survey-mesh.js';
+import {photoFrontModels,softwareId,teachingFrontId} from '../photo-fronts.js';
 import { cuitingCenter, isMarcoRing, marcoHole, publicBlockers, surveyedCourtPlan } from '../campus-commons.js';
 import { nanyuanId,officeId } from '../round-buildings.js';
 import {standId,standFrame,standHeight,canStepOnStand,stadiumFieldModel,stadiumFence} from '../stadium-bowl.js';
@@ -68,6 +69,32 @@ assert(plantings.some(z=>z<north)&&plantings.some(z=>z>south)&&plantings.every(z
 const details=rendered.field;
 const bodies3d=[...buildingSolids(data.building)];
 const solidAt=(x,y,z,id)=>bodies3d.some(s=>(!id||s.record[4]===id)&&s.base<y&&y<s.top&&toolkit.contains(x,z,s.p));
+function checkPhotoFronts(){
+  const portal=orientedFrame(40.7,-191.7,.1,43.6),westFace=orientedFrame(93.1,-73.9,-59,-.2);
+  const occupied=(id,d,u,y,v)=>solidAt(...d.at([u,y,v]),id);
+  assert(!occupied(softwareId,portal,4,2.45,-1)&&occupied(softwareId,portal,4,2.45,-2.16),'The software threshold is recessed and stops at the glass doors');
+  for(const y of [8.62,12.1,15.63,19.19]){
+    assert(!occupied(softwareId,portal,3,y,-.9)&&occupied(softwareId,portal,7.2,y,-.9)&&!occupied(softwareId,portal,13.1,y,-.9),'Each open balcony and deep window flank solid stone, not a painted rectangle');
+  }
+  const signs=visibleSigns(data),softwareSigns=signs.filter(s=>s.id===softwareId);
+  assert.deepEqual(softwareSigns.map(s=>s.text),['软件学院','河南省特色化示范性']);
+  for(const s of softwareSigns){
+    const [x,y,z]=s.point,[u,v]=portal.local([x,z]);
+    assert(y-s.height/2>6.9&&v>0&&v<.25&&Math.cos(s.yaw)>.99&&occupied(softwareId,portal,u,y,v-.24),'Software lettering must be mounted on the south wall above the doorway');
+  }
+  const facadeParts=id=>photoFrontModels({building:data.building.filter(r=>r[4]===id)}).flatMap(g=>g.parts);
+  assert(!facadeParts(softwareId).some(([p])=>p.some(([x,y,z])=>portal.local([x,z])[1]>.6&&y>1.45&&y<6.8)),'No board or supporting post stands in front of the software entrance or flower bed');
+  assert(!occupied(teachingFrontId,westFace,4,2.45,-.9)&&occupied(teachingFrontId,westFace,4,2.45,-2.2),'The ground floor is behind the upper curtain wall');
+  assert(!occupied(teachingFrontId,westFace,-10,18,-2)&&occupied(teachingFrontId,westFace,6,20,-4)&&!occupied(teachingFrontId,westFace,12,19.4,-3.5)&&occupied(teachingFrontId,westFace,12,21,-3.5),'The low roof, raised pavilion and open rectangular roof frame have different silhouettes');
+  const roofName=signs.find(s=>s.id===teachingFrontId);
+  assert(roofName?.text==='综合教学楼'&&roofName.horizontal&&roofName.point[1]-roofName.height/2>16.9&&Math.sin(roofName.yaw)<-.99,'Five roof characters face the library and clear the parapet');
+  const curtain=facadeParts(teachingFrontId).filter(p=>p[2]==='curtain').map(([p])=>p.map(([x,y,z])=>[westFace.local([x,z])[0],y]));
+  for(const y of [6,10,14]){
+    const spans=curtain.filter(p=>p[0][1]<y&&p[2][1]>y).map(p=>[p[0][0],p[1][0]]).sort((a,b)=>a[0]-b[0]);
+    assert(spans.length&&spans[0][0]<-25&&spans.at(-1)[1]>25&&spans.every(([l],i)=>!i||l-spans[i-1][1]<.025),'Glazing is continuous across the square-facing elevation');
+  }
+}
+checkPhotoFronts();
 const eastern=data.building.filter(r=>residences.has(r[4]));
 assert.deepEqual(eastern.map(r=>r[3]).sort(),['十九','二十','二十一','二十二','二十三','二十四','二十五','二十六'].map(s=>'学'+s+'公寓').sort());
 const eastRouter=createCampusRouter(data),inSolid=(x,z)=>bodies3d.some(s=>s.base<2 && x>500 && toolkit.contains(x,z,s.p));
@@ -258,6 +285,7 @@ for (const [name, result] of results) {
       if(object.name==='Court chain-link enclosures'){
         const base=geometry.getAttribute('railBase').array;
         assert(base.some(y=>y<0)&&base.some(y=>y>5)&&base.filter(y=>y>=0).length<=96,'Terrace rails share the original court shader in whole indexed panels');
+        assert(base.filter(y=>y===-2).length===4*4&&base.includes(-3)&&base.includes(-4),'Four balcony fronts, equipment screens and roof louvers use indexed panels, not separate bars');
       }
     }
     if (index) {
