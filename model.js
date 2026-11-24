@@ -10,7 +10,7 @@ import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
 import { fieldGround, entryGap, putFieldTrees, walkingWater } from './field-ground.js';
 import { buildingSolids, hallId } from './wenfu.js';
 import { steppedIds } from './landmark-wings.js';
-import {photoFrontIds} from './photo-fronts.js';
+import {photoFrontIds,softwarePillarPlaque} from './photo-fronts.js';
 import { residences } from './dongyuan.js';
 import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.js';
 import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
@@ -364,6 +364,25 @@ function buildScene(scene, data, trees, anisotropy=1) {
     const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
     const sign=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,alphaTest:.20,roughness:.76}));
     sign.position.set(...point);sign.rotation.y=yaw;sign.name=text;scene.add(sign);
+  }
+  if(data.building.some(b=>b[4]===softwarePillarPlaque.id)){
+    const {point,yaw,width,height,columns}=softwarePillarPlaque;
+    const cv=document.createElement('canvas');cv.width=180;cv.height=410;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#1f2321';ctx.fillRect(0,0,180,410);
+    ctx.strokeStyle='#8e7544';ctx.lineWidth=5;ctx.strokeRect(4,4,172,402);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    const xs=[144,90,36];
+    columns.forEach((col,ci)=>{
+      const main=ci===1;
+      ctx.font=`bold ${main?28:18}px KaiTi,STKaiti,SimSun,serif`;
+      ctx.fillStyle=main?'#deb764':'#c7a154';
+      const step=366/col.length;
+      [...col].forEach((ch,i)=>ctx.fillText(ch,xs[ci],22+(i+.5)*step));
+    });
+    const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;map.anisotropy=anisotropy;
+    const plate=new T.Mesh(new T.PlaneGeometry(width,height),new T.MeshStandardMaterial({map,roughness:.72}));
+    plate.position.set(...point);plate.rotation.y=yaw;plate.name='Software college pillar plaque';scene.add(plate);
   }
   if(data.building.some(b=>b[4]===labId)){
     const {text,width,height,point,yaw}=labPlaque;

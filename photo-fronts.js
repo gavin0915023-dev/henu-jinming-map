@@ -57,7 +57,10 @@ function squareMembers(){
     [9.63,18.64,roof,18.07,-3.68,-3.32,red],[9.63,10.02,18.07,20.76,-3.78,-3.26,pale],
     [14.00,14.32,18.07,20.76,-3.78,-3.26,pale],[18.27,18.64,18.07,20.76,-3.78,-3.26,pale],
     [9.63,18.64,20.76,21.20,-3.78,-3.26,pale]];
-  for(const u of [-24.7,-16,-8,0,8,16,24.7])p.push([u-.21,u+.21,.08,arcade,-.31,.14,'#c2c0b4']);
+  for(let i=0;i<=12;i++){
+    const u=-24.7+49.4*i/12;
+    p.push([u-.19,u+.19,.08,arcade,-.29,.14,'#c2c0b4']);
+  }
   return p;
 }
 export function* photoFrontSolids(record){
@@ -99,22 +102,29 @@ function lettering(id,d,u,y,v,text,width,height,color,horizontal=false){
   const paintAnchor=id===softwareId?d.at([(5.85+10.16)/2,(level+21.34)/2,.30]):null;
   return {id,text,point:d.at([u,y,v]),paintAnchor,yaw:Math.atan2(d.nx,d.nz),width,height,color,horizontal,spaced:true};
 }
+export const softwarePillarPlaque={
+  id:softwareId,
+  point:software().at([.44,1.98,.085]),
+  yaw:Math.atan2(software().nx,software().nz),
+  width:.78,height:1.78,
+  columns:['河南大学鲲鹏产业创新学院','河南大学软件学院','河南大学信息化建设与管理办公室']
+};
 export const photoFrontSigns=[
-  lettering(softwareId,software(),7.10,14.26,.135,'软件学院',1.53,10.22,'#b59b68'),
-  lettering(softwareId,software(),9.22,14.49,.136,'河南省特色化示范性',.85,12.44,'#b0986e'),
+  lettering(softwareId,software(),7.06,15.10,.135,'软件学院',1.64,8.35,'#b59b68'),
+  lettering(softwareId,software(),9.24,14.55,.136,'河南省特色化示范性',.84,12.15,'#b0986e'),
   lettering(teachingFrontId,teaching(),-.90,18.25,.02,'综合教学楼',24.6,2.47,'#c1a26e',true)
 ];
 // Slim cantilever, with a continuous outer lip. Construct the roof around
 // an open lightwell above the lettering so sky is visible from the doorway.
 function portalEave(d){
-  const cu=8.10,cv=-.63,l=-.62,r=17.24,back=-3.58,front=1.55,th=.24;
+  const cu=7.95,cv=-.18,l=-.62,r=17.24,back=-3.58,front=1.55,th=.24;
   const angles=Array.from({length:24},(_,i)=>i*Math.PI/12);
   for(const [u,v] of rect(l,r,back,front))angles.push((Math.atan2(v-cv,u-cu)+Math.PI*2)%(Math.PI*2));
   const rings=angles.sort((a,b)=>a-b).map(a=>{
     const x=Math.cos(a),z=Math.sin(a),t=Math.min((x>=0?r-cu:l-cu)/x,(z>=0?front-cv:back-cv)/z);
     const edgeU=cu+t*x,edgeV=cv+t*z;
     return [[edgeU,edgeV+(Math.abs(edgeV-front)<.001?.23*Math.cos((edgeU-5)*Math.PI/16):0)],
-      [cu+2.24*x,cv+1.59*z]];
+      [cu+2.28*x,cv+1.45*z]];
   });
   const point=([u,v],dy)=>[u,22.96+.18*((u-7)/9)**2+dy,v];
   for(const [i,[a,b]] of rings.entries()){
@@ -135,7 +145,18 @@ function softwareFront(){
   // The glass doors sit behind the letter wall. The black transom is part of
   // the doorway. The former freestanding roadside sign is absent.
   panes(d,.90,14.34,1.19,level-.34,-2.013,7,'#485a60');
-  panel(d,1.12,13.77,3.94,4.52,-1.966,'#393e40');
+  panel(d,1.12,13.77,3.94,4.56,-1.966,'#282c2e');
+  // Row of six arched silver/cream institute plaques hung right beneath the black LED fascia.
+  for(let i=0;i<6;i++){
+    const u=1.42+i*1.82;
+    panel(d,u,u+1.48,3.44,3.84,-1.86,'#dcd8cd','wall',1);
+    panel(d,u+.16,u+1.32,3.82,3.93,-1.855,'#e4e0d5','wall',1);
+    panel(d,u+.12,u+1.36,3.50,3.80,-1.84,'#b4b3aa','wall',1);
+  }
+  // Crimson display stand tucked inside the recessed right corner of the glazed vestibule.
+  d.box(12.95,14.28,1.32,2.46,-1.86,-1.48,'#9d302b','wall',1);
+  // Ground-floor left-pillar plaque recessed dark bronze plate (gold columns drawn in model/software).
+  d.box(.03,.85,1.06,2.90,.02,.068,'#232725','wall',1);
   panel(d,.95,14.32,5.93,6.02,-1.935,frame);
   for(const l of [1.38,4.28,7.18,10.08]){
     panel(d,l,l+2.68,1.29,3.81,-1.942,'#a2aaab');
@@ -155,6 +176,9 @@ function softwareFront(){
     // Only a few shallow joints cross the stone sign pier.
     panel(d,5.88,10.15,y+.06,y+.081,.088,'#bfb5a4','wall',1);
   }
+  // Visible condenser unit tucked in the left corner of the first-floor balcony, standing proud of the glass.
+  d.box(1.06,1.62,level+.34,level+1.16,-.68,-.04,'#d2cdc0','wall',1);
+  panel(d,1.14,1.46,level+.46,level+1.04,-.02,'#7b807b','wall',1);
   portalEave(d);
   // Beyond the entrance the classroom wing has broad grouped windows with
   // low equipment screens underneath. No lattice bars become separate meshes.
@@ -169,6 +193,7 @@ function softwareFront(){
       panes(d,l+.29,r-.04,y+1.00,y+storey-.35,.065,3,(i+j)%4?'#78847e':'#697a7a');
       panel(d,l+.30,r-.04,y+.23,y+.94,.11,'#69716c');
       panel(d,l+.30,r-.04,y+.24,y+.94,.31,'#a5a295','screen');
+      if((i===1&&j<2)||(i===2&&j===0))d.box(l+.46,l+1.20,y+.22,y+.88,.08,.44,'#cbc6ba','wall',1);
     }
   }
   for(let i=0;i<=4;i++){const y=level+i*storey;d.box(left,right,y-.21,y+.095,-.04,.53,edge);}
@@ -223,6 +248,11 @@ function teachingWest(){
     const u=-.90+24.6*((i+.5)/5-.5),base=roof+.10;
     d.group([u,18,-.55]);d.bar([u,base,-.13],[u,19.03,-.13],.048,metal);
     d.bar([u,base,-1.53],[u,18.76,-.16],.044,metal);
+  }
+  // Slender roof lightning rods / comms masts observed along the skyline.
+  for(const [u,y0,y1,v] of [[-21.4,21.31,23.2,-2.4],[-18.2,21.31,22.9,-2.9],[-8.4,roof+.10,20.6,-1.6]]){
+    d.group([u,(y0+y1)/2,v]);
+    d.bar([u,y0,v],[u,y1,v],.042,'#8d928f',1);
   }
   return d.groups;
 }

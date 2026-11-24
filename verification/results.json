@@ -156,7 +156,7 @@
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1302267,
+    "vertices": 1302683,
     "invalid": 0,
     "trees": 1007,
     "treeForms": {
@@ -169,7 +169,7 @@
       "windows": 11750,
       "entrances": 82,
       "rooftopUnits": 92,
-      "triangles": 507990
+      "triangles": 508196
     },
     "landscape": {
       "courts": 103,
@@ -181,10 +181,10 @@
       "shores": 3,
       "tracks": 2
     },
-    "drawCalls": 69,
-    "triangles": 1243668
+    "drawCalls": 70,
+    "triangles": 1243876
   },
-  "linkedPrograms": 266,
+  "linkedPrograms": 271,
   "shaderErrors": [],
   "failures": []
 }

@@ -55,7 +55,7 @@ node server.mjs
 
 ## 实拍参考细化
 
-从[软件学院入口近看](https://gavin0915023-dev.github.io/henu-jinming-map/?view=software-portal)，四层敞廊右侧的浅色实墙上有两列竖字：“软件学院”和“河南省特色化示范性”。入口玻璃退在字墙下面；花坛和步道上没有旧街景里的独立立牌。
+从[软件学院入口近看](https://gavin0915023-dev.github.io/henu-jinming-map/?view=software-portal)，四层敞廊右侧的浅色实墙上有两列竖字：“软件学院”和“河南省特色化示范性”，一楼左柱挂有黑底金字三联院名牌，黑色电子屏下排着六块荣誉挂牌；入口玻璃退在字墙下面，花坛和步道上没有旧街景里的独立立牌。
 
 从[图书馆一侧望综合教学楼（黄昏）](https://gavin0915023-dev.github.io/henu-jinming-map/?view=teaching-library&light=sunset)，连续的幕墙和屋顶五个分开安装的字正对广场。换成[正午](https://gavin0915023-dev.github.io/henu-jinming-map/?view=teaching-library&light=noon)可比较玻璃反光。两处视角均以使用者提供的照片为依据，进深和构件尺寸为估计值。
 

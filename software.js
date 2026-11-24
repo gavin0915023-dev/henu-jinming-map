@@ -5,7 +5,7 @@ import { buildingSolids, hallId, reportFacade } from './wenfu.js';
 import { physicsModel, labId, labPlaque } from './physics.js';
 import { eastModels, protectedTeachingEdge, teachingId, stadiumSign, standId, boundaryLines } from './east-campus.js';
 import { centralModels, axisCustomEdge } from './central-axis.js';
-import {behindCurtain} from './photo-fronts.js';
+import {behindCurtain,softwarePillarPlaque} from './photo-fronts.js';
 import { facultyModels, facultyColors, facultyEdge, visibleSigns } from './faculty-sites.js';
 import { hasMarco,isMarcoRing,marcoHole,surveyedCourtPlan } from './campus-commons.js';
 import { westGatePlacement } from './west-gate.js';
@@ -170,6 +170,17 @@ export function softwareRenderer(data,palette,trees,inside){
     const {point:[x,y,z],text,width,color}=stadiumSign;
     objects.push({center:[x,y,z],normal:[-1,0,0],parts:[],sign:()=>{
       [...text].forEach((ch,i)=>glyph(ch,[x,y,z+width*((i+.5)/text.length-.5)],1.82,color));
+    }});
+  }
+  if(data.building.some(b=>b[4]===softwarePillarPlaque.id)){
+    const {point:[x,y,z],width,height,yaw,columns}=softwarePillarPlaque;
+    const nx=Math.sin(yaw),nz=Math.cos(yaw),tx=nz,tz=-nx;
+    objects.push({center:[x,y,z],normal:[nx,0,nz],parts:[],sign:()=>{
+      [...columns[1]].forEach((ch,i)=>glyph(ch,[x,y+height*(.42-i*.118),z],.17,'#deb764'));
+      for(const [ci,off] of [[0,width*.28],[2,-width*.28]]){
+        const col=columns[ci];
+        [...col].forEach((ch,i)=>glyph(ch,[x+tx*off,y+height*(.44-i*(.88/col.length)),z+tz*off],.11,'#c7a154'));
+      }
     }});
   }
   if(data.building.some(b=>b[4]===labId)){

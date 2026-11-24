@@ -375,8 +375,10 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
     if(material==='exposed-body')continue; // Already supplied by the extruded solid in WebGL.
     const target=material==='brick'?brick:material==='glass'||material==='curtain'?glass:material==='canopy'?canopy:
       material==='ground'?plazaGround:material==='foliage'?foliage:material==='rail'||Object.hasOwn(pattern,material)?fence:masonry;
-    // A continuous reflective curtain does not light up like a grid of rooms.
-    target.quad(...points,color,material==='curtain'?.06:1);
+    // Continuous reflective curtain walls carry a distinct roomGlow tag (0.28) so
+    // dusk/night renders show horizontal interior classroom ceiling strip lighting
+    // instead of a random dorm checkerboard.
+    target.quad(...points,color,material==='curtain'?.28:1);
     if(target===fence){
       const y=material==='rail'?Math.min(...points.map(p=>p[1])):pattern[material];
       railBases.push(y,y,y,y);
@@ -525,7 +527,7 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
   const nightGlowUniform = { value: 0 };
   if (windowChunks.length) {
     const winMat = windowChunks[0].material;
-    winMat.customProgramCacheKey = () => 'campus-window-glaze-v2';
+    winMat.customProgramCacheKey = () => 'campus-window-glaze-v3';
     winMat.onBeforeCompile = shader => {
       shader.uniforms.uNightGlow = nightGlowUniform;
       shader.vertexShader = 'attribute float roomGlow;varying float vRoomGlow;varying vec3 vWinPos;\n' + shader.vertexShader
@@ -533,11 +535,24 @@ export function addBuildingDetails(scene, data, { Batch, contains, bounds }) {
       shader.fragmentShader = 'uniform float uNightGlow;varying float vRoomGlow;varying vec3 vWinPos;\n' + shader.fragmentShader
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         if (uNightGlow > 0.01) {
-          vec3 cell = floor(vec3(vWinPos.x / 3.8 + vWinPos.z * 0.13, vWinPos.y / 3.45, vWinPos.z / 3.8 - vWinPos.x * 0.11));
-          float h = fract(sin(dot(cell, vec3(127.1, 311.7, 74.7))) * 43758.5453);
-          float lit = step(0.54, h);
-          vec3 warmTone = mix(vec3(1.0, 0.78, 0.45), vec3(0.95, 0.91, 0.80), fract(h * 19.3));
-          totalEmissiveRadiance += warmTone * lit * (0.45 + 0.65 * fract(h * 7.7)) * uNightGlow * vRoomGlow;
+          if (vRoomGlow < 0.5) {
+            // Subtle warm interior classroom strip glow behind continuous curtain glass & ground arcade.
+            float bay = floor(vWinPos.z / 4.2);
+            float fl = floor(max(0.0, vWinPos.y - 0.9) / 3.68);
+            float fy = fract(max(0.0, vWinPos.y - 0.9) / 3.68);
+            float band = smoothstep(0.18, 0.34, fy) * (1.0 - smoothstep(0.72, 0.88, fy));
+            float h = fract(sin(dot(vec2(bay, fl), vec2(63.7, 211.3))) * 43758.5453);
+            float isGround = step(vWinPos.y, 4.55);
+            float lit = mix(step(0.32, h) * 0.52, 0.65, isGround) * band;
+            vec3 warmStrip = mix(vec3(1.0, 0.72, 0.34), vec3(1.0, 0.84, 0.56), fract(h * 13.7));
+            totalEmissiveRadiance += warmStrip * lit * uNightGlow * (vRoomGlow * 1.45);
+          } else {
+            vec3 cell = floor(vec3(vWinPos.x / 3.8 + vWinPos.z * 0.13, vWinPos.y / 3.45, vWinPos.z / 3.8 - vWinPos.x * 0.11));
+            float h = fract(sin(dot(cell, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+            float lit = step(0.54, h);
+            vec3 warmTone = mix(vec3(1.0, 0.78, 0.45), vec3(0.95, 0.91, 0.80), fract(h * 19.3));
+            totalEmissiveRadiance += warmTone * lit * (0.45 + 0.65 * fract(h * 7.7)) * uNightGlow * vRoomGlow;
+          }
         }`);
     };
   }

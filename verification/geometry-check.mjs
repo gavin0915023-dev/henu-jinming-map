@@ -10,7 +10,7 @@ import { libraryId } from '../central-axis.js';
 import { civilId, zengId, clinicId, facultyHeights, visibleSigns } from '../faculty-sites.js';
 import { eduId, beiId, courtSigns } from '../college-courts.js';
 import { orientedFrame } from '../survey-mesh.js';
-import {photoFrontModels,softwareId,teachingFrontId} from '../photo-fronts.js';
+import {photoFrontModels,softwareId,teachingFrontId,softwarePillarPlaque} from '../photo-fronts.js';
 import { cuitingCenter, isMarcoRing, marcoHole, publicBlockers, surveyedCourtPlan } from '../campus-commons.js';
 import { nanyuanId,officeId } from '../round-buildings.js';
 import {standId,standFrame,standHeight,canStepOnStand,stadiumFieldModel,stadiumFence} from '../stadium-bowl.js';
@@ -84,6 +84,7 @@ function checkPhotoFronts(){
   }
   const facadeParts=id=>photoFrontModels({building:data.building.filter(r=>r[4]===id)}).flatMap(g=>g.parts);
   assert(!facadeParts(softwareId).some(([p])=>p.some(([x,y,z])=>portal.local([x,z])[1]>.6&&y>1.45&&y<6.8)),'No board or supporting post stands in front of the software entrance or flower bed');
+  assert(softwarePillarPlaque.columns.includes('河南大学软件学院')&&portal.local([softwarePillarPlaque.point[0],softwarePillarPlaque.point[2]])[1]<.15,'The dark pillar plaque sits flush on the left entrance pier');
   assert(!occupied(teachingFrontId,westFace,4,2.45,-.9)&&occupied(teachingFrontId,westFace,4,2.45,-2.2),'The ground floor is behind the upper curtain wall');
   assert(!occupied(teachingFrontId,westFace,-10,18,-2)&&occupied(teachingFrontId,westFace,6,20,-4)&&!occupied(teachingFrontId,westFace,12,19.4,-3.5)&&occupied(teachingFrontId,westFace,12,21,-3.5),'The low roof, raised pavilion and open rectangular roof frame have different silhouettes');
   const roofName=signs.find(s=>s.id===teachingFrontId);
