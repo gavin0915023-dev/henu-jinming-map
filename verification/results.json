@@ -101,6 +101,10 @@
     "Live walking navigation shows remaining distance and a directional arrow",
     "Auto-walk advances along the A* route and pauses cleanly on manual takeover",
     "Closing navigation removes the route bar",
+    "A Software College route is valid and a coincident start cannot replay the old path",
+    "North Gate is off route and cannot count as a Software College arrival",
+    "Auto-walk replans from the actual nearby position instead of jumping back to West Gate",
+    "Auto-walk stops outside the Software College and shares the reached position",
     "Time-of-day presets switch exclusively between dusk, night and morning",
     "Share link records the orbit camera and the night lighting",
     "Opening a shared orbit link restores the same camera and lighting",
@@ -123,10 +127,6 @@
     "Restarting returns to the first stop",
     "Going down to the ground leaves the tour for the stop viewpoint",
     "Descending from a nighttime library tour stop preserves night lighting in walk mode",
-    "Tiles switch hosts when the first host fails",
-    "Zoom reports missing tiles instead of treating one tile as success",
-    "Campus outline and labels stay visible when both imagery hosts fail",
-    "Retry restores imagery in place",
     "Mobile viewport uses device width",
     "Mobile layout stays within viewport",
     "Mobile canvas remains usable",
@@ -156,7 +156,7 @@
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1302683,
+    "vertices": 1343553,
     "invalid": 0,
     "trees": 1007,
     "treeForms": {
@@ -184,7 +184,7 @@
     "drawCalls": 70,
     "triangles": 1243876
   },
-  "linkedPrograms": 271,
+  "linkedPrograms": 283,
   "shaderErrors": [],
   "failures": []
 }

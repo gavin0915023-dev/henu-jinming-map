@@ -6,20 +6,23 @@ import { addBuildingDetails, computingSignColumns } from './building-detail.js';
 import { addLandscapeDetails } from './landscape-detail.js';
 import { addTreeModels } from './tree-model.js';
 import { addWestGate } from './west-gate.js';
-import { campusAvenueData, avenueTrees, avenueHedgeRuns } from './avenue.js';
-import { fieldGround, entryGap, putFieldTrees, walkingWater } from './field-ground.js';
+import { avenueTrees, avenueHedgeRuns } from './avenue.js';
+import { entryGap, putFieldTrees } from './field-ground.js';
+import { bounds, contains, prepareWalkingMap } from './walking-space.js';
+import { cumulativeDistances, routeProgress } from './routing.js';
 import { buildingSolids, hallId } from './wenfu.js';
 import { steppedIds } from './landmark-wings.js';
 import {photoFrontIds,softwarePillarPlaque} from './photo-fronts.js';
 import { residences } from './dongyuan.js';
 import { labId, labPlaque, physicsGroundHeight, physicsCourt } from './physics.js';
 import { facultyColors, visibleSigns, facultyHeights } from './faculty-sites.js';
-import { publicBlockers,hasMarco,isMarcoRing,marcoHole } from './campus-commons.js';
-import { stadiumSign, standId, teachingId, eastGateBlockers, hasEastGate, boundaryLines } from './east-campus.js';
-import {standHeight,canStepOnStand,stadiumFence} from './stadium-bowl.js';
+import { hasMarco,isMarcoRing,marcoHole } from './campus-commons.js';
+import { stadiumSign, standId, teachingId, boundaryLines } from './east-campus.js';
+import {standHeight,canStepOnStand} from './stadium-bowl.js';
 import { campusSky, shadeGround, LIGHTING_PRESETS } from './daylight.js';
 import { applyGroundSurfaceTextures } from './ground-surfaces.js';
 import { createPlayerAvatar } from './avatar.js';
+import { WALK_PACE, RUN_PACE } from './elysia-motion.js';
 
 const ground = 0;
 const extent = 1400;
@@ -33,15 +36,6 @@ const palette = {
 };
 
 const closed = (points) => points[0][0] === points.at(-1)[0] && points[0][1] === points.at(-1)[1];
-const contains = (x, z, ring) => {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [a,b] = ring[i], [c,d] = ring[j];
-    if ((b > z) !== (d > z) && x < (c - a) * (z - b) / (d - b) + a) inside = !inside;
-  }
-  return inside;
-};
-const bounds = (points) => points.reduce(([a,b,c,d],[x,z]) => [Math.min(a,x),Math.min(b,z),Math.max(c,x),Math.max(d,z)],[Infinity,Infinity,-Infinity,-Infinity]);
 const shape = (points) => new T.Shape(points.slice(0, closed(points) ? -1 : undefined).map(([x,z]) => new T.Vector2(x, -z)));
 function groundShape(points,holes=[]){
   const s=shape(points);for(const h of holes)s.holes.push(shape(h));
@@ -532,8 +526,8 @@ function buildScene(scene, data, trees, anisotropy=1) {
 
 export function createModel(stage,data,onFrame,options={}){
   const {onPickBuilding,onWalkCamera,onPointerLock}=options;
-  data=campusAvenueData(data);
-  data={...data,field:fieldGround(data,contains)};
+  const {data:prepared,solids:campusSolids,space}=options.walkingMap??prepareWalkingMap(data);
+  data=prepared;
   const scene = new T.Scene();
   const orbitMist=new T.FogExp2('#cad6d6',.00019), walkMist=new T.FogExp2('#dce4e4',.00082);
   scene.fog=orbitMist;
@@ -572,8 +566,8 @@ export function createModel(stage,data,onFrame,options={}){
   scene.add(ambient,sun,sun.target);
   const anisotropy=context?Math.min(8,renderer.capabilities.getMaxAnisotropy()):1;
   const details=context?buildScene(scene,data,trees,anisotropy):null;
-  const avatar=context?createPlayerAvatar():null;
-  if(avatar)scene.add(avatar.root);
+  let avatar=null,lastAvatarTick=0;
+  const reducedWalkMotion=matchMedia('(prefers-reduced-motion: reduce)');
   let contextLost=false;
   if(context){
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;},false);
@@ -590,10 +584,10 @@ export function createModel(stage,data,onFrame,options={}){
   controls.maxPolarAngle=Math.PI*.48;
   const direction=new T.Vector3(), projection=new T.Vector3(), raycaster=new T.Raycaster(), ndc=new T.Vector2();
   const walk={
-    active:false,yaw:0,pitch:-.02,position:new T.Vector3(),fov:65,horizontal:0,eyeHeight:1.70,
+    active:false,yaw:0,pitch:-.02,lastPitch:-.02,position:new T.Vector3(),fov:65,horizontal:0,eyeHeight:1.70,
     jumpY:0,velY:0,grounded:true,coyote:0,jumpBuf:0,landDip:0,
-    bobPhase:0,bobAmp:0,fovKick:0,speed:0,sprinting:false,
-    cameraMode:'fps',avatarYaw:0
+    bobPhase:0,bobAmp:0,bobX:0,bobY:0,fovKick:0,speed:0,sprinting:false,
+    cameraMode:'fps',avatarYaw:0,facing:0,turnRate:0,tapMeters:0,fpsHands:true
   };
   const keys=new Set();
   let drag=null, tapStart=null, tween=null, visible=true, size={w:0,h:0}, last=performance.now(), lastView='';
@@ -664,7 +658,6 @@ export function createModel(stage,data,onFrame,options={}){
   }
 
   // Pick named buildings from solid footprints, including detached residences.
-  const campusSolids=[...buildingSolids(data.building)];
   const pickBody=(record,ring,height,base=0)=>{
     const [minX,minZ,maxX,maxZ]=bounds(ring);
     return {record,ring,height,base,box:new T.Box3(new T.Vector3(minX,base,minZ),new T.Vector3(maxX,height+.2,maxZ))};
@@ -787,13 +780,7 @@ export function createModel(stage,data,onFrame,options={}){
     lastView='';
   }
 
-  const footprints=campusSolids.filter(s=>s.base<2.45&&!s.walkSurface).map(({p})=>[bounds(p),p]);
-  if(hasEastGate(data))for(const p of eastGateBlockers())footprints.push([bounds(p),p]);
-  for(const p of publicBlockers(data))footprints.push([bounds(p),p]);
-  const fence=data.building.some(b=>b[4]===standId)&&stadiumFence(data);
-  if(fence)footprints.push([bounds(fence),fence]);
-  const {onDeck,waterBlocks}=walkingWater(data.field,data.water,contains,bounds),physics=data.building.some(b=>b[4]===labId);
-  const obstructed=(x,z)=>footprints.some(([[a,b,c,d],ring])=>x>a&&x<c&&z>b&&z<d&&contains(x,z,ring))||waterBlocks(x,z);
+  const {onDeck,blocked:obstructed}=space,physics=data.building.some(b=>b[4]===labId);
   const facultyHeight=facultyHeights(data),hasStand=data.building.some(b=>b[4]===standId);
   const groundY=(x,z)=>(hasStand?standHeight(x,z):undefined)??(onDeck(x,z)?1.055:physics&&x>-125&&x<-55&&z>200&&z<256?
     (physicsGroundHeight(x,z)??(contains(x,z,physicsCourt)?.94:.75)):(facultyHeight(x,z)??.75));
@@ -857,32 +844,30 @@ export function createModel(stage,data,onFrame,options={}){
     tween={from,fromTarget:controls.target.clone(),to,target:center,start:performance.now(),duration,lift:Math.min(260,from.distanceTo(to)*.22),drift};
   }
   function stopDrift(){controls.autoRotate=false;}
-  function syncAvatar(dt=0){
-    const floor=groundY(walk.position.x,walk.position.z);
-    if(avatar){
-      avatar.setVisible(walk.active);
-      if(walk.active){
-        avatar.update({
-          x:walk.position.x,z:walk.position.z,groundY:floor,
-          jumpY:walk.jumpY,velY:walk.velY,landDip:walk.landDip,
-          yaw:walk.avatarYaw,speed:walk.speed,sprinting:walk.sprinting,
-          grounded:walk.grounded,dt
-        });
-      }
-    }else if(renderer.setAvatar){
-      renderer.setAvatar(walk.active?{
-        x:walk.position.x,z:walk.position.z,groundY:floor,
-        jumpY:walk.jumpY,yaw:walk.avatarYaw,speed:walk.speed,
-        grounded:walk.grounded,thirdPerson:walk.cameraMode==='third'
-      }:null);
+  function syncAvatar(dt=0,distance=0){
+    const third=walk.cameraMode==='third';
+    if(!walk.active||(!context&&!third)){
+      avatar?.setVisible(false);renderer.setAvatar?.(null);return;
     }
+    if(!avatar){
+      avatar=createPlayerAvatar({coarse:!context});
+      if(context)scene.add(avatar.root);
+    }
+    avatar.setFirstPerson(!third,walk.fpsHands);avatar.setVisible(true);
+    avatar.update({x:walk.position.x,z:walk.position.z,groundY:groundY(walk.position.x,walk.position.z),
+      jumpY:walk.jumpY,velY:walk.velY,landDip:walk.landDip,yaw:walk.avatarYaw,camYaw:walk.yaw,pitch:walk.pitch,
+      eyeHeight:walk.eyeHeight,bobX:walk.bobX,bobY:walk.bobY,bobPhase:walk.bobPhase,bobAmp:walk.bobAmp,
+      turnRate:walk.turnRate,speed:walk.speed,sprinting:walk.sprinting,grounded:walk.grounded,
+      still:reducedWalkMotion.matches,dt,distance});
+    renderer.setAvatar?.(avatar);
   }
   function face(){
     const floor=groundY(walk.position.x,walk.position.z);
-    const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced=reducedWalkMotion.matches;
     const bobOn=walk.cameraMode==='fps'&&!reduced;
     const bobY=bobOn?Math.sin(walk.bobPhase)*(walk.sprinting?.062:.038)*walk.bobAmp:0;
     const bobX=bobOn?Math.cos(walk.bobPhase*.5)*(walk.sprinting?.03:.016)*walk.bobAmp:0;
+    walk.bobX=bobX;walk.bobY=bobY;
     const eyeY=floor+walk.eyeHeight+walk.jumpY+walk.landDip+bobY;
     direction.set(Math.sin(walk.yaw)*Math.cos(walk.pitch),Math.sin(walk.pitch),-Math.cos(walk.yaw)*Math.cos(walk.pitch));
     if(walk.cameraMode==='third'){
@@ -923,13 +908,21 @@ export function createModel(stage,data,onFrame,options={}){
   }
   function setWalkCamera(camMode){
     const next=camMode==='third'?'third':'fps';
+    walk.tapMeters=0;
+    if(walk.cameraMode!==next){walk.facing=walk.avatarYaw=walk.yaw;walk.turnRate=0;avatar?.reset();}
     walk.cameraMode=next;
-    avatar?.setFirstPerson(next==='fps');
+    avatar?.setFirstPerson(next==='fps',walk.fpsHands);
     if(next==='third'&&document.pointerLockElement===stage)document.exitPointerLock?.();
-    if(walk.active){syncAvatar(0);face();}
+    if(walk.active){face();syncAvatar(0);}
     lastView='';
     onWalkCamera?.(next);
     return next;
+  }
+  function setFirstPersonHands(show){
+    const next=Boolean(show);
+    if(walk.fpsHands===next)return;
+    walk.fpsHands=next;
+    if(walk.active){avatar?.setFirstPerson(walk.cameraMode==='fps',walk.fpsHands);syncAvatar(0);lastView='';}
   }
   function setPointerLock(enable){
     if(!walk.active||walk.cameraMode!=='fps')return false;
@@ -969,67 +962,33 @@ export function createModel(stage,data,onFrame,options={}){
   }
   function routeStartPose(points){
     if(!points||points.length<2)return null;
-    const n=points.length, cum=new Float64Array(n);
-    for(let i=1;i<n;i++)cum[i]=cum[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
-    const total=cum[n-1];
-    if(total<1)return [points[0][0],points[0][1],0,.04,65];
-    // Start slightly ahead of the start beacon and clear of any building/gate wall footprint.
-    let dist=Math.min(total*.15,3.5);
-    const maxSkip=Math.min(total,dist+60);
-    let [sx,sz]=samplePolyline(points,cum,dist);
-    const clear=(x,z)=>!obstructed(x,z)&&!obstructed(x+1.2,z)&&!obstructed(x-1.2,z)&&!obstructed(x,z+1.2)&&!obstructed(x,z-1.2);
-    while(dist<maxSkip&&!clear(sx,sz)){
-      dist=Math.min(maxSkip,dist+2);
-      [sx,sz]=samplePolyline(points,cum,dist);
-    }
-    const [lx,lz]=samplePolyline(points,cum,Math.min(total,dist+14));
-    const yaw=Math.hypot(lx-sx,lz-sz)>.3?Math.atan2(lx-sx,-(lz-sz)):0;
-    return [sx,sz,yaw,-.01,65];
+    const [x,z]=points[0];
+    if(obstructed(x,z))return null;
+    const next=points.find(([a,b])=>Math.hypot(a-x,b-z)>.01)??points[0];
+    return [x,z,Math.atan2(next[0]-x,z-next[1]),-.01,65];
   }
-  function startRouteWalk(points,{speed=14,startDist=null,onState=null,onArrive=null}={}){
+  function startRouteWalk(points,{speed=14,resume=false,onState=null,onArrive=null,onBlocked=null}={}){
     if(!points||points.length<2)return false;
-    const n=points.length, cum=new Float64Array(n);
-    for(let i=1;i<n;i++)cum[i]=cum[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
-    const total=cum[n-1];
-    if(total<1)return false;
-    let dist=0;
-    if(startDist!==null&&Number.isFinite(startDist)){
-      dist=T.MathUtils.clamp(startDist,0,total);
-    }else if(walk.active){
-      let bestDist=0, bestD2=Infinity;
-      for(let i=0;i<n-1;i++){
-        const ax=points[i][0],az=points[i][1],bx=points[i+1][0],bz=points[i+1][1];
-        const dx=bx-ax,dz=bz-az,len2=dx*dx+dz*dz;
-        const t=len2>1e-8?Math.max(0,Math.min(1,((walk.position.x-ax)*dx+(walk.position.z-az)*dz)/len2)):0;
-        const px=ax+dx*t,pz=az+dz*t,d2=(walk.position.x-px)**2+(walk.position.z-pz)**2;
-        if(d2<bestD2){bestD2=d2;bestDist=cum[i]+t*(cum[i+1]-cum[i]);}
-      }
-      dist=bestD2<55*55&&bestDist<total-22?bestDist:0;
-    }
-    if(dist<3.5)dist=Math.min(total*.15,3.5);
-    // Skip any short building-center or gate-wall stub so the camera starts cleanly outdoors on the road.
-    let [sx,sz]=samplePolyline(points,cum,dist);
-    const maxSkip=Math.min(total,dist+60);
-    const clear=(x,z)=>!obstructed(x,z)&&!obstructed(x+1.2,z)&&!obstructed(x-1.2,z)&&!obstructed(x,z+1.2)&&!obstructed(x,z-1.2);
-    while(dist<maxSkip&&!clear(sx,sz)){
-      dist=Math.min(maxSkip,dist+2);
-      [sx,sz]=samplePolyline(points,cum,dist);
-    }
-    const [lx,lz]=samplePolyline(points,cum,Math.min(total,dist+14));
-    const initYaw=Math.hypot(lx-sx,lz-sz)>.3?Math.atan2(lx-sx,-(lz-sz)):walk.yaw;
+    const cum=cumulativeDistances(points),total=cum.at(-1);
+    if(total<.05)return false;
+    const current=[walk.position.x,walk.position.z];
+    const dist=walk.active&&resume?routeProgress(points,...current).traveled:0;
+    const start=samplePolyline(points,cum,dist),[sx,sz]=start;
+    if(walk.active&&resume&&(Math.hypot(current[0]-sx,current[1]-sz)>4||!space.clear(current,start)))return false;
+    if(obstructed(sx,sz))return false;
+    let segment=0;
+    while(segment<points.length-2&&cum[segment+1]<=dist+1e-6)segment++;
+    const [lx,lz]=points[segment+1],initYaw=Math.hypot(lx-sx,lz-sz)>.01?Math.atan2(lx-sx,sz-lz):walk.yaw;
     if(!walk.active){
       enterWalk(sx,sz,initYaw,-.01,65);
     }else{
       stopRouteWalk(false);
-      if(Math.hypot(walk.position.x-sx,walk.position.z-sz)>6){
-        walk.position.set(sx,eye(sx,sz),sz);
-        walk.yaw=initYaw;
-        walk.pitch=-.01;
-      }
+      walk.position.set(sx,eye(sx,sz),sz);
+      if(!resume){walk.yaw=initYaw;walk.pitch=-.01;}
       updateShadowFrustum(true);
       face();
     }
-    routeAuto={points,cum,total,dist,speed,onState,onArrive};
+    routeAuto={points,cum,total,dist,segment,speed,onState,onArrive,onBlocked};
     onState?.(true);
     lastView='';
     return true;
@@ -1069,18 +1028,18 @@ export function createModel(stage,data,onFrame,options={}){
     walk.eyeHeight=lens?.eye??1.70;walk.horizontal=lens?.horizontal??0;
     walk.position.set(x,eye(x,z),z);
     walk.yaw=yaw;
-    walk.avatarYaw=yaw;
-    walk.pitch=pitch;
+    walk.facing=walk.avatarYaw=yaw;walk.turnRate=0;walk.tapMeters=0;avatar?.reset();
+    walk.pitch=walk.lastPitch=pitch;
     walk.jumpY=0;walk.velY=0;walk.grounded=true;walk.coyote=.1;walk.jumpBuf=0;walk.landDip=0;
-    walk.bobPhase=0;walk.bobAmp=0;walk.fovKick=0;walk.speed=0;walk.sprinting=false;avatarSettle=0;
+    walk.bobPhase=0;walk.bobAmp=0;walk.bobX=0;walk.bobY=0;walk.fovKick=0;walk.speed=0;walk.sprinting=false;avatarSettle=0;
     walk.fov=walk.horizontal?fromHorizontal(walk.horizontal):fov;
     camera.fov=walk.fov;
     camera.updateProjectionMatrix();
     scene.fog=walkMist;
-    avatar?.setFirstPerson(walk.cameraMode==='fps');
+    face();
+    avatar?.setFirstPerson(walk.cameraMode==='fps',walk.fpsHands);
     syncAvatar(0);
     updateShadowFrustum(true);
-    face();
   }
   function teleportWalk(x,z){
     if(!walk.active)return false;
@@ -1098,10 +1057,11 @@ export function createModel(stage,data,onFrame,options={}){
       if(!found)return false;
     }
     walk.position.set(tx,eye(tx,tz),tz);
+    walk.facing=walk.avatarYaw=walk.yaw;walk.turnRate=0;walk.tapMeters=0;walk.speed=0;avatar?.reset();
     walk.jumpY=0;walk.velY=0;walk.grounded=true;walk.landDip=0;
+    face();
     syncAvatar(0);
     updateShadowFrustum(true);
-    face();
     lastView='';
     return true;
   }
@@ -1111,7 +1071,7 @@ export function createModel(stage,data,onFrame,options={}){
     if(!walk.active)return;
     const wx=walk.position.x, wz=walk.position.z, wyaw=walk.yaw;
     walk.active=false;
-    walk.jumpY=0;walk.velY=0;walk.grounded=true;walk.landDip=0;walk.bobAmp=0;walk.fovKick=0;walk.speed=0;walk.sprinting=false;
+    walk.jumpY=0;walk.velY=0;walk.grounded=true;walk.landDip=0;walk.bobAmp=0;walk.bobX=0;walk.bobY=0;walk.fovKick=0;walk.speed=0;walk.sprinting=false;walk.tapMeters=0;
     walkDrive=0;
     walkTurn=0;
     keys.clear();
@@ -1170,7 +1130,7 @@ export function createModel(stage,data,onFrame,options={}){
     }
   });
   window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
-  stage.addEventListener('blur',()=>{keys.clear();walkDrive=0;walkTurn=0;});
+  stage.addEventListener('blur',()=>{keys.clear();walkDrive=0;walkTurn=0;walk.tapMeters=0;});
   stage.addEventListener('wheel',e=>{
     if(walk.active){e.preventDefault();zoom(e.deltaY<0?1:-1);}
     else {tween=null;controls.autoRotate=false;}
@@ -1225,26 +1185,27 @@ export function createModel(stage,data,onFrame,options={}){
       let move=Number(has('w','arrowup'))-Number(has('s','arrowdown'))+walkDrive;
       let side=Number(has('d','arrowright'))-Number(has('a','arrowleft'));
       const turn=Number(keys.has('e'))-Number(keys.has('q'))+walkTurn;
+      const third=walk.cameraMode==='third';
+      if(move||side||turn||routeAuto)walk.tapMeters=0;
       if(routeAuto&&(move||side||turn))stopRouteWalk(true);
       if(routeAuto){
-        const nextDist=Math.min(routeAuto.total,routeAuto.dist+dt*routeAuto.speed);
-        const [nx,nz]=samplePolyline(routeAuto.points,routeAuto.cum,nextDist);
-        const nearEnd=routeAuto.total-nextDist<=18;
-        if(nearEnd&&(routeAuto.total-nextDist<=1.5||obstructed(nx,nz))){
-          const endPt=routeAuto.points[routeAuto.points.length-1];
-          if(Math.hypot(endPt[0]-walk.position.x,endPt[1]-walk.position.z)>1){
-            walk.yaw=Math.atan2(endPt[0]-walk.position.x,-(endPt[1]-walk.position.z));
-          }
-          const cb=routeAuto.onArrive;
-          stopRouteWalk(true);
-          cb?.();
+        routeAuto.requestedSpeed??=routeAuto.speed;
+        routeAuto.speed=third?Math.min(RUN_PACE,routeAuto.requestedSpeed):routeAuto.requestedSpeed;
+        const {points,cum,total,speed}=routeAuto;
+        // Finish the current segment before turning. Each movement is checked;
+        // even a narrow fence stops the walk without advancing its progress.
+        const stop=cum[routeAuto.segment+1],nextDist=Math.min(stop,routeAuto.dist+dt*speed);
+        const next=samplePolyline(points,cum,nextDist),[nx,nz]=next;
+        if(!space.clear([prevX,prevZ],next)||(hasStand&&!canStepOnStand(prevX,prevZ,nx,nz))){
+          const cb=routeAuto.onBlocked;stopRouteWalk(true);cb?.();
         }else{
           routeAuto.dist=nextDist;
-          if(!obstructed(nx,nz)){
-            walk.position.set(nx,eye(nx,nz),nz);
-            updateShadowFrustum(false);
-          }
-          const [lx,lz]=samplePolyline(routeAuto.points,routeAuto.cum,Math.min(routeAuto.total,nextDist+14));
+          walk.position.set(nx,eye(nx,nz),nz);
+          updateShadowFrustum(false);
+          if(nextDist>=total-1e-6){
+            const cb=routeAuto.onArrive;stopRouteWalk(true);cb?.();
+          }else if(nextDist===stop)routeAuto.segment++;
+          const [lx,lz]=samplePolyline(points,cum,Math.min(total,nextDist+14));
           if(Math.hypot(lx-walk.position.x,lz-walk.position.z)>.5){
             const targetYaw=Math.atan2(lx-walk.position.x,-(lz-walk.position.z));
             const diff=Math.atan2(Math.sin(targetYaw-walk.yaw),Math.cos(targetYaw-walk.yaw));
@@ -1256,7 +1217,11 @@ export function createModel(stage,data,onFrame,options={}){
         if(turn)walk.yaw+=turn*dt*1.65;
         const mag=Math.hypot(move,side);
         if(mag>1){move/=mag;side/=mag;}
-        const speed=keys.has('shift')?22:12.5;
+        const speed=third?(keys.has('shift')?RUN_PACE:WALK_PACE):(keys.has('shift')?22:12.5);
+        if(third&&walk.tapMeters&&dt>0){
+          const advance=Math.sign(walk.tapMeters)*Math.min(Math.abs(walk.tapMeters),dt*speed);
+          move=advance/(dt*speed);walk.tapMeters-=advance;
+        }
         if(move||side)step(move*dt*speed,side*dt*speed);
       }
 
@@ -1291,7 +1256,7 @@ export function createModel(stage,data,onFrame,options={}){
       const movedDist=Math.hypot(walk.position.x-prevX,walk.position.z-prevZ);
       const instSpeed=dt>1e-4?movedDist/dt:0;
       walk.speed+=(instSpeed-walk.speed)*Math.min(1,dt*14);
-      walk.sprinting=Boolean(!routeAuto&&keys.has('shift')&&instSpeed>8);
+      walk.sprinting=third?instSpeed>2.3:Boolean(!routeAuto&&keys.has('shift')&&instSpeed>8);
       const moving=instSpeed>.4;
       const targetBob=walk.grounded&&moving?Math.min(1,instSpeed/12):0;
       walk.bobAmp+=(targetBob-walk.bobAmp)*Math.min(1,dt*10);
@@ -1309,15 +1274,22 @@ export function createModel(stage,data,onFrame,options={}){
         camera.updateProjectionMatrix();
       }
 
-      // Smoothly align character facing to walk heading (slight lag in third-person for natural turn look).
-      const yawDiff=Math.atan2(Math.sin(walk.yaw-walk.avatarYaw),Math.cos(walk.yaw-walk.avatarYaw));
-      walk.avatarYaw+=yawDiff*Math.min(1,dt*(walk.cameraMode==='fps'?28:12));
+      // The camera can orbit a standing character. On the move she turns
+      // towards the actual displacement, including a side step or a corner.
+      if(!third)walk.facing=walk.yaw;
+      else if(movedDist>.0001)walk.facing=Math.atan2(walk.position.x-prevX,prevZ-walk.position.z);
+      const yawDiff=Math.atan2(Math.sin(walk.facing-walk.avatarYaw),Math.cos(walk.facing-walk.avatarYaw));
+      const yawStep=yawDiff*(1-Math.exp(-dt*(third?11:28)));
+      walk.avatarYaw+=yawStep;walk.turnRate=dt>.0001?yawStep/dt:0;
+      const pitchMoved=Math.abs(walk.pitch-walk.lastPitch)>.0002;
+      walk.lastPitch=walk.pitch;
 
-      if(moving||!walk.grounded||walk.jumpY>0||Math.abs(walk.landDip)>.001||Math.abs(yawDiff)>.003)avatarSettle=.35;
-      else if(avatarSettle>0)avatarSettle=Math.max(0,avatarSettle-dt);
-      avatarDirty=avatarSettle>0;
-      if(avatarDirty)syncAvatar(dt);
       face();
+      if(movedDist>.0001||!walk.grounded||walk.jumpY>0||Math.abs(walk.landDip)>.001||Math.abs(yawDiff)>.003||pitchMoved)avatarSettle=.7;
+      else if(avatarSettle>0)avatarSettle=Math.max(0,avatarSettle-dt);
+      const idleTick=third&&!reducedWalkMotion.matches&&!document.hidden&&time-lastAvatarTick>=100;
+      avatarDirty=avatarSettle>0||idleTick;
+      if(avatarDirty){syncAvatar(avatarSettle>0?dt:Math.min(.13,(time-lastAvatarTick)/1000),movedDist);lastAvatarTick=time;}
       stage.dataset.jumpY=walk.jumpY.toFixed(2);
     }else{
       if(tween){
@@ -1334,7 +1306,7 @@ export function createModel(stage,data,onFrame,options={}){
       controls.update();
     }
     // Give shallow facade and paving layers enough depth precision at campus scale.
-    const near=walk.active?.2:T.MathUtils.clamp(camera.position.distanceTo(controls.target)/30,.75,40);
+    const near=walk.active?(walk.cameraMode==='fps'?.11:.2):T.MathUtils.clamp(camera.position.distanceTo(controls.target)/30,.75,40);
     if(Math.abs(camera.near-near)>.01){camera.near=near;camera.updateProjectionMatrix();}
     let waterDirty=false;
     if(context && waterMotion && details?.landscapeDetails?.lakeNormals && time-lastWaterTick>40){
@@ -1346,6 +1318,10 @@ export function createModel(stage,data,onFrame,options={}){
     }
     const view=[camera.position.x,camera.position.y,camera.position.z,camera.quaternion.x,camera.quaternion.y,camera.quaternion.z,camera.quaternion.w,camera.fov,camera.near,size.w,size.h].map(value=>value.toFixed(5)).join(',');
     if(view===lastView && !waterDirty && !avatarDirty)return;
+    // Piggyback gentle FPS opera-glove idle breathing onto existing water redraws (zero extra render cost).
+    if(walk.active && walk.cameraMode==='fps' && walk.fpsHands && !avatarDirty && waterDirty && !reducedWalkMotion.matches){
+      syncAvatar(Math.min(.13,(time-lastAvatarTick)/1000),0);lastAvatarTick=time;
+    }
     const cameraMoved=view!==lastView;
     lastView=view;
     renderer.render(scene,camera);
@@ -1360,8 +1336,13 @@ export function createModel(stage,data,onFrame,options={}){
   }
   home(false);
   renderer.setAnimationLoop(frame);
-  return {focus,lookFrom,setOrbitPose,flyTo,stopDrift,home,zoom,north,enterWalk,exitWalk,step,teleportWalk,
-    jump,setWalkCamera,getWalkCamera(){return walk.cameraMode;},setPointerLock,isPointerLocked(){return document.pointerLockElement===stage;},
+  return {focus,lookFrom,setOrbitPose,flyTo,stopDrift,home,zoom,north,enterWalk,exitWalk,teleportWalk,
+    step(m,side=0){
+      if(!walk.active)return;
+      if(walk.cameraMode!=='third'||side){step(m,side);return;}
+      stopRouteWalk(true);walk.tapMeters=T.MathUtils.clamp(walk.tapMeters+m,-5,5);
+    },
+    jump,setWalkCamera,setFirstPersonHands,getWalkCamera(){return walk.cameraMode;},setPointerLock,isPointerLocked(){return document.pointerLockElement===stage;},
     routeStartPose,startRouteWalk,stopRouteWalk,isRouteWalking(){return Boolean(routeAuto);},
     setLighting,setWaterMotion(on){waterMotion=Boolean(on);lastView='';},
     // dir: forward/back drive (-1..1); turn: yaw rate (-1..1) for the touch joystick.

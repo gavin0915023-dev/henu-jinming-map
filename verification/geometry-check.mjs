@@ -17,7 +17,9 @@ import {standId,standFrame,standHeight,canStepOnStand,stadiumFieldModel,stadiumF
 import {runningTracks} from '../running-tracks.js';
 import {economicsId,mathsId,lifeId,huayuanId,landmarkModels} from '../landmark-wings.js';
 import {residences,residenceModel} from '../dongyuan.js';
-import {createCampusRouter} from '../routing.js';
+import {createCampusRouter,routeProgress} from '../routing.js';
+import {bounds,contains,createWalkingSpace,prepareWalkingMap} from '../walking-space.js';
+import {campusEntrances,campusWalkLinks} from '../navigation-anchors.js';
 
 // Evaluate the real Batch and footprint helpers without starting the browser renderer.
 const root = new URL('../', import.meta.url);
@@ -25,7 +27,7 @@ const modelSource = await readFile(new URL('model.js', root), 'utf8');
 const start = modelSource.indexOf('const closed =');
 const end = modelSource.indexOf('\nfunction seeded()', start);
 assert(start >= 0 && end > start, 'Cannot locate the model geometry helpers');
-const toolkit = new Function('T', `${modelSource.slice(start, end)}\nreturn { Batch, contains, bounds, groundShape };`)(T);
+const toolkit = new Function('T','contains','bounds', `${modelSource.slice(start, end)}\nreturn { Batch, contains, bounds, groundShape };`)(T,contains,bounds);
 // Two indexed quads must still share each quad's corners after merging. An
 // identity index on an expanded triangle stream is not the same optimisation.
 {
@@ -96,9 +98,34 @@ function checkPhotoFronts(){
   }
 }
 checkPhotoFronts();
+const walkPlan=prepareWalkingMap(data),walkSpace=walkPlan.space;
+const campusRouter=createCampusRouter(walkPlan.data,{space:walkSpace,walkLinks:campusWalkLinks});
+const westApproach=campusEntrances.west,portalApproach=campusEntrances.software;
+for(const [name,point] of Object.entries(campusEntrances)){
+  const route=campusRouter.findRoute(westApproach,point);
+  assert(route&&route.points.at(-1).every((v,i)=>Math.abs(v-point[i])<.01),name+': the route must reach the outside approach');
+  assert(route.points.slice(1).every((p,i)=>walkSpace.clear(route.points[i],p)),name+': the route must stay clear of campus obstacles');
+}
+const portalRoute=campusRouter.findRoute(westApproach,portalApproach);
+const northSide=fieldViews.find(v=>v.id==='north-gate').camera.slice(0,2);
+const northProgress=routeProgress(portalRoute.points,...northSide,0,walkSpace.clear);
+assert(northProgress.offCourse&&!northProgress.arrived&&northProgress.remaining>400,'A position at North Gate cannot finish a walk to the Software College');
+assert(!campusRouter.findRoute(westApproach,[62,-197]),'The software building label is not a walking destination');
+assert(!walkSpace.clear([-465,-76],[-450,-76]),'The route cannot take the direct line through the west gate name wall');
+{
+  const fence=[[4.91,-20],[5.09,-20],[5.09,20],[4.91,20]],space=createWalkingSpace({walls:[fence]});
+  const road=[[[[0,0],[10,0]],3,'','footway']];
+  assert(!createCampusRouter({road},{space}).findRoute([0,0],[10,0]),'A narrow fence breaks road links and cannot be rejoined by endpoint snapping');
+  assert(!routeProgress([[10,0],[5.4,0]],4.6,0,0,space.clear).arrived,'Close on the other side of a fence is not an arrival');
+  const pond=[[4,-8],[8,-8],[8,8],[4,8]],deck=[[3,-1],[9,-1],[9,1],[3,1]];
+  const shore=createWalkingSpace({water:[pond],deck});
+  assert(shore.clear([0,0],[12,0])&&!shore.clear([0,4],[12,4]),'A bridge connects the banks only along the deck');
+  const lane=createCampusRouter({road:[[[[0,0],[100,0]],3,'','footway']]});
+  assert.equal(lane.findRoute([41,0],[55,0])?.distance,14,'Two mid-block endpoints walk directly along the same lane');
+}
 const eastern=data.building.filter(r=>residences.has(r[4]));
 assert.deepEqual(eastern.map(r=>r[3]).sort(),['十九','二十','二十一','二十二','二十三','二十四','二十五','二十六'].map(s=>'学'+s+'公寓').sort());
-const eastRouter=createCampusRouter(data),inSolid=(x,z)=>bodies3d.some(s=>s.base<2 && x>500 && toolkit.contains(x,z,s.p));
+const eastRouter=campusRouter,inSolid=(x,z)=>bodies3d.some(s=>s.base<2 && x>500 && toolkit.contains(x,z,s.p));
 for(const record of eastern){
   const [ring,h,,,id,inside]=record,[minX,minZ,maxX,maxZ]=toolkit.bounds(ring);
   const own=bodies3d.filter(s=>s.record===record),source=own.filter(s=>s.base<1);

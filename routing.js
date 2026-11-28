@@ -14,6 +14,9 @@ const WALK_WEIGHT = {
   primary: 1.55,
   trunk: 1.8
 };
+const dist=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);
+const WALK_SPEED=75, ARRIVAL_RADIUS=4, OFF_ROUTE_RADIUS=15;
+const freeSpace={blocked:()=>false,clear:()=>true,openSegments:(a,b)=>[[a,b]]};
 
 function pointToSeg(px, pz, ax, az, bx, bz) {
   const dx = bx - ax, dz = bz - az;
@@ -72,30 +75,29 @@ class MinHeap {
   get size() { return this.items.length; }
 }
 
-function simplifyPath(points) {
+function simplifyPath(points,clear) {
   if (points.length <= 2) return points;
   const out = [points[0]];
   for (let i = 1; i < points.length - 1; i++) {
     const a = out[out.length - 1], b = points[i], c = points[i + 1];
     const d1 = Math.hypot(b[0] - a[0], b[1] - a[1]);
     const d2 = Math.hypot(c[0] - b[0], c[1] - b[1]);
-    if (d1 < 0.6) continue;
     const cos = ((b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])) / (d1 * d2 + 1e-8);
-    if (cos > 0.9992) continue;
+    if ((d1 < .05 || d2 < .05 || cos > 0.9992) && clear(a,c)) continue;
     out.push(b);
   }
   out.push(points[points.length - 1]);
   return out;
 }
 
-export function createCampusRouter(data) {
+export function createCampusRouter(data,{space=freeSpace,walkLinks=[]}={}) {
   let graph = null;
 
   function buildGraph() {
     if (graph) return graph;
     // Collect segments within campus & perimeter box
     const rawSegs = [];
-    for (const [line, , , kind] of data.road) {
+    for (const [line, , , kind] of [...data.road,...walkLinks.map(p=>[p,0,'','footway'])]) {
       const weight = WALK_WEIGHT[kind] ?? 1.15;
       for (let i = 1; i < line.length; i++) {
         const a = line[i - 1], b = line[i];
@@ -170,7 +172,7 @@ export function createCampusRouter(data) {
           for (const id of bucket) {
             const p = nodes[id];
             const d2 = (p[0] - x) ** 2 + (p[1] - z) ** 2;
-            if (d2 < bestD2) { bestD2 = d2; best = id; }
+            if (d2 < bestD2 && space.clear([x,z],p)) { bestD2 = d2; best = id; }
           }
         }
       }
@@ -189,29 +191,30 @@ export function createCampusRouter(data) {
       if (u === v || dist < 0.05) return;
       const existing = adj[u].find(e => e.to === v);
       if (existing) {
-        if (cost < existing.cost) { existing.cost = cost; existing.dist = dist; }
+        if (cost < existing.cost) adj[v].find(e=>e.to===u).cost=existing.cost=cost;
         return;
       }
-      adj[u].push({ to: v, dist, cost });
-      adj[v].push({ to: u, dist, cost });
+      if (!space.clear(nodes[u],nodes[v])) return;
+      adj[u].push({ to: v, cost });
+      adj[v].push({ to: u, cost });
     }
 
     for (const seg of rawSegs) {
       seg.splits.sort((p, q) => p - q);
       let prev = null;
       for (const t of seg.splits) {
-        const x = seg.a[0] + (seg.b[0] - seg.a[0]) * t;
-        const z = seg.a[1] + (seg.b[1] - seg.a[1]) * t;
-        const id = getNode(x, z);
-        if (prev !== null && prev !== id) {
-          const dist = Math.hypot(nodes[id][0] - nodes[prev][0], nodes[id][1] - nodes[prev][1]);
-          addEdge(prev, id, dist, dist * seg.weight);
+        const point=[seg.a[0]+(seg.b[0]-seg.a[0])*t,seg.a[1]+(seg.b[1]-seg.a[1])*t];
+        if(prev&&dist(prev,point)>.05){
+          for(const [a,b] of space.openSegments(prev,point)){
+            const u=getNode(...a),v=getNode(...b),length=dist(nodes[u],nodes[v]);
+            addEdge(u,v,length,length*seg.weight);
+          }
         }
-        prev = id;
+        prev = point;
       }
     }
 
-    // Bridge any tiny remaining sidewalk gaps (< 9m) between disconnected components
+    // Join nearby path ends only when the gap is open on the ground.
     const comp = new Int32Array(nodes.length).fill(-1);
     const compSizes = [];
     let compId = 0;
@@ -235,7 +238,7 @@ export function createCampusRouter(data) {
       for (let j = 0; j < nodes.length; j++) {
         if (comp[j] !== mainComp) continue;
         const d2 = (nodes[j][0] - x) ** 2 + (nodes[j][1] - z) ** 2;
-        if (d2 < bestD2) { bestD2 = d2; best = j; }
+        if (d2 < bestD2 && space.clear(nodes[i],nodes[j])) { bestD2 = d2; best = j; }
       }
       if (best >= 0) {
         const d = Math.sqrt(bestD2);
@@ -256,89 +259,93 @@ export function createCampusRouter(data) {
       }
     }
 
-    graph = { nodes, adj, finalMain };
+    const edges=[];
+    for(let u=0;u<nodes.length;u++)for(const {to:v,cost} of adj[u])if(u<v){
+      edges.push({u,v,cost,length:dist(nodes[u],nodes[v])});
+    }
+    graph = { nodes, adj, finalMain, edges };
     return graph;
   }
 
-  function nearestNode(x, z, requireMain = true) {
-    const { nodes, finalMain } = buildGraph();
-    let best = -1, bestD2 = Infinity;
-    for (let i = 0; i < nodes.length; i++) {
-      if (requireMain && !finalMain[i]) continue;
-      const d2 = (nodes[i][0] - x) ** 2 + (nodes[i][1] - z) ** 2;
-      if (d2 < bestD2) { bestD2 = d2; best = i; }
+  function projections(p){
+    const {nodes,edges}=buildGraph();
+    return edges.map(e=>{
+      const q=pointToSeg(...p,...nodes[e.u],...nodes[e.v]);
+      return {e,p:[q.x,q.z],along:q.t,gap:Math.sqrt(q.d2)};
+    }).sort((a,b)=>a.gap-b.gap||a.e.cost/a.e.length-b.e.cost/b.e.length);
+  }
+
+  function roadsideFor(x,z){
+    const {finalMain}=buildGraph(), nearby=projections([x,z]).filter(s=>s.gap<=80);
+    return (nearby.find(s=>finalMain[s.e.u])??nearby[0])?.p??null;
+  }
+
+  // Attach to the middle of a path, rather than detouring through its nearest
+  // intersection. Only short, unobstructed approaches to the nearest lanes
+  // are eligible; internal graph edges keep their original sidewalk weights.
+  function attachments(p){
+    const candidates=[],nodes=new Map();
+    for(const s of projections(p)){
+      if(s.gap>65||(candidates.length&&s.gap>candidates[0].gap+8))break;
+      if(!space.clear(p,s.p))continue;
+      candidates.push(s);
+      for(const [id,along] of [[s.e.u,s.along],[s.e.v,1-s.along]]){
+        const cost=s.gap*1.2+s.e.cost*along;
+        if(!nodes.has(id)||cost<nodes.get(id).cost)nodes.set(id,{to:id,cost,via:[s.p]});
+      }
     }
-    return { id: best, dist: Math.sqrt(bestD2) };
+    return {candidates,nodes};
   }
 
   function findRoute(from, to) {
-    const { nodes, adj } = buildGraph();
-    const start = nearestNode(from[0], from[1], true);
-    const goal = nearestNode(to[0], to[1], true);
-    if (start.id < 0 || goal.id < 0) return null;
-
-    if (start.id === goal.id) {
-      const pts = simplifyPath([from, nodes[start.id], to]);
-      const d = Math.hypot(to[0] - from[0], to[1] - from[1]);
-      return { points: pts, distance: Math.round(d), minutes: Math.max(1, Math.round(d / 75)) };
-    }
-
-    const n = nodes.length;
-    const gScore = new Float64Array(n).fill(Infinity);
-    const prev = new Int32Array(n).fill(-1);
-    const closed = new Uint8Array(n);
-    const gx = nodes[goal.id][0], gz = nodes[goal.id][1];
-    const heap = new MinHeap();
-    gScore[start.id] = 0;
-    heap.push([Math.hypot(gx - nodes[start.id][0], gz - nodes[start.id][1]), start.id]);
-
-    let found = false;
-    while (heap.size) {
-      const [, cur] = heap.pop();
-      if (cur === goal.id) { found = true; break; }
-      if (closed[cur]) continue;
-      closed[cur] = 1;
-      const baseG = gScore[cur];
-      for (const e of adj[cur]) {
-        if (closed[e.to]) continue;
-        const ng = baseG + e.cost;
-        if (ng < gScore[e.to]) {
-          gScore[e.to] = ng;
-          prev[e.to] = cur;
-          const h = Math.hypot(gx - nodes[e.to][0], gz - nodes[e.to][1]) * 0.95;
-          heap.push([ng + h, e.to]);
-        }
-      }
-    }
-
-    if (!found) return null;
-    const chain = [];
-    for (let u = goal.id; u !== -1; u = prev[u]) chain.push(nodes[u]);
-    chain.reverse();
-
-    // Only prepend/append endpoints if they are visibly off the road node
-    const raw = [];
-    if (Math.hypot(from[0] - chain[0][0], from[1] - chain[0][1]) > 2) raw.push([from[0], from[1]]);
-    for (const p of chain) raw.push(p);
-    const last = chain[chain.length - 1];
-    if (Math.hypot(to[0] - last[0], to[1] - last[1]) > 2) raw.push([to[0], to[1]]);
-
-    // A mid-block destination can snap to the far end of its own segment.
-    // If the route actually passes over the endpoint, stop there on that lane.
-    const onSegment = (p,a,b) => pointToSeg(...p,...a,...b).d2 < .16;
-    if(raw.length>=3 && onSegment(raw[0],raw[1],raw[2]))raw.splice(1,1);
-    if(raw.length>=3 && onSegment(raw.at(-1),raw.at(-2),raw.at(-3)))raw.splice(-2,1);
-
-    const points = simplifyPath(raw);
-    let distance = 0;
-    for (let i = 1; i < points.length; i++) {
-      distance += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-    }
-    return {
-      points,
-      distance: Math.round(distance),
-      minutes: Math.max(1, Math.round(distance / 75))
+    if(from?.length!==2||to?.length!==2||!from.every(Number.isFinite)||!to.every(Number.isFinite)||
+      space.blocked(...from)||space.blocked(...to))return null;
+    const result=raw=>{
+      const points=simplifyPath(raw,space.clear),distance=Math.round(cumulativeDistances(points).at(-1));
+      return {points,distance,minutes:distance?Math.max(1,Math.round(distance/WALK_SPEED)):0};
     };
+    if(dist(from,to)<1&&space.clear(from,to))return result([from,to]);
+    const {nodes,adj}=buildGraph(),start=nodes.length,goal=start+1;
+    const first=attachments(from),last=attachments(to);
+    if(!first.nodes.size||!last.nodes.size)return null;
+    const goals=new Map(last.candidates.map(s=>[s.e,s]));
+    let sameLane=null;
+    for(const a of first.candidates){
+      const b=goals.get(a.e);if(!b)continue;
+      const cost=(a.gap+b.gap)*1.2+a.e.cost*Math.abs(a.along-b.along);
+      if(!sameLane||cost<sameLane.cost)sameLane={to:goal,cost,via:[a.p,b.p]};
+    }
+    const startEdges=[...first.nodes.values()];
+    if(sameLane)startEdges.push(sameLane);
+    const score=new Float64Array(nodes.length+2).fill(Infinity),prev=[];
+    const heap = new MinHeap();
+    score[start]=0;
+    heap.push([0,start,0]);
+    const relax=(u,e)=>{
+      const cost=score[u]+e.cost;
+      if(cost>=score[e.to])return;
+      score[e.to]=cost;
+      prev[e.to]={u,via:e.via};
+      const h=e.to===goal?0:dist(nodes[e.to],to)*.95;
+      heap.push([cost+h,e.to,cost]);
+    };
+    while (heap.size) {
+      const [,u,cost]=heap.pop();
+      if(cost!==score[u])continue;
+      if(u===goal){
+        const route=[to];
+        for(let v=goal;v!==start;){
+          const e=prev[v];v=e.u;
+          if(e.via)for(let i=e.via.length-1;i>=0;i--)route.push(e.via[i]);
+          route.push(v===start?from:nodes[v]);
+        }
+        return result(route.reverse());
+      }
+      for(const edge of u===start?startEdges:adj[u])relax(u,edge);
+      const end=last.nodes.get(u);
+      if(end)relax(u,{...end,to:goal});
+    }
+    return null;
   }
 
   // Pick a clean road-side standing point looking toward (x, z) for any campus building.
@@ -369,17 +376,24 @@ export function createCampusRouter(data) {
     return [Number(best.x.toFixed(1)), Number(best.z.toFixed(1)), Number(yaw.toFixed(3)), 0.14];
   }
 
-  return { findRoute, streetPoseFor };
+  return { findRoute, roadsideFor, streetPoseFor };
+}
+
+const routeLengths=new WeakMap();
+export function cumulativeDistances(points){
+  if(!routeLengths.has(points)){
+    const cum=new Float64Array(points.length);
+    for(let i=1;i<points.length;i++)cum[i]=cum[i-1]+dist(points[i-1],points[i]);
+    routeLengths.set(points,cum);
+  }
+  return routeLengths.get(points);
 }
 
 // Project a walking pose onto a planned polyline to drive live turn guidance and progress.
-export function routeProgress(points, x, z, yaw = 0) {
+export function routeProgress(points, x, z, yaw = 0, clear=freeSpace.clear) {
   if (!points || points.length < 2) return null;
   const n = points.length;
-  const cum = new Float64Array(n);
-  for (let i = 1; i < n; i++) {
-    cum[i] = cum[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-  }
+  const cum=cumulativeDistances(points);
   const total = cum[n - 1];
   let bestSeg = 0, bestProj = { x: points[0][0], z: points[0][1], t: 0, d2: Infinity };
   for (let i = 0; i < n - 1; i++) {
@@ -388,10 +402,11 @@ export function routeProgress(points, x, z, yaw = 0) {
   }
   const segLen = cum[bestSeg + 1] - cum[bestSeg];
   const traveled = cum[bestSeg] + bestProj.t * segLen;
-  const remaining = Math.max(0, total - traveled);
   const end = points[n - 1];
   const directEnd = Math.hypot(end[0] - x, end[1] - z);
-  const arrived = remaining <= 16 || directEnd <= 18;
+  const arrived = directEnd<=ARRIVAL_RADIUS&&clear([x,z],end);
+  const deviation=Math.sqrt(bestProj.d2),offCourse=deviation>OFF_ROUTE_RADIUS;
+  const remaining=arrived?0:Math.max(1,total-traveled,directEnd);
 
   // Sample a lookahead target ~14m ahead along the route for stable directional arrows.
   const lookDist = Math.min(total, traveled + 14);
@@ -419,12 +434,13 @@ export function routeProgress(points, x, z, yaw = 0) {
 
   return {
     remaining: Math.round(remaining),
-    minutes: remaining < 38 ? 0 : Math.max(1, Math.round(remaining / 75)),
-    progress: total > 0 ? Math.min(1, Math.max(0, traveled / total)) : 1,
+    minutes: remaining < WALK_SPEED/2 ? 0 : Math.max(1, Math.round(remaining / WALK_SPEED)),
+    progress: arrived?1:offCourse||!total?0:Math.min(.99,traveled/total),
     relDeg: Number((rel * 180 / Math.PI).toFixed(1)),
     hint,
     arrived,
-    offRoute: Math.round(Math.sqrt(bestProj.d2)),
+    offRoute: Math.round(deviation),
+    offCourse,
     traveled,
     total
   };

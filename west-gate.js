@@ -1,4 +1,6 @@
 import * as T from 'three';
+import {westGatePlacement} from './west-gate-plan.js';
+export {westGatePlacement} from './west-gate-plan.js';
 
 // The university's Jinming west-gate photograph and west-axis aerial show a
 // low name wall flanked by open entries. Its separately captioned 2024 flower
@@ -6,13 +8,6 @@ import * as T from 'three';
 // gate chronology belongs to Zhengzhou. Wall dimensions here are estimates.
 // https://ganbu.henu.edu.cn/info/1036/4225.htm
 // https://zbcg.henu.edu.cn/xwtz/5707.chtml
-export function westGatePlacement(data) {
-  const axis=data.road.find(([, ,name])=>name==='明德广场中轴')?.[0];
-  if(!axis?.length || axis.length<2)return null;
-  const ends=[axis[0],axis.at(-1)].sort((a,b)=>a[0]-b[0]);
-  const [start,end]=ends,angle=Math.atan2(end[1]-start[1],end[0]-start[0]);
-  return [start[0]+5*Math.cos(angle)+6*Math.sin(angle),start[1]+5*Math.sin(angle)-6*Math.cos(angle),angle];
-}
 export function addWestGate(scene,data,anisotropy=1) {
   const anchor=westGatePlacement(data);
   if(!anchor)return null;

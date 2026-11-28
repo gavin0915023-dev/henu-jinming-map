@@ -104,6 +104,44 @@ try {
     return result.result.value;
   }
   const settle = () => evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+  async function satelliteShareRoundTrip() {
+    const waitForView = () => until(() => evaluate(`(() => {
+      const map = window.__verifySatellite;
+      if (!map || document.querySelector('[data-mode=satellite]').getAttribute('aria-pressed') !== 'true') return null;
+      const zoom = map.getZoom();
+      const tiles = [...document.querySelectorAll('#satellite img[data-zoom="'+zoom+'"]')];
+      if (!tiles.length || tiles.some(tile => tile.dataset.imagery !== 'ready')) return null;
+      const {lat, lng} = map.getCenter();
+      return {lat, lng, zoom};
+    })()`), 'Satellite view and imagery ready', 30000);
+    const initial = await waitForView();
+    await evaluate(`(() => {
+      window.__verifySatellite.panBy([132, -86], {animate:false});
+      document.querySelector('#zoom-in').click();
+    })()`);
+    const moved = await waitForView();
+    const copied = await evaluate(`(() => {
+      document.querySelector('#share').click();
+      return {link:window.__verifyCopiedUrl, address:location.href};
+    })()`);
+    const closeToMoved = view => Math.abs(view.lat - moved.lat) < 1e-6 &&
+      Math.abs(view.lng - moved.lng) < 1e-6 && view.zoom === moved.zoom;
+    const query = new URL(copied.address).searchParams;
+    const [lat, lng, zoom] = query.get('sat')?.split(',').map(Number) ?? [];
+    check('Satellite share copies the center and zoom after panning and zooming',
+      copied.link === copied.address && Math.abs(moved.lat - initial.lat) > 1e-5 && moved.zoom === initial.zoom + 1 &&
+      closeToMoved({lat, lng, zoom}) && ['view','pos','cam','tour','stop'].every(key => !query.has(key)));
+    await evaluate('window.__verifySatellite = null');
+    await call('Page.navigate', {url:copied.link});
+    check('A reopened satellite share renders the same center and zoom', closeToMoved(await waitForView()));
+    check('Switching to 3D clears the satellite view from the next share', await evaluate(`(() => {
+      document.querySelector('[data-mode=model]').click();
+      const satCleared = !new URL(location.href).searchParams.has('sat');
+      document.querySelector('#share').click();
+      const params = new URL(window.__verifyCopiedUrl).searchParams;
+      return satCleared && params.has('cam') && !params.has('sat');
+    })()`));
+  }
   async function photoFrontViews(base,renderer){
     await call('Page.navigate',{url:base+'?view=teaching-library&light=sunset'});
     await until(()=>evaluate("document.querySelector('#stage')?.dataset.ready==='true' && document.querySelector('#mode-note')?.textContent.includes('面向图书馆')"),'Library-facing photo view restored');
@@ -129,6 +167,56 @@ try {
     return restored&&await painted()&&await evaluate("new URL(location.href).searchParams.get('view')==='software-portal'");
   }
   const eastDormNames=['十九','二十','二十一','二十二','二十三','二十四','二十五','二十六'].map(n=>'学'+n+'公寓');
+  async function softwareWalkingRoute(){
+    // Keep the moving frames cheap on the software GPU used by this harness.
+    await call('Emulation.setDeviceMetricsOverride',{width:940,height:600,deviceScaleFactor:1,mobile:false});
+    const plan=await evaluate(`(()=>{
+      const $=s=>document.querySelector(s),q=$('#search');
+      $('#home').click();$('[data-cat=all]').click();q.value='软件学院';q.dispatchEvent(new Event('input'));
+      const place=$('#place-list .place');
+      if(place?.querySelector('b').textContent!=='软件学院')return false;
+      place.click();$('#detail [data-route]').click();
+      const from=$('#route-from'),to=$('#route-to'),summary=$('#route-summary');
+      const setFrom=id=>{from.value=id;from.dispatchEvent(new Event('change'));};
+      setFrom('west');
+      const m=summary.textContent.match(/步行约 ([0-9]+) 米 · 约 ([0-9]+) 分钟/);
+      if(to.value!=='software'||!m||+m[1]<550||+m[1]>760)return false;
+      setFrom('software');
+      const reset=summary.textContent.includes('同一位置')&&$('#route-autoplay').disabled&&$('#route-walk').disabled;
+      setFrom('west');
+      return reset&&!$('#route-autoplay').disabled;
+    })()`);
+    check('A Software College route is valid and a coincident start cannot replay the old path',plan);
+    await capture('route-software-plan');
+    const visit=id=>evaluate(`document.querySelector('#field-views').click();document.querySelector('[data-view="${id}"]').click()`);
+    await visit('north-gate');
+    await settle();
+    check('North Gate is off route and cannot count as a Software College arrival',await evaluate(`(()=>{
+      const n=document.querySelector('#route-nav');
+      return !n.hidden&&n.dataset.arrived==='false'&&n.dataset.offCourse==='true'&&Number(n.dataset.remaining)>400&&
+        document.querySelector('#route-live').textContent.includes('偏离路线');
+    })()`));
+    await visit('software-portal');
+    check('Auto-walk replans from the actual nearby position instead of jumping back to West Gate',await evaluate(`(()=>{
+      const $=s=>document.querySelector(s);
+      $('#route-autoplay').click();
+      const distance=Number($('#route-summary').textContent.match(/步行约 ([0-9]+) 米/)?.[1]);
+      return $('#route-from').value==='__current__'&&distance>8&&distance<40&&$('#route-bar').dataset.auto==='true';
+    })()`));
+    await until(()=>evaluate("document.querySelector('#route-bar').dataset.auto==='false' && document.querySelector('#route-nav').dataset.arrived==='true'"),'Auto-walk reached the Software College doorway',55000);
+    await settle();
+    await evaluate("document.querySelector('#share').click()");
+    check('Auto-walk stops outside the Software College and shares the reached position',await evaluate(`(()=>{
+      const [x,z]=new URL(location.href).searchParams.get('pos')?.split(',').map(Number)??[];
+      return x>46&&x<51&&z> -191.4&&z< -187&&document.querySelector('#route-live').textContent.includes('已到达软件学院');
+    })()`));
+    await capture('route-software-entrance');
+    await evaluate(`(()=>{
+      const $=s=>document.querySelector(s),q=$('#search');
+      $('#route-clear').click();$('#home').click();q.value='';q.dispatchEvent(new Event('input'));$('[data-cat=featured]').click();
+    })()`);
+    await call('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  }
   async function eastDormCards(){
     return evaluate(`(()=>{
       const $=s=>document.querySelector(s),s=$('#search'),names=()=>[...document.querySelectorAll('#place-list .rowtext b')].map(e=>e.textContent);
@@ -211,7 +299,12 @@ try {
         globalThis.__verifyProgramLink(ok?'':(this.getProgramInfoLog(program)||'Program failed to link'));
       };
     }
-    Object.defineProperty(navigator,'clipboard',{value:{writeText:async()=>{}}});
+    Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{window.__verifyCopiedUrl=text;}}});
+    document.addEventListener('load', ({target}) => {
+      if (target instanceof HTMLScriptElement && target.src.endsWith('/assets/leaflet.js')) {
+        window.L?.Map.addInitHook(function(){window.__verifySatellite=this;});
+      }
+    }, true);
   })()`});
   await call('Network.enable');
   await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
@@ -254,6 +347,7 @@ try {
     check('Published catalog opens the four surveyed buildings and their original sources',await surveyCards());
     check('Published Dongyuan search opens the correct street photo or courtyard aerial',await eastDormCards());
     check('Published photo views restore the library side at sunset and the current software entrance',await photoFrontViews(satelliteUrl,'webgl'));
+    await softwareWalkingRoute();
     await evaluate("document.querySelector('[data-mode=satellite]').click()");
     const getTiles=()=>evaluate("(()=>{const tiles=[...document.querySelectorAll('#satellite img.leaflet-tile')];return {loaded:tiles.filter(t=>t.complete&&t.naturalWidth>0).length,total:tiles.length,message:document.querySelector('#fallback').hidden?'':document.querySelector('#fallback').innerText}})()");
     try {
@@ -482,6 +576,7 @@ try {
   }
   await evaluate("document.querySelector('#route-clear').click();document.querySelector('#home').click()");
   check('Closing navigation removes the route bar',await evaluate("document.querySelector('#route-bar').hidden && document.querySelector('#route-nav').hidden && document.querySelector('#street-help').hidden"));
+  await softwareWalkingRoute();
   await evaluate("document.querySelector('#lighting').click()");
   check('Time-of-day presets switch exclusively between dusk, night and morning',await evaluate(`(()=>{
     if(document.querySelector('#env-panel').hidden||document.querySelector('#lighting').getAttribute('aria-expanded')!=='true')return false;
@@ -622,7 +717,7 @@ try {
     await evaluate("document.querySelector('#imagery-retry').click()");
     await waitState('ready');
     check('Retry restores imagery in place',await evaluate(`document.querySelector('#imagery-status').hidden && document.querySelector('#satellite img[data-zoom="18"][data-imagery=ready]')!==null`));
-    await evaluate("document.querySelector('[data-mode=model]').click()");
+    await satelliteShareRoundTrip();
     await call('Fetch.disable');
   }
   await treeStudy();

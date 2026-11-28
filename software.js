@@ -1,4 +1,5 @@
 import { Matrix4,ShapeUtils,Vector2 } from 'three';
+import {makeAvatarRasterizer} from './avatar-canvas.js';
 import { libraryFacade } from './facade.js';
 import { observedTeachingFace, computingElevation, computingSignColumns } from './building-detail.js';
 import { buildingSolids, hallId, reportFacade } from './wenfu.js';
@@ -48,7 +49,9 @@ export function softwareRenderer(data,palette,trees,inside){
   const canvas=document.createElement('canvas'), ctx=canvas.getContext('2d',{alpha:false});
   const matrix=new Matrix4();
   const floor=[], shadows=[], objects=[];
-  let width=1,height=1,dpr=1,previous='',lighting='noon',routeFaces=[],avatarPose=null;
+  let width=1,height=1,dpr=1,previous='',lighting='noon',routeFaces=[],actor=null,actorVersion=0;
+  const renderActor=makeAvatarRasterizer(),actorCanvas=document.createElement('canvas');
+  const actorContext=actorCanvas.getContext('2d');
   function surface(points,y,color,holes=[]){
     if(!holes.length){floor.push([poly(points,y),color]);return;}
     const verts=p=>(p.length>1&&p[0][0]===p.at(-1)[0]&&p[0][1]===p.at(-1)[1]?p.slice(0,-1):p).map(([x,z])=>new Vector2(x,z));
@@ -372,13 +375,12 @@ export function softwareRenderer(data,palette,trees,inside){
     setSize(w,h){width=w;height=h;canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);previous='';},
     setLighting(name){lighting=name;previous='';},
     setRoute(points){routeFaces=points&&points.length>1?ribbon(points,2.2,1.2):[];previous='';},
-    setAvatar(pose){avatarPose=pose;previous='';},
+    setAvatar(value){if(actor||value)actorVersion++;actor=value;},
     setAnimationLoop(fn){const loop=t=>{fn(t);requestAnimationFrame(loop);};requestAnimationFrame(loop);},
     render(scene,camera){
       camera.updateMatrixWorld();
       matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
-      const avKey=avatarPose&&avatarPose.thirdPerson?`${avatarPose.x.toFixed(2)},${avatarPose.z.toFixed(2)},${avatarPose.jumpY.toFixed(2)},${avatarPose.yaw.toFixed(2)}`:'';
-      const state=matrix.elements.map(n=>n.toFixed(6)).join(',')+lighting+routeFaces.length+avKey;
+      const state=matrix.elements.map(n=>n.toFixed(6)).join(',')+lighting+routeFaces.length+':'+actorVersion;
       if(state===previous)return;
       previous=state;
       cam=camera;m=matrix.elements;
@@ -418,46 +420,21 @@ export function softwareRenderer(data,palette,trees,inside){
         }
         else building(obj,w);
       }
-      if(avatarPose&&avatarPose.thirdPerson){
-        const {x,z,groundY,jumpY,grounded}=avatarPose;
-        const baseY=groundY+jumpY;
-        const [gx,gy,gw]=point([x,groundY+.04,z]);
-        const [bx,by,bw]=point([x,baseY,z]);
-        const [hx,hy,hw]=point([x,baseY+1.65,z]);
-        if(bw>.65&&hw>.65){
-          const sx=(.5+bx/(2*bw))*width, sy=(.5-by/(2*bw))*height;
-          const headY=(.5-hy/(2*hw))*height, h=Math.max(18,sy-headY);
-          const u=h/1.65;
+      if(actor){
+        const patch=renderActor(actor,camera,width,height,lighting);
+        if(patch){
+          const {x,y,z}=actor.root.position;
+          const [gx,gy,gw]=point([x,y+.032,z]);
           if(gw>.65){
-            const shx=(.5+gx/(2*gw))*width, shy=(.5-gy/(2*gw))*height;
-            const shrink=Math.max(.55,1-jumpY*.28);
-            ctx.fillStyle='rgba(24,42,33,0.32)';
-            ctx.beginPath();ctx.ellipse(shx,shy,u*.24*shrink,u*.09*shrink,0,0,Math.PI*2);ctx.fill();
+            const radius=height*camera.projectionMatrix.elements[5]*.105/gw;
+            ctx.fillStyle='rgba(42,34,53,.23)';ctx.beginPath();
+            ctx.ellipse((.5+gx/(2*gw))*width,(.5-gy/(2*gw))*height,radius,radius*.27,0,0,Math.PI*2);ctx.fill();
           }
-          // Legs & sneakers
-          const lift=grounded?0:u*.14;
-          ctx.fillStyle='#2e3946';
-          ctx.fillRect(sx-u*.13,sy-u*.82,u*.095,u*.72-lift);
-          ctx.fillRect(sx+u*.035,sy-u*.82,u*.095,u*.66-lift);
-          ctx.fillStyle='#f0f1ea';
-          ctx.fillRect(sx-u*.14,sy-u*.11-lift,u*.115,u*.10);
-          ctx.fillRect(sx+u*.03,sy-u*.17-lift,u*.115,u*.10);
-          // Varsity green jacket & cream sleeves
-          ctx.fillStyle='#ebe6d6';
-          ctx.fillRect(sx-u*.25,sy-u*1.32,u*.09,u*.46);
-          ctx.fillRect(sx+u*.16,sy-u*1.32,u*.09,u*.46);
-          ctx.fillStyle='#244b3e';
-          ctx.fillRect(sx-u*.17,sy-u*1.36,u*.34,u*.56);
-          // Campus backpack
-          ctx.fillStyle='#465850';
-          ctx.fillRect(sx-u*.13,sy-u*1.30,u*.26,u*.36);
-          ctx.fillStyle='#c4ae84';
-          ctx.fillRect(sx-u*.11,sy-u*1.28,u*.22,u*.10);
-          // Head & hair
-          ctx.fillStyle='#f1cfb4';
-          ctx.beginPath();ctx.arc(sx,sy-u*1.52,u*.13,0,Math.PI*2);ctx.fill();
-          ctx.fillStyle='#262428';
-          ctx.beginPath();ctx.arc(sx,sy-u*1.55,u*.135,Math.PI,Math.PI*2);ctx.fill();
+          if(actorCanvas.width!==patch.width||actorCanvas.height!==patch.height){
+            actorCanvas.width=patch.width;actorCanvas.height=patch.height;
+          }
+          actorContext.putImageData(new ImageData(patch.rgba,patch.width,patch.height),0,0);
+          ctx.drawImage(actorCanvas,patch.x,patch.y,patch.displayWidth,patch.displayHeight);
         }
       }
     }

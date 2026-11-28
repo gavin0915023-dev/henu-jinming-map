@@ -3,6 +3,8 @@ import { fieldViews, mountFieldViews, walks } from './field-views.js';
 import { imageryLayer, addCampusBasemap } from './satellite.js';
 import { cuitingCenter } from './campus-commons.js';
 import { createCampusRouter, routeProgress } from './routing.js';
+import { prepareWalkingMap } from './walking-space.js';
+import { campusEntrances, campusWalkLinks } from './navigation-anchors.js';
 import { createMinimap } from './minimap.js';
 import { residences } from './dongyuan.js';
 import { tours, createTourController, DWELL } from './tour.js';
@@ -96,7 +98,8 @@ stage.after(satelliteHost);
 
 const pinMap = new Map();
 let active = null, activeView = null, mode = 'model', model = null, satellite = null, satelliteTiles = null, campus = null;
-let router = null, minimap = null, activeRoute = null, routeArrivedNotified = false, satelliteRouteLine = null, satelliteMoved = false;
+let router = null, walkingSpace = null, minimap = null, activeRoute = null, routeArrivedNotified = false, satelliteRouteLine = null, satelliteMoved = false;
+const routeAnchors = new WeakMap();
 let currentLighting = 'noon', imageryFrame = 0, noticeTimer;
 let tourCtl = null, tourDriving = false, tourPrevLighting = null, resetJoystick = null;
 
@@ -284,6 +287,17 @@ function fromGps(lat, lon) {
   ];
 }
 
+const SATELLITE_MIN_ZOOM = 12, SATELLITE_MAX_ZOOM = 20;
+
+function parseSatelliteView(value) {
+  const parts = value?.split(',');
+  if (parts?.length !== 3 || parts.some(part => !part.trim())) return null;
+  const [lat, lng, zoom] = parts.map(Number);
+  if (!Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lng) || Math.abs(lng) > 180 ||
+      !Number.isInteger(zoom) || zoom < SATELLITE_MIN_ZOOM || zoom > SATELLITE_MAX_ZOOM) return null;
+  return { center: [lat, lng], zoom };
+}
+
 function jumpSatellite(p, zoom) {
   if (!satellite) return;
   satellite.setView((p ? gps(p.x, p.z) : gps(0, 45)).reverse(), zoom ?? (p ? 18 : satelliteHost.clientWidth < 540 ? 15 : 16), { animate: false });
@@ -302,6 +316,7 @@ function syncSatelliteRoute() {
 
 function markView(item) {
   activeView = item;
+  model?.setFirstPersonHands(!item);
   const route = walks.find(r => r.stops.includes(item)), i = route ? route.stops.indexOf(item) : -1;
   $('#walk-route').hidden = i < 0;
   if (i >= 0) {
@@ -310,7 +325,9 @@ function markView(item) {
     $('#route-next').disabled = i === route.stops.length - 1;
   }
   const url = new URL(location.href), current = url.searchParams.get('view');
-  if ((item?.id ?? null) === current) return;
+  const clearSatellite = mode !== 'satellite' && url.searchParams.has('sat');
+  if ((item?.id ?? null) === current && !clearSatellite) return;
+  if (clearSatellite) url.searchParams.delete('sat');
   if (item) {
     url.searchParams.set('view', item.id);
     url.searchParams.delete('cam');
@@ -475,7 +492,7 @@ function loadSatellite() {
   if (satellite) return;
   const L = window.L;
   if (!L) throw new Error('Satellite library unavailable');
-  satellite = L.map(satelliteHost, { zoomControl: false, attributionControl: false, zoomAnimation: false, minZoom: 12, maxZoom: 20 });
+  satellite = L.map(satelliteHost, { zoomControl: false, attributionControl: false, zoomAnimation: false, minZoom: SATELLITE_MIN_ZOOM, maxZoom: SATELLITE_MAX_ZOOM });
   satellite.on('dragend zoomend', () => { satelliteMoved = true; });
   satellite.on('move zoom resize', renderSatelliteLabels);
   satellite.on('moveend zoomend resize', scheduleImageryStatus);
@@ -499,7 +516,7 @@ function renderSatelliteLabels() {
   updateLabels(project, 0, mpp, { w: size.x, h: size.y });
 }
 
-function setMode(next, walkPose, item = null) {
+function setMode(next, pose, item = null) {
   if (next === 'walk' && !model) {
     notice('当前浏览器暂时无法进入三维地面漫游。');
     return;
@@ -516,7 +533,7 @@ function setMode(next, walkPose, item = null) {
   const [title, note] = {
     model: ['三维校园', stage.dataset.renderer === 'canvas' ? '兼容模式 · 基础模型' : '精细化模型 · 建筑高度估算'],
     satellite: ['卫星影像', 'Esri World Imagery · 实拍底图'],
-    walk: ['地面漫游', '第一人称 · 模拟街景']
+    walk: ['地面漫游', '第一人称 · 爱莉希雅「真我·人之律者」']
   }[mode];
   $('#mode-label').textContent = title;
   $('#mode-note').textContent = note;
@@ -550,7 +567,10 @@ function setMode(next, walkPose, item = null) {
       if (mode !== 'satellite') return;
       loadSatellite();
       satellite.invalidateSize();
-      if (active) {
+      if (pose) {
+        satellite.setView(pose.center, pose.zoom, { animate: false });
+        satelliteMoved = true;
+      } else if (active) {
         jumpSatellite(active);
       } else if (prev3dView && (prev3dView.walking || prev3dView.distance < 1050)) {
         const z = prev3dView.walking ? 18 : Math.max(16, Math.min(19, Math.round(21 - Math.log2(Math.max(30, prev3dView.distance) / 28))));
@@ -571,7 +591,7 @@ function setMode(next, walkPose, item = null) {
   }
 
   if (mode === 'walk') {
-    model.enterWalk(...(walkPose ?? (active ?? places[0]).walk));
+    model.enterWalk(...(pose ?? (active ?? places[0]).walk));
     const v = model.getView();
     minimap?.update({ x: v.x, z: v.z, yaw: v.yaw });
     updateRouteNav({ x: v.x, z: v.z, yaw: v.yaw });
@@ -618,12 +638,20 @@ function populateRouteSelects() {
 }
 
 function resolveRouteEndpoint(val) {
-  if (val === '__current__' && model) {
+  if (val === '__current__' && model?.getView().walking) {
     const v = model.getView();
     return { x: v.x, z: v.z, name: '当前位置' };
   }
   const p = allPlaces.find(p => p.id === val);
-  return p?.routePoint ? { ...p, x: p.routePoint[0], z: p.routePoint[1] } : (p ?? null);
+  if (!p) return null;
+  if (!routeAnchors.has(p)) {
+    const waypoint = campusEntrances[p.id] ?? p.routePoint;
+    const spot = waypoint && !walkingSpace.blocked(...waypoint)
+      ? waypoint : router.roadsideFor(p.x, p.z);
+    routeAnchors.set(p, spot);
+  }
+  const spot = routeAnchors.get(p);
+  return spot ? { ...p, x: spot[0], z: spot[1] } : null;
 }
 
 function syncAutoWalkButton(running) {
@@ -641,18 +669,21 @@ function updateRouteNav(walkPose) {
     box.hidden = true;
     return;
   }
-  const nav = routeProgress(activeRoute.points, walkPose.x, walkPose.z, walkPose.yaw);
+  const nav = routeProgress(activeRoute.points, walkPose.x, walkPose.z, walkPose.yaw, walkingSpace.clear);
   if (!nav) { box.hidden = true; return; }
   box.hidden = false;
   box.classList.toggle('arrived', nav.arrived);
   box.dataset.remaining = String(nav.remaining);
   box.dataset.arrived = String(nav.arrived);
+  box.dataset.offCourse = String(nav.offCourse);
   const arrow = $('#route-arrow');
   arrow.textContent = nav.arrived ? '✓' : '↑';
   arrow.style.transform = nav.arrived ? '' : `rotate(${nav.relDeg}deg)`;
   $('#route-live').textContent = nav.arrived
     ? `已到达${activeRoute.to.name}附近`
-    : `${nav.hint} · 剩余 ${nav.remaining} 米 · ${nav.minutes > 0 ? `约 ${nav.minutes} 分钟` : '不足 1 分钟'}`;
+    : nav.offCourse
+      ? `已偏离路线约 ${nav.offRoute} 米 · 可从当前位置重新规划`
+      : `${nav.hint} · 剩余 ${nav.remaining} 米 · ${nav.minutes > 0 ? `约 ${nav.minutes} 分钟` : '不足 1 分钟'}`;
   $('#route-progress-fill').style.width = (nav.progress * 100).toFixed(1) + '%';
   if (nav.arrived && !routeArrivedNotified) {
     routeArrivedNotified = true;
@@ -666,18 +697,24 @@ function updateActiveRoute(frameResult = false) {
   routeArrivedNotified = false;
   const from = resolveRouteEndpoint($('#route-from').value);
   const to = resolveRouteEndpoint($('#route-to').value);
-  if (!from || !to) return;
-  const result = router.findRoute([from.x, from.z], [to.x, to.z]);
+  const result = from && to && router.findRoute([from.x, from.z], [to.x, to.z]);
+  activeRoute = result?.distance > 0 ? { ...result, from, to } : null;
+  const points = activeRoute?.points ?? null;
+  $('#route-walk').disabled = $('#route-autoplay').disabled = !points;
+  model?.setRoute(points);
+  minimap?.setRoute(points);
+  syncSatelliteRoute();
   if (!result) {
     $('#route-summary').textContent = '暂未找到连通的步行路线';
     updateRouteNav(null);
-    return;
+    return false;
   }
-  activeRoute = { ...result, from, to };
+  if (!points) {
+    $('#route-summary').textContent = '起点与终点在同一位置';
+    updateRouteNav(null);
+    return false;
+  }
   $('#route-summary').textContent = `步行约 ${result.distance} 米 · 约 ${result.minutes} 分钟`;
-  model?.setRoute(result.points);
-  minimap?.setRoute(result.points);
-  syncSatelliteRoute();
   if (mode === 'walk' && model) {
     const v = model.getView();
     updateRouteNav({ x: v.x, z: v.z, yaw: v.yaw });
@@ -690,6 +727,7 @@ function updateActiveRoute(frameResult = false) {
     const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
     model.focus(mx, mz, Math.max(220, Math.min(1400, span * 1.45)));
   }
+  return true;
 }
 
 function openRouteTo(dest) {
@@ -730,16 +768,13 @@ $('#route-swap').onclick = () => {
 };
 $('#route-clear').onclick = clearRoute;
 $('#route-walk').onclick = () => {
+  if (mode === 'walk' && $('#route-from').value === '__current__') updateActiveRoute();
   if (!activeRoute?.points?.length) return;
   routeArrivedNotified = false;
   const pose = model?.routeStartPose(activeRoute.points);
   if (pose) {
     setMode('walk', pose);
-  } else {
-    const p0 = activeRoute.points[0], p1 = activeRoute.points[1] ?? p0;
-    const yaw = Math.atan2(p1[0] - p0[0], -(p1[1] - p0[1]));
-    setMode('walk', [p0[0], p0[1], yaw, 0.04, 65]);
-  }
+  } else return;
   $('#mode-note').textContent = `步行导航 · 前往${activeRoute.to.name}`;
 };
 $('#route-autoplay').onclick = () => {
@@ -752,21 +787,34 @@ $('#route-autoplay').onclick = () => {
   const resumeCurrent = mode === 'walk';
   if (!resumeCurrent) {
     const pose = model.routeStartPose(activeRoute.points);
-    if (pose) setMode('walk', pose);
+    if (!pose) return;
+    setMode('walk', pose);
   }
   routeArrivedNotified = false;
-  const started = model.startRouteWalk(activeRoute.points, {
+  const options = {
     speed: 14,
-    startDist: resumeCurrent ? null : 0,
+    resume: resumeCurrent,
     onState: syncAutoWalkButton,
     onArrive() {
       routeArrivedNotified = true;
       const v = model.getView();
       updateRouteNav({ x: v.x, z: v.z, yaw: v.yaw });
       notice(`已沿步行路线抵达${activeRoute.to.name}附近`, 3500);
+    },
+    onBlocked() {
+      notice('前方无法通行，自动步行已暂停。可从当前位置重新规划。');
     }
-  });
+  };
+  let started = model.startRouteWalk(activeRoute.points, options);
+  if (!started && resumeCurrent) {
+    $('#route-from').value = '__current__';
+    if (updateActiveRoute()) {
+      started = model.startRouteWalk(activeRoute.points, options);
+      if (started) notice('已从当前位置重新规划');
+    }
+  }
   if (started) {
+    markView(null);
     $('#mode-note').textContent = `自动导航 · 前往${activeRoute.to.name}`;
     const v = model.getView();
     updateRouteNav({ x: v.x, z: v.z, yaw: v.yaw });
@@ -810,22 +858,24 @@ document.addEventListener('pointerdown', e => {
 
 /* Shareable exact viewpoint link */
 $('#share').onclick = async () => {
+  const satelliteZoom = mode === 'satellite' ? satellite?.getZoom() : null;
+  if (mode === 'satellite' && !Number.isInteger(satelliteZoom)) {
+    notice('卫星地图未就绪，暂时无法分享这一视角。');
+    return;
+  }
   const url = new URL(location.href);
-  url.searchParams.delete('cam');
-  url.searchParams.delete('pos');
-  url.searchParams.delete('light');
-  url.searchParams.delete('tour');
-  url.searchParams.delete('stop');
+  for (const key of ['view', 'cam', 'pos', 'light', 'tour', 'stop', 'sat']) url.searchParams.delete(key);
   if (currentLighting !== 'noon') url.searchParams.set('light', currentLighting);
-  if (tourCtl?.active) {
-    url.searchParams.delete('view');
+  if (mode === 'satellite') {
+    const { lat, lng } = satellite.wrapLatLng(satellite.getCenter());
+    url.searchParams.set('sat', [lat.toFixed(7), lng.toFixed(7), satelliteZoom].join(','));
+  } else if (tourCtl?.active) {
     url.searchParams.delete('light');
     url.searchParams.set('tour', tourCtl.state.id);
     url.searchParams.set('stop', String(tourCtl.state.index + 1));
   } else if (activeView) {
     url.searchParams.set('view', activeView.id);
   } else if (model) {
-    url.searchParams.delete('view');
     const v = model.getView();
     if (v.walking) {
       url.searchParams.set('pos', [v.x, v.z, v.yaw, v.pitch].map(n => Number(n.toFixed(2))).join(','));
@@ -833,6 +883,8 @@ $('#share').onclick = async () => {
       url.searchParams.set('cam', [...v.camera, ...v.target].map(n => Number(n.toFixed(1))).join(','));
     }
   }
+  if (mode === 'walk' && model?.getWalkCamera() === 'third') url.searchParams.set('person', 'third');
+  else url.searchParams.delete('person');
   const shareUrl = url.toString();
   history.replaceState(null, '', shareUrl);
   try {
@@ -977,7 +1029,9 @@ function syncWalkHud() {
   reticle.classList.toggle('locked', locked);
   reticle.hidden = mode !== 'walk' || cam !== 'fps' || Boolean(activeView);
   if (mode === 'walk' && !activeView && !activeRoute) {
-    $('#mode-note').textContent = cam === 'third' ? '第三人称 · 校园漫步' : '第一人称 · 模拟街景';
+    $('#mode-note').textContent = cam === 'third'
+      ? '第三人称 · 爱莉希雅「真我·人之律者」'
+      : '第一人称 · 爱莉希雅「真我·人之律者」';
   }
 }
 $('#walk-jump').onclick = () => {
@@ -1191,11 +1245,15 @@ document.querySelectorAll('[data-open-tour]').forEach(b => b.onclick = () => {
 }
 renderPlaces();
 
+const params = new URLSearchParams(location.search);
+const requestedSatellite = parseSatelliteView(params.get('sat'));
 try {
   const response = await fetch('./assets/campus.json');
   if (!response.ok) throw new Error('Campus data missing');
   campus = await response.json();
-  router = createCampusRouter(campus);
+  const walkingMap = prepareWalkingMap(campus);
+  walkingSpace = walkingMap.space;
+  router = createCampusRouter(walkingMap.data, {space:walkingSpace,walkLinks:campusWalkLinks});
   enrichCampusPlaces(campus);
   minimap = createMinimap($('#minimap'), campus, (wx, wz) => {
     if (model?.teleportWalk(wx, wz)) notice('已跳转到小地图指定位置', 1800);
@@ -1207,6 +1265,7 @@ try {
     campus,
     (...args) => { if (mode !== 'satellite') updateLabels(...args); },
     {
+      walkingMap,
       onPickBuilding: handlePickBuilding,
       onWalkCamera: () => syncWalkHud(),
       onPointerLock: () => syncWalkHud()
@@ -1214,14 +1273,15 @@ try {
   );
   syncWalkHud();
 
-  const params = new URLSearchParams(location.search);
   const reqLight = params.get('light');
   if (reqLight && ['morning', 'noon', 'sunset', 'night'].includes(reqLight)) applyLighting(reqLight);
 
   const requested = fieldViews.find(v => v.id === params.get('view'));
   const reqPos = params.get('pos')?.split(',').map(Number);
   const reqCam = params.get('cam')?.split(',').map(Number);
-  if (requested) {
+  if (requestedSatellite) {
+    setMode('satellite', requestedSatellite);
+  } else if (requested) {
     visitView(requested);
   } else if (tours.some(t => t.id === params.get('tour'))) {
     const t = tours.find(t => t.id === params.get('tour'));
@@ -1232,6 +1292,7 @@ try {
   } else if (reqCam?.length === 6 && reqCam.every(Number.isFinite)) {
     model.setOrbitPose(reqCam.slice(0, 3), reqCam.slice(3, 6));
   }
+  if (mode === 'walk' && params.get('person') === 'third') { model.setWalkCamera('third'); syncWalkHud(); }
   model.setVisible(mode !== 'satellite');
   if (!requested && mode === 'model' && stage.dataset.renderer === 'canvas') $('#mode-note').textContent = '兼容模式 · 基础模型';
   requestAnimationFrame(() => {
@@ -1241,5 +1302,6 @@ try {
   if (mode === 'model') fallback.hidden = true;
 } catch (error) {
   console.warn('Campus model failed', error);
-  if (mode === 'model') displayError('三维场景无法启动。可切换卫星影像，或在支持 WebGL 的浏览器中重试。');
+  if (requestedSatellite && mode === 'model') setMode('satellite', requestedSatellite);
+  else if (mode === 'model') displayError('三维场景无法启动。可切换卫星影像，或在支持 WebGL 的浏览器中重试。');
 }
