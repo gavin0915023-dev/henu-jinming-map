@@ -13,8 +13,6 @@ function cycle(keys,p){
 }
 function stepTarget(p,stride,run){
   const duty=mix(.59,.43,run),back=-stride*duty/2,front=-back, swing=(p-duty)/(1-duty);
-  // Linear travel through support cancels the forward motion of the root.
-  // During recovery, the toe clears the ground before the heel reaches forward.
   const fore=p<duty?front-p*stride:mix(back,front,ease(swing));
   const lift=p<duty?0:Math.sin(Math.PI*swing)**1.5*mix(.095,.215,run);
   const pitch=cycle([[0,.16],[.13,.015],[duty*.66,0],[duty,-.37],[duty+(1-duty)*.34,-.40],
@@ -27,8 +25,6 @@ function legIK(part,down,fore,pitch){
   const hip=Math.atan2(fore,down)-Math.atan2(b*Math.sin(knee),a+b*Math.cos(knee));
   part.leg.rotation.x=hip;part.shin.rotation.x=knee;part.foot.rotation.x=pitch-hip-knee;
 }
-// Both arms have the same rest axis. Solve the wrist in shoulder space; the
-// separate palm direction lets the fingertips hover next to the cheek.
 function armPose(target,pole,fingers){
   const down=new Vector3(0,-1,0),end=new Vector3(...target),d=end.length(),axis=end.clone().normalize();
   const side=new Vector3(...pole);side.addScaledVector(axis,-side.dot(axis)).normalize();
@@ -45,8 +41,8 @@ function pivotHeight(angle){
 }
 export function animateElysia(rig){
   let time=0,phase=0,motion=0,run=0,turn=0,air=0,trail=0,side=0,settled=2,fpsTurn=0;
-  const cheek=armPose([-.068,.056,-.135],[.060,-.20,-.155],[-.15,.91,.36]);
-  const waist=armPose([.142,-.245,-.124],[-.12,-.26,-.08],[.88,-.26,.06]);
+  const cheek=armPose([-.064,.059,-.135],[.060,-.20,-.155],[-.15,.91,.36]);
+  const waist=armPose([.138,-.242,-.124],[-.12,-.26,-.08],[.88,-.26,.06]);
   const flex=drape(rig);
   function reset(){time=0;phase=0;motion=run=turn=air=trail=side=fpsTurn=0;settled=2;flex.reset();}
   function update({dt=0,speed=0,distance,turnRate=0,sprinting=false,grounded=true,velY=0,landDip=0,still=false,pitch=0,bobPhase=0,bobAmp=0}){
@@ -82,8 +78,9 @@ export function animateElysia(rig){
         -.22*relax-.09*beat-wave*.13*motion-turn*.025,.015*relax-rig.hip.rotation.z*.66-turn*.018-.045*beat);
       rig.head.rotation.set(.021-rig.chest.rotation.x*.64+.014*breath*relax,
         .15*relax+.05*sway*relax+wave*.034*motion+turn*.047,-.072*relax-.082*beat);
-      const blink=still?1:1-.94*Math.max(0,1-Math.abs((time%4.63)-3.74)/.088);
-      for(const eye of rig.eyes)eye.scale.y=blink;
+      // Snappy anime blinking driven cleanly in FaceToon shader (zero ghosted half-blink)
+      const blink=still?0:Math.max(0,1-Math.abs((time%4.85)-4.20)/.065);
+      if(rig.faceMat?.uniforms?.uBlink)rig.faceMat.uniforms.uBlink.value=ease(blink);
     }
     for(let i=0;i<2;i++){
       const sign=i?1:-1,opposite=i?-wave:wave,t=targets[i],leg=rig.legs[i],a=rig.arms[i];
@@ -106,8 +103,6 @@ export function animateElysia(rig){
         a.arm.quaternion.slerp(pose[0],amount);a.fore.quaternion.slerp(pose[1],amount);a.wrist.quaternion.slerp(pose[2],amount);
       }
     }
-    // Cloth follows acceleration and angular velocity with different settling
-    // times; skip hidden hair/veil/train vertex skinning completely in FPS mode.
     trail=damp(trail, .055*motion+.25*run*motion+.085*air+.065*rise*air,4.4,dt);
     side=damp(side,turn*.105+Math.sin(phase*tau)*.042*motion,3.0,dt);
     rig.skirt.rotation.y=-rig.hip.rotation.y*.38-side*.22;
@@ -129,40 +124,57 @@ export function animateElysia(rig){
       flex.update(dt,time,phase,motion,run,air,turn,still);
     }
 
-    // First-person sculpted opera-gloved arms: breathing poise at rest,
-    // rhythmic alternating stride swing, sprint energy, jump lift, turn sway,
-    // and graceful parting when looking straight down at her skirt & heels.
+    // Redesigned First-Person Anime Elysia Pose:
+    //   - Right Hand poised gracefully lower-right, conjuring her floating
+    //     Elysia Crystal Blossom with gentle rotation & orbiting crystal motes.
+    //   - Left Hand relaxed low & out of minimap's way at rest, rising smoothly
+    //     into natural athletic stride swing when walking, sprinting or jumping!
     if(rig.fpsArms?.visible){
-      const lookDown=ease(clamp((-pitch-.50)/.65));
+      const lookDown=ease(clamp((-pitch-.46)/.65));
       const strideSin=bobAmp>.01?Math.sin(bobPhase*.5):Math.sin(phase*tau);
       const strideCos=bobAmp>.01?Math.cos(bobPhase):Math.cos(phase*tau*2);
       const strideAmp=Math.max(motion,bobAmp);
+      const leftLift=ease(clamp(strideAmp*.85+air*.95));
       const idleFloat=still?0:Math.sin(time*1.85);
       const idleAlt=still?0:Math.cos(time*1.28);
+
       for(const {arm,hand,sign:s} of rig.fpsHands){
+        const isRight=s>0;
         const alt=s*strideSin;
-        const baseX=s*(s>0?.212:.200)+s*.085*lookDown-fpsTurn*.016;
-        const baseY=-.232+(s>0?.016:0)-.068*lookDown
-          +idleFloat*.0055*(1-strideAmp*.5)
-          +Math.abs(strideSin)*.014*strideAmp*(1+run*.65)
-          +strideCos*.006*strideAmp
-          +air*(.034+.028*rise)+landDip*.28;
-        const baseZ=-.19+.055*lookDown
-          -alt*(.044+.036*run)*strideAmp
-          -.018*run*strideAmp
-          -.014*air;
-        arm.position.set(baseX,baseY,baseZ);
+        const restX=isRight?.225:-.230;
+        const restY=isRight?-.224:mix(-.395,-.238,leftLift);
+        const restZ=isRight?-.185:mix(-.130,-.188,leftLift);
+
+        arm.position.set(
+          restX+s*.085*lookDown-fpsTurn*.015,
+          restY-.065*lookDown
+            +idleFloat*.0050*(1-strideAmp*.4)
+            +Math.abs(strideSin)*.014*strideAmp*(1+run*.65)
+            +strideCos*.005*strideAmp
+            +air*(.032+.026*rise)+landDip*.26,
+          restZ+.055*lookDown
+            -alt*(.040+.034*run)*strideAmp
+            -.016*run*strideAmp-.012*air
+        );
         arm.rotation.set(
-          .04+alt*(.11+.09*run)*strideAmp+.14*air+.07*rise*air+landDip*.6-.16*lookDown,
-          -s*.05-fpsTurn*.045-s*.14*lookDown+alt*.05*strideAmp,
-          -s*(.04+.09*lookDown)+fpsTurn*.035+s*idleAlt*.018
+          (isRight?.05:.02)+alt*(.10+.08*run)*strideAmp+.13*air+.06*rise*air+landDip*.55-.16*lookDown,
+          -s*.06-fpsTurn*.045-s*.14*lookDown+alt*.045*strideAmp,
+          -s*(.03+.09*lookDown)+fpsTurn*.032+s*idleAlt*.016
         );
-        // Graceful dorsal-inward hand roll so the gold/rose embroidery & gently arched fingers shine.
-        hand.rotation.set(
-          -.04+idleFloat*.030+.08*air-alt*.06*strideAmp,
-          s*(.12+idleAlt*.025),
-          -s*(.24+idleFloat*.020+.05*air)
-        );
+        if(isRight){
+          // Poised palm-inward/upward spellcaster cradle below the Crystal Blossom
+          hand.rotation.set(
+            .10+idleFloat*.035+.07*air-alt*.05*strideAmp,
+            -.16+idleAlt*.03,
+            .32+idleFloat*.025+.04*air
+          );
+        }else{
+          hand.rotation.set(
+            -.04+idleFloat*.025+.08*air-alt*.06*strideAmp,
+            -.12-idleAlt*.02,
+            .24+idleFloat*.02
+          );
+        }
       }
       for(const {ribbon,sign:s} of rig.fpsRibbons){
         const flutter=still?0:Math.sin(time*2.6+s*1.3);
@@ -171,6 +183,27 @@ export function animateElysia(rig){
           -s*.12-fpsTurn*.18,
           s*(.08+flutter*.07*(.4+strideAmp))-fpsTurn*.12
         );
+      }
+      if(rig.fpsCrystal){
+        const bob=still?0:Math.sin(time*2.35);
+        rig.fpsCrystal.position.set(
+          -.044-fpsTurn*.010,
+          .124+bob*.007+.014*air+.006*strideAmp,
+          -.250-.008*run*strideAmp
+        );
+        rig.fpsCrystal.rotation.set(
+          .18+bob*.08,
+          still?.3:(time*.95+strideAmp*1.2)%(tau*10),
+          .12*Math.sin(time*1.4)
+        );
+        const sc=1+.06*air+.03*bob;
+        rig.fpsCrystal.scale.setScalar(sc);
+        for(let i=0;i<rig.fpsMotes.length;i++){
+          const m=rig.fpsMotes[i];
+          const a=m.angle+(still?0:time*(1.65+i*.35));
+          m.mote.position.set(Math.cos(a)*m.radius,m.height+Math.sin(a*1.7)*.008,Math.sin(a)*m.radius*.55);
+          m.mote.rotation.y=a*1.8;
+        }
       }
     }
   }

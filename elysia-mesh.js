@@ -1,11 +1,15 @@
 import * as T from './assets/three.module.min.js';
+import {createCelToonMaterial, buildOutlineMesh} from './elysia-toon.js';
 
-// Small modelling vocabulary for the costume. Every piece attached to a joint
-// shares one indexed, vertex-painted mesh, including its stitching and gems.
+// Modelling vocabulary for Elysia with miHoYo-style multi-material NPR cel
+// shading (hair angel-ring, warm porcelain skin, lilac-shaded silk, sparkling
+// crystal) and distance-adaptive colored inverted-hull anime outlines.
 const TAU = Math.PI * 2;
 const linear = Float32Array.from({length:256}, (_,i) => T.ColorManagement.toWorkingColorSpace(new T.Color().setRGB(i/255,0,0),T.SRGBColorSpace).r);
-export const group = (parent, name, x=0,y=0,z=0) => {
-  const g=new T.Group(); g.name=name; g.position.set(x,y,z); parent.add(g); return g;
+export const group = (parent, name, x=0,y=0,z=0, kind=null) => {
+  const g=new T.Group(); g.name=name; g.position.set(x,y,z);
+  if(kind)g.userData.toonKind=kind;
+  parent.add(g); return g;
 };
 export function mix(a,b,t) {
   t=Math.max(0,Math.min(1,t)); const u=1-t;
@@ -19,33 +23,33 @@ export function curve(keys,t) {
 }
 export function sculpt({coarse=false}={}) {
   const buckets=new Map();
-  const fabric=new T.MeshLambertMaterial({name:'Elysia · painted silk',vertexColors:true,side:T.DoubleSide,
-    emissive:0x321f3f,emissiveIntensity:.19});
-  fabric.onBeforeCompile=shader=>{
-    shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
-      vec3 keyDirection = normalize((viewMatrix * vec4(-.43,.77,-.47,0.)).xyz);
-      float softLight = smoothstep(-.36,.52,dot(normal,keyDirection));
-      float rimGlow = pow(1.0 - max(0.0, abs(normal.z)), 3.0);
-      outgoingLight = outgoingLight * mix(vec3(.78,.72,.84),vec3(1.05,1.03,1.03),softLight)
-        + outgoingLight * vec3(.16,.13,.21) * rimGlow;
-      #include <opaque_fragment>`);
+  const materials={
+    silk:createCelToonMaterial({name:'Elysia · Silk Toon',shadowTint:0xc8bce8,rimTint:0xfff4ff,rimStrength:.26,specular:.20}),
+    skin:createCelToonMaterial({name:'Elysia · Skin Toon',shadowTint:0xf4c5bf,rimTint:0xfff6f2,rimStrength:.14,specular:0}),
+    hair:createCelToonMaterial({name:'Elysia · Hair Toon',shadowTint:0xdc82b2,rimTint:0xffeef8,rimStrength:.30,angelRing:true}),
+    crystal:createCelToonMaterial({name:'Elysia · Crystal Toon',shadowTint:0xbfb5ec,rimTint:0xe2fbff,rimStrength:.38,specular:.58,emissive:.16})
   };
-  fabric.customProgramCacheKey=()=>'elysia-silk-lambert-2';
-  function surface(joint,nu,nv,position,colour,flip=false) {
-    if(!buckets.has(joint))buckets.set(joint,{p:[],c:[],ix:[]});
+  const outlineSpec={
+    silk:[0x65518c,.0019],
+    skin:[0xb87676,.0015],
+    hair:[0x8f436c,.0020],
+    crystal:[0x6c4c8f,.0016]
+  };
+  function surface(joint,nu,nv,position,colour,flip=false,uvFn=null) {
+    if(!buckets.has(joint))buckets.set(joint,{p:[],c:[],uv:[],ix:[]});
     const b=buckets.get(joint),offset=b.p.length/3;
     for(let j=0;j<=nv;j++)for(let i=0;i<=nu;i++){
       const u=i/nu,v=j/nv,p=position(u,v);
       const col=typeof colour==='function'?colour(u,v):colour;
       b.p.push(...p); b.c.push(linear[col>>16],linear[(col>>8)&255],linear[col&255]);
+      if(uvFn){const uv=uvFn(u,v,p);b.uv.push(uv[0],uv[1]);}
+      else b.uv.push(u,v);
     }
     for(let j=0;j<nv;j++)for(let i=0;i<nu;i++){
       const a=offset+j*(nu+1)+i,c=a+nu+1;
       if(flip)b.ix.push(a,c,a+1,a+1,c,c+1);else b.ix.push(a,a+1,c,a+1,c+1,c);
     }
   }
-  // Sections: height, half-width, half-depth, centre Z, centre X. Around
-  // a section angle zero is the front of the model (local -Z).
   function loft(j,rows,col,n=24) {
     const ordered=rows.map(([y,w,d,z=0,x=0])=>[y,w,d,z,x]).sort((a,b)=>a[0]-b[0]);
     surface(j,coarse?Math.max(8,Math.round(n*.65)):n,ordered.length-1,(u,v)=>{
@@ -59,8 +63,6 @@ export function sculpt({coarse=false}={}) {
       return [center[0]+r[0]*s*Math.sin(a),center[1]+r[1]*Math.cos(b),center[2]-r[2]*s*Math.cos(a)];
     },col);
   }
-  // A swept, closed section, not a flat card. Knots: X,Y,Z,width,thickness.
-  // A fixed width axis lets a curl turn sideways without ribbon-frame flips.
   function strand(j,knots,col,axis=[1,0,0],steps,radial=8){
     const stepsV=steps??Math.max(4,(knots.length-1)*(coarse?2:3)),frames=[];
     const guide=new T.Vector3(...axis);
@@ -90,8 +92,6 @@ export function sculpt({coarse=false}={}) {
       const p=flat[Math.round(u*4)%4];return v===0?p:[x-w*.16,y+h*.14,z+front*w*.62];
     },(u,v)=>mix(col,v?0xffffff:0x7968b7,v?.58:Math.max(0,.22*Math.cos(u*TAU))),front<0);
   }
-  // A lined textile follows one surface on both sides, including the rolled
-  // edge. Its lining becomes visible when the fold turns towards the camera.
   function cloth(j,nu,nv,fn,outer,lining,thickness=.003,faceSign=1){
     const xyz=(u,v)=>new T.Vector3(...fn(u,v));
     function inset(u,v){
@@ -114,11 +114,19 @@ export function sculpt({coarse=false}={}) {
       const g=new T.BufferGeometry();
       g.setAttribute('position',new T.Float32BufferAttribute(b.p,3));
       g.setAttribute('color',new T.Float32BufferAttribute(b.c,3));
+      g.setAttribute('uv',new T.Float32BufferAttribute(b.uv,2));
       g.setIndex(b.ix);g.computeVertexNormals();g.computeBoundingSphere();
-      const m=new T.Mesh(g,fabric);m.name=joint.name+' · mesh';
+      const kind=joint.userData.toonKind??'silk';
+      const customMat=joint.userData.customMaterial;
+      const mat=customMat??materials[kind]??materials.silk;
+      const m=new T.Mesh(g,mat);m.name=joint.name+' · mesh';
       m.frustumCulled=true;joint.add(m);meshes.push(m);
+      if(!coarse&&!joint.userData.noOutline){
+        const [oc,ow]=joint.userData.outline??outlineSpec[kind]??outlineSpec.silk;
+        joint.add(buildOutlineMesh(m,oc,ow));
+      }
     }
     return meshes;
   }
-  return {surface,loft,oval,strand,line,gem,cloth,finish};
+  return {surface,loft,oval,strand,line,gem,cloth,finish,materials};
 }

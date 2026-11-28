@@ -6,7 +6,7 @@ export function drape(rig){
   const links=4,rot=new Matrix4(),angle=new Euler();
   const swatches=[];
   function bind(node,kind,index){
-    const m=node.children.find(m=>m.isMesh),g=m.geometry,p=g.attributes.position,n=g.attributes.normal;
+    const m=node.children.find(m=>m.isMesh&&!m.userData.isOutline),g=m.geometry,p=g.attributes.position,n=g.attributes.normal;
     const src=p.array.slice(),norm=n.array.slice(),count=p.count;
     let top=-Infinity,bottom=Infinity;
     for(let j=1;j<src.length;j+=3){top=Math.max(top,src[j]);bottom=Math.min(bottom,src[j]);}
@@ -16,6 +16,7 @@ export function drape(rig){
       lo[i]=Math.floor(k);frac[i]=k-lo[i];
     }
     p.setUsage(DynamicDrawUsage);n.setUsage(DynamicDrawUsage);g.boundingSphere.radius+=.35;
+    for(const child of node.children)if(child.userData?.isOutline&&child.geometry?.boundingSphere)child.geometry.boundingSphere.radius+=.35;
     const mats=Array.from({length:links+1},()=>new Matrix4());
     swatches.push({kind,index,top,len,lo,frac,p,n,src,norm,mats,state:new Float32Array(links*4),last:''});
   }

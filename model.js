@@ -23,6 +23,7 @@ import { campusSky, shadeGround, LIGHTING_PRESETS } from './daylight.js';
 import { applyGroundSurfaceTextures } from './ground-surfaces.js';
 import { createPlayerAvatar } from './avatar.js';
 import { WALK_PACE, RUN_PACE } from './elysia-motion.js';
+import { setToonLighting } from './elysia-toon.js';
 
 const ground = 0;
 const extent = 1400;
@@ -628,6 +629,7 @@ export function createModel(stage,data,onFrame,options={}){
   function setLighting(name){
     const preset=LIGHTING_PRESETS[name]??LIGHTING_PRESETS.noon;
     lightingName=LIGHTING_PRESETS[name]?name:'noon';
+    setToonLighting(lightingName);
     sunOffset.set(...preset.sunPos);
     sun.color.set(preset.sunColor);
     sun.intensity=preset.sunIntensity;
@@ -898,6 +900,7 @@ export function createModel(stage,data,onFrame,options={}){
     walk.jumpBuf=.14;
     if(walk.grounded||walk.coyote>0){
       walk.velY=7.2;
+      walk.jumpY=Math.max(walk.jumpY,.04);
       walk.grounded=false;
       walk.coyote=0;
       walk.jumpBuf=0;

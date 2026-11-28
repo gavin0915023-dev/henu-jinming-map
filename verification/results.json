@@ -156,7 +156,7 @@
   ],
   "stats": {
     "renderer": "webgl",
-    "vertices": 1343553,
+    "vertices": 1378974,
     "invalid": 0,
     "trees": 1007,
     "treeForms": {
@@ -184,7 +184,7 @@
     "drawCalls": 70,
     "triangles": 1243876
   },
-  "linkedPrograms": 283,
+  "linkedPrograms": 292,
   "shaderErrors": [],
   "failures": []
 }
