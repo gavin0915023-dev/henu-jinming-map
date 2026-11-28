@@ -72,9 +72,7 @@ for(const coarse of [false,true]){
     }
   }
   actor.setFirstPerson(true);
-  assert(!actor.root.getObjectByName('bodice').visible&&actor.root.getObjectByName('thigh 1').visible&&actor.root.getObjectByName('fps arms').visible);
-  actor.setFirstPerson(true,false);
-  assert(!actor.root.getObjectByName('fps arms').visible);
+  assert(!actor.root.getObjectByName('bodice').visible&&actor.root.getObjectByName('thigh 1').visible&&!actor.root.getObjectByName('fps arms').visible);
   console.log(JSON.stringify({mesh:coarse?'Canvas':'WebGL',triangles,draws:actor.meshes.length,
     height:bounds.max.y.toFixed(3),supportSlipPerFrame:(totalSlip/contacts).toFixed(4)}));
 }

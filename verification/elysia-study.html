@@ -14,9 +14,10 @@ button[aria-pressed=true]{color:#372736;background:#efd5e8}small{font-size:12px;
 </style><main>
 <canvas id="stage" tabindex="0" aria-label="交互三维模型。拖动或用左右方向键旋转。"></canvas>
 <header><h1>爱莉希雅</h1><p>真我·人之律者　/　校园漫游试镜</p></header>
-<footer><small id="hint">拖动或按 ← → 环看 · 滚轮调整距离</small><nav aria-label="动作和视角">
+<footer><small id="hint">拖动或按 ← → 环看 · 滚轮调整距离 · 支持直接拖入 .glb / .vrm 模型</small><nav aria-label="动作和视角">
 <button data-pose="idle" aria-pressed="true">待机</button><button data-pose="walk" aria-pressed="false">走路</button><button data-pose="run" aria-pressed="false">跑步</button>
-<button id="fps" aria-pressed="false">第一人称</button><button id="zoom" aria-pressed="false">面部近看</button><button id="back">转到背面</button><button id="play" aria-pressed="false">暂停</button>
+<button id="zoom" aria-pressed="false">面部近看</button><button id="back">转到背面</button><button id="import">导入 .glb/.vrm</button><button id="play" aria-pressed="false">暂停</button>
+<input id="file" type="file" accept=".glb,.gltf,.vrm" hidden>
 </nav></footer></main>
 <!-- import-map -->
 <script type="module">
@@ -24,25 +25,42 @@ import * as T from '../assets/three.module.min.js';
 import {createPlayerAvatar} from '../avatar.js';
 import {WALK_PACE,RUN_PACE} from '../elysia-motion.js';
 import {makeAvatarRasterizer} from '../avatar-canvas.js';
+import {loadCustomAvatar} from '../custom-avatar.js';
 const $=s=>document.querySelector(s),scene=new T.Scene(),camera=new T.PerspectiveCamera(31,1,.035,30);
 let canvas=$('#stage'),renderer,ctx;
-try{renderer=new T.WebGLRenderer({canvas,alpha:true,antialias:true});renderer.setClearColor(0,0);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.04;}
+try{renderer=new T.WebGLRenderer({canvas,alpha:true,antialias:true});renderer.setClearColor(0,0);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;}
 catch {const next=canvas.cloneNode(false);canvas.replaceWith(next);canvas=next;ctx=canvas.getContext('2d');}
 const hemi=new T.HemisphereLight(0xffedea,0x9a9eb9,1.42);scene.add(hemi);
 for(const [x,y,z,c,i] of [[-2.4,3,-2.7,0xffeadf,2.15],[2,2,1.6,0xe8d9ff,1.68]]){
   const l=new T.DirectionalLight(c,i);l.position.set(x,y,z);scene.add(l);
 }
-const actor=createPlayerAvatar({coarse:!renderer});scene.add(actor.root);actor.setVisible(true);actor.setFirstPerson(false);
+let actor=createPlayerAvatar({coarse:!renderer});scene.add(actor.root);actor.setVisible(true);actor.setFirstPerson(false);
 const raster=makeAvatarRasterizer(),layer=document.createElement('canvas');
-let pose='idle',near=false,fpsMode=false,paused=matchMedia('(prefers-reduced-motion: reduce)').matches,az=-.44,tilt=.09,fpsPitch=-.04;
-let dist=3.96,focus=.87,goalDist=dist,goalFocus=focus,prev=0,drag=null,dirty=true,w=0,h=0,bobPhase=0;
+let pose='idle',near=false,paused=matchMedia('(prefers-reduced-motion: reduce)').matches,az=-.44,tilt=.09;
+let dist=3.96,focus=.87,goalDist=dist,goalFocus=focus,prev=0,drag=null,dirty=true,w=0,h=0;
 function step(dt){
   const speed=pose==='walk'?WALK_PACE:pose==='run'?RUN_PACE:0;
-  if(speed>0)bobPhase+=dt*(pose==='run'?11.2:8.0);
-  actor.update({x:0,z:0,groundY:0,yaw:0,camYaw:0,pitch:fpsMode?fpsPitch:0,eyeHeight:1.68,
-    bobPhase,bobAmp:speed>0?1:0,jumpY:0,landDip:0,velY:0,grounded:true,sprinting:pose==='run',speed,distance:speed*dt,dt});
+  actor.update({x:0,z:0,groundY:0,yaw:0,camYaw:0,pitch:0,eyeHeight:1.68,
+    jumpY:0,landDip:0,velY:0,grounded:true,sprinting:pose==='run',speed,distance:speed*dt,dt});
 }
 for(let i=0;i<198;i++)step(1/60);
+async function importFile(file){
+  if(!file||!renderer)return;
+  $('#hint').textContent='正在加载 '+file.name+'…';
+  try{
+    const buf=await file.arrayBuffer();
+    const next=await loadCustomAvatar(buf,file.name.replace(/\.\w+$/,''));
+    scene.remove(actor.root);actor.dispose?.();
+    actor=next;scene.add(actor.root);actor.setVisible(true);actor.setFirstPerson(false);
+    $('header p').textContent='自定义三维模型　/　'+file.name;
+    $('#hint').textContent='已加载 '+file.name+' · 拖动环看或切走路/跑步预览';
+    dirty=true;
+  }catch{ $('#hint').textContent='加载失败，请确认是有效的 .glb / .vrm 模型文件'; }
+}
+$('#import').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{const f=e.target.files?.[0];e.target.value='';if(f)importFile(f);};
+canvas.addEventListener('dragover',e=>{if(e.dataTransfer?.types?.includes('Files'))e.preventDefault();});
+canvas.addEventListener('drop',e=>{const f=[...(e.dataTransfer?.files??[])].find(x=>/\.(glb|gltf|vrm)$/i.test(x.name));if(f){e.preventDefault();importFile(f);}});
 function size(){
   w=Math.max(1,canvas.clientWidth);h=Math.max(1,canvas.clientHeight);
   camera.aspect=w/h;camera.updateProjectionMatrix();
@@ -58,15 +76,8 @@ function frame(now){
   if(!dirty&&paused&&!moving)return;dirty=false;
   const k=1-Math.exp(-14*dt);dist+=(goalDist-dist)*k;focus+=(goalFocus-focus)*k;
   if(!paused)step(dt);
-  if(fpsMode){
-    if(camera.fov!==65){camera.fov=65;camera.updateProjectionMatrix();}
-    camera.position.set(0,1.68,0);
-    camera.lookAt(0,1.68+Math.sin(fpsPitch),-Math.cos(fpsPitch));
-  }else{
-    if(camera.fov!==31){camera.fov=31;camera.updateProjectionMatrix();}
-    const range=dist*(camera.aspect<.7?1.09:1),r=range*Math.cos(tilt);
-    camera.position.set(r*Math.sin(az),focus+range*Math.sin(tilt),-r*Math.cos(az));camera.lookAt(0,focus,0);
-  }
+  const range=dist*(camera.aspect<.7?1.09:1),r=range*Math.cos(tilt);
+  camera.position.set(r*Math.sin(az),focus+range*Math.sin(tilt),-r*Math.cos(az));camera.lookAt(0,focus,0);
   camera.updateMatrixWorld();
   if(renderer)renderer.render(scene,camera);
   else{
@@ -81,22 +92,14 @@ canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.p
 canvas.onpointerup=canvas.onpointercancel=()=>drag=null;
 canvas.onpointermove=e=>{
   if(!drag)return;
-  if(fpsMode){fpsPitch=Math.max(-1.25,Math.min(.65,fpsPitch-(e.clientY-drag[1])*.005));}
-  else{az-=(e.clientX-drag[0])*.009;tilt=Math.max(-.45,Math.min(.68,tilt+(e.clientY-drag[1])*.005));}
+  az-=(e.clientX-drag[0])*.009;tilt=Math.max(-.45,Math.min(.68,tilt+(e.clientY-drag[1])*.005));
   drag=[e.clientX,e.clientY];dirty=true;
 };
 canvas.onkeydown=e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();az+=e.key==='ArrowLeft'?-.15:.15;dirty=true;}};
-canvas.addEventListener('wheel',e=>{if(fpsMode)return;e.preventDefault();goalDist=Math.max(.64,Math.min(6,goalDist*Math.exp(.001*e.deltaY)));dirty=true;},{passive:false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();goalDist=Math.max(.64,Math.min(6,goalDist*Math.exp(.001*e.deltaY)));dirty=true;},{passive:false});
 const showPaused=()=>{$('#play').textContent=paused?'播放':'暂停';$('#play').setAttribute('aria-pressed',String(paused));};showPaused();
 document.querySelectorAll('[data-pose]').forEach(b=>b.onclick=()=>{pose=b.dataset.pose;paused=false;showPaused();for(const el of document.querySelectorAll('[data-pose]'))el.setAttribute('aria-pressed',String(el===b));dirty=true;});
 $('#play').onclick=()=>{paused=!paused;showPaused();dirty=true;};
-$('#fps').onclick=()=>{
-  fpsMode=!fpsMode;actor.setFirstPerson(fpsMode,true);
-  $('#fps').setAttribute('aria-pressed',String(fpsMode));
-  $('#hint').textContent=fpsMode?'上下拖动可低头看裙摆与高跟鞋 · 切走路/跑步看手套摆动':'拖动或按 ← → 环看 · 滚轮调整距离';
-  if(fpsMode){fpsPitch=-.04;step(0);}
-  dirty=true;
-};
-$('#zoom').onclick=()=>{if(fpsMode)$('#fps').click();near=!near;goalFocus=near?1.46:.87;goalDist=near?1.02:3.96;$('#zoom').textContent=near?'全身':'面部近看';$('#zoom').setAttribute('aria-pressed',String(near));dirty=true;};
-$('#back').onclick=()=>{if(fpsMode)$('#fps').click();const behind=Math.cos(az)<0;az=behind?-.44:Math.PI+.12;$('#back').textContent=behind?'转到背面':'转到正面';dirty=true;};
+$('#zoom').onclick=()=>{near=!near;goalFocus=near?1.46:.87;goalDist=near?1.02:3.96;$('#zoom').textContent=near?'全身':'面部近看';$('#zoom').setAttribute('aria-pressed',String(near));dirty=true;};
+$('#back').onclick=()=>{const behind=Math.cos(az)<0;az=behind?-.44:Math.PI+.12;$('#back').textContent=behind?'转到背面':'转到正面';dirty=true;};
 </script></html>

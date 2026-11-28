@@ -73,16 +73,14 @@ export function createFaceToonMaterial(openMap, closedMap, sdfMap) {
         float isRight = step(0.0, L.x);
         vec2 sdfUv = vec2(mix(1.0 - vUv.x, vUv.x, isRight), vUv.y);
         float sdf = texture2D(uSdf, sdfUv).r;
-        // Flattering warm anime lighting: keeps face radiant & never grey
+        // Soft warm anime face shading with gentle natural 3D depth (never flat paper mask)
         float frontDot = clamp(L.y * 0.5 + 0.5, 0.0, 1.0);
-        float threshold = mix(0.84, 0.24, frontDot);
-        float lit = smoothstep(threshold - 0.06, threshold + 0.06, sdf);
-        // Keep dark lashes, irises & smile pigment crisp inside cel shadow
+        float threshold = mix(0.78, 0.28, frontDot);
+        float lit = smoothstep(threshold - 0.14, threshold + 0.14, sdf);
+        float nShade = smoothstep(-0.35, 0.65, dot(normalize(vViewNorm), normalize(vec3(-0.22, 0.35, 0.91))));
         float lum = dot(base, vec3(0.299, 0.587, 0.114));
-        float shadowAmt = (1.0 - lit) * 0.36 * smoothstep(0.40, 0.86, lum);
-        vec3 col = mix(base, base * uShadowColor * 1.05, shadowAmt);
-        float rim = smoothstep(0.68, 0.80, 1.0 - max(0.0, dot(normalize(vViewNorm), normalize(vViewPos))));
-        col += vec3(0.07, 0.05, 0.08) * rim;
+        float shadowAmt = ((1.0 - lit) * 0.32 + (1.0 - nShade) * 0.18) * smoothstep(0.32, 0.80, lum);
+        vec3 col = mix(base * 0.95, base * uShadowColor * 0.94, shadowAmt);
         gl_FragColor = vec4(col * uSunTint, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -152,24 +150,23 @@ export function createCelToonMaterial({
         vec3 V = normalize(vViewPos);
         if (!gl_FrontFacing) { N = -N; VN = -VN; }
 
-        // Crisp 2-tone miHoYo stepped cel ramp (warm/pastel shadow tint, never muddy grey)
+        // Soft harmonious 2-tone cel ramp (avoid harsh paper-cutout blowout)
         float ndl = dot(N, normalize(uLightDir));
-        float cel = smoothstep(-0.08, 0.09, ndl);
-        float midBand = smoothstep(-0.40, 0.36, ndl);
-        vec3 shadowCol = vColor * uShadowTint;
-        vec3 litCol = vColor * mix(vec3(0.98, 0.97, 1.00), vec3(1.06, 1.04, 1.05), midBand);
+        float cel = smoothstep(-0.14, 0.16, ndl);
+        float midBand = smoothstep(-0.42, 0.40, ndl);
+        vec3 shadowCol = vColor * uShadowTint * 0.96;
+        vec3 litCol = vColor * mix(vec3(0.92, 0.91, 0.95), vec3(1.00, 0.99, 1.00), midBand);
         vec3 col = mix(shadowCol, litCol, cel);
 
-        // Iconic miHoYo horizontal zig-zag Hair Angel Ring specular ribbon
+        // Soft horizontal Hair Angel Ring highlight (subtle, not blinding white spots)
         if (uAngelRing > 0.5) {
           vec3 VL = normalize((viewMatrix * vec4(uLightDir, 0.0)).xyz);
           vec3 H = normalize(V + VL);
-          float strandZig = sin(vLocalPos.x * 115.0 + vLocalPos.z * 75.0) * 0.016;
-          float crownBand = exp(-pow((vLocalPos.y - 0.195 + strandZig) / 0.032, 2.0));
-          float lowerBand = exp(-pow((vLocalPos.y + 0.18 + strandZig) / 0.065, 2.0)) * 0.45;
-          float specEnv = smoothstep(0.52, 0.78, dot(VN, H));
-          float ring = smoothstep(0.42, 0.62, (crownBand + lowerBand) * specEnv);
-          col = mix(col, vec3(1.0, 0.94, 0.98), ring * 0.50);
+          float strandZig = sin(vLocalPos.x * 95.0 + vLocalPos.z * 65.0) * 0.012;
+          float crownBand = exp(-pow((vLocalPos.y - 0.205 + strandZig) / 0.036, 2.0));
+          float specEnv = smoothstep(0.45, 0.78, dot(VN, H));
+          float ring = smoothstep(0.38, 0.68, crownBand * specEnv);
+          col = mix(col, vec3(1.0, 0.92, 0.96), ring * 0.32);
         }
 
         // Crisp jewelry / crystal specular sparkle

@@ -1288,7 +1288,7 @@ dialog a { color: #466d4b; text-underline-offset: 4px; }
     font-size: 11px;
     touch-action: manipulation;
   }
-  #walk-fps { display: none; }
+  #walk-fps, #walk-model { display: none; }
   .mode-switch button { min-width: 44px; min-height: 44px; }
   .joystick {
     display: block;

@@ -24,6 +24,7 @@ import { applyGroundSurfaceTextures } from './ground-surfaces.js';
 import { createPlayerAvatar } from './avatar.js';
 import { WALK_PACE, RUN_PACE } from './elysia-motion.js';
 import { setToonLighting } from './elysia-toon.js';
+import { loadCustomAvatar, loadCachedModel, saveCachedModel, clearCachedModel } from './custom-avatar.js';
 
 const ground = 0;
 const extent = 1400;
@@ -567,7 +568,7 @@ export function createModel(stage,data,onFrame,options={}){
   scene.add(ambient,sun,sun.target);
   const anisotropy=context?Math.min(8,renderer.capabilities.getMaxAnisotropy()):1;
   const details=context?buildScene(scene,data,trees,anisotropy):null;
-  let avatar=null,lastAvatarTick=0;
+  let avatar=null,lastAvatarTick=0,cachedAvatarChecked=false,customAvatarLabel='';
   const reducedWalkMotion=matchMedia('(prefers-reduced-motion: reduce)');
   let contextLost=false;
   if(context){
@@ -588,7 +589,7 @@ export function createModel(stage,data,onFrame,options={}){
     active:false,yaw:0,pitch:-.02,lastPitch:-.02,position:new T.Vector3(),fov:65,horizontal:0,eyeHeight:1.70,
     jumpY:0,velY:0,grounded:true,coyote:0,jumpBuf:0,landDip:0,
     bobPhase:0,bobAmp:0,bobX:0,bobY:0,fovKick:0,speed:0,sprinting:false,
-    cameraMode:'fps',avatarYaw:0,facing:0,turnRate:0,tapMeters:0,fpsHands:true
+    cameraMode:'fps',avatarYaw:0,facing:0,turnRate:0,tapMeters:0,fpsHands:false
   };
   const keys=new Set();
   let drag=null, tapStart=null, tween=null, visible=true, size={w:0,h:0}, last=performance.now(), lastView='';
@@ -846,10 +847,39 @@ export function createModel(stage,data,onFrame,options={}){
     tween={from,fromTarget:controls.target.clone(),to,target:center,start:performance.now(),duration,lift:Math.min(260,from.distanceTo(to)*.22),drift};
   }
   function stopDrift(){controls.autoRotate=false;}
+  function swapAvatar(next){
+    if(avatar&&context){scene.remove(avatar.root);avatar.dispose?.();}
+    avatar=next;
+    if(avatar&&context)scene.add(avatar.root);
+    customAvatarLabel=avatar?.isCustom?(avatar.label||'自定义模型'):'';
+    if(walk.active){syncAvatar(0);lastView='';}
+  }
+  async function loadAvatarModel(source,label='自定义角色',persist=false){
+    if(!context)throw new Error('需要 WebGL 才能加载自定义三维模型');
+    let payload=source;
+    if(typeof File!=='undefined'&&source instanceof File){
+      label=source.name.replace(/\.(glb|gltf|vrm)$/i,'')||label;
+      payload=await source.arrayBuffer();
+      if(persist)await saveCachedModel(label,payload.slice(0));
+    }
+    const next=await loadCustomAvatar(payload,label);
+    swapAvatar(next);
+    return label;
+  }
+  async function clearAvatarModel(){
+    await clearCachedModel();
+    swapAvatar(null);
+  }
   function syncAvatar(dt=0,distance=0){
     const third=walk.cameraMode==='third';
     if(!walk.active||(!context&&!third)){
       avatar?.setVisible(false);renderer.setAvatar?.(null);return;
+    }
+    if(context&&!cachedAvatarChecked){
+      cachedAvatarChecked=true;
+      loadCachedModel().then(cached=>{
+        if(cached?.buffer&&!avatar?.isCustom)loadCustomAvatar(cached.buffer,cached.name).then(swapAvatar).catch(()=>{});
+      }).catch(()=>{});
     }
     if(!avatar){
       avatar=createPlayerAvatar({coarse:!context});
@@ -861,7 +891,7 @@ export function createModel(stage,data,onFrame,options={}){
       eyeHeight:walk.eyeHeight,bobX:walk.bobX,bobY:walk.bobY,bobPhase:walk.bobPhase,bobAmp:walk.bobAmp,
       turnRate:walk.turnRate,speed:walk.speed,sprinting:walk.sprinting,grounded:walk.grounded,
       still:reducedWalkMotion.matches,dt,distance});
-    renderer.setAvatar?.(avatar);
+    renderer.setAvatar?.(avatar.isCustom?null:avatar);
   }
   function face(){
     const floor=groundY(walk.position.x,walk.position.z);
@@ -1193,7 +1223,7 @@ export function createModel(stage,data,onFrame,options={}){
       if(routeAuto&&(move||side||turn))stopRouteWalk(true);
       if(routeAuto){
         routeAuto.requestedSpeed??=routeAuto.speed;
-        routeAuto.speed=third?Math.min(RUN_PACE,routeAuto.requestedSpeed):routeAuto.requestedSpeed;
+        routeAuto.speed=third?Math.min(18,routeAuto.requestedSpeed):routeAuto.requestedSpeed;
         const {points,cum,total,speed}=routeAuto;
         // Finish the current segment before turning. Each movement is checked;
         // even a narrow fence stops the walk without advancing its progress.
@@ -1220,7 +1250,8 @@ export function createModel(stage,data,onFrame,options={}){
         if(turn)walk.yaw+=turn*dt*1.65;
         const mag=Math.hypot(move,side);
         if(mag>1){move/=mag;side/=mag;}
-        const speed=third?(keys.has('shift')?RUN_PACE:WALK_PACE):(keys.has('shift')?22:12.5);
+        // Brisk campus traversal: 3rd-person walk 8 m/s / sprint 22 m/s, FPS walk 16 m/s / sprint 38 m/s
+        const speed=third?(keys.has('shift')?22:8):(keys.has('shift')?38:16);
         if(third&&walk.tapMeters&&dt>0){
           const advance=Math.sign(walk.tapMeters)*Math.min(Math.abs(walk.tapMeters),dt*speed);
           move=advance/(dt*speed);walk.tapMeters-=advance;
@@ -1259,7 +1290,7 @@ export function createModel(stage,data,onFrame,options={}){
       const movedDist=Math.hypot(walk.position.x-prevX,walk.position.z-prevZ);
       const instSpeed=dt>1e-4?movedDist/dt:0;
       walk.speed+=(instSpeed-walk.speed)*Math.min(1,dt*14);
-      walk.sprinting=third?instSpeed>2.3:Boolean(!routeAuto&&keys.has('shift')&&instSpeed>8);
+      walk.sprinting=third?Boolean(keys.has('shift')&&instSpeed>10):Boolean(!routeAuto&&keys.has('shift')&&instSpeed>18);
       const moving=instSpeed>.4;
       const targetBob=walk.grounded&&moving?Math.min(1,instSpeed/12):0;
       walk.bobAmp+=(targetBob-walk.bobAmp)*Math.min(1,dt*10);
@@ -1292,7 +1323,8 @@ export function createModel(stage,data,onFrame,options={}){
       else if(avatarSettle>0)avatarSettle=Math.max(0,avatarSettle-dt);
       const idleTick=third&&!reducedWalkMotion.matches&&!document.hidden&&time-lastAvatarTick>=100;
       avatarDirty=avatarSettle>0||idleTick;
-      if(avatarDirty){syncAvatar(avatarSettle>0?dt:Math.min(.13,(time-lastAvatarTick)/1000),movedDist);lastAvatarTick=time;}
+      const animDist=Math.min(movedDist,dt*(walk.sprinting?4.6:2.6));
+      if(avatarDirty){syncAvatar(avatarSettle>0?dt:Math.min(.13,(time-lastAvatarTick)/1000),animDist);lastAvatarTick=time;}
       stage.dataset.jumpY=walk.jumpY.toFixed(2);
     }else{
       if(tween){
@@ -1345,7 +1377,7 @@ export function createModel(stage,data,onFrame,options={}){
       if(walk.cameraMode!=='third'||side){step(m,side);return;}
       stopRouteWalk(true);walk.tapMeters=T.MathUtils.clamp(walk.tapMeters+m,-5,5);
     },
-    jump,setWalkCamera,setFirstPersonHands,getWalkCamera(){return walk.cameraMode;},setPointerLock,isPointerLocked(){return document.pointerLockElement===stage;},
+    jump,setWalkCamera,setFirstPersonHands,loadAvatarModel,clearAvatarModel,getCustomAvatarLabel(){return customAvatarLabel;},getWalkCamera(){return walk.cameraMode;},setPointerLock,isPointerLocked(){return document.pointerLockElement===stage;},
     routeStartPose,startRouteWalk,stopRouteWalk,isRouteWalking(){return Boolean(routeAuto);},
     setLighting,setWaterMotion(on){waterMotion=Boolean(on);lastView='';},
     // dir: forward/back drive (-1..1); turn: yaw rate (-1..1) for the touch joystick.

@@ -46,7 +46,7 @@ export function sculptFace(head,art,P,coarse){
   const sdfMap=createFaceSdfTexture();
   const faceMat=createFaceToonMaterial(openMap,closedMap,sdfMap);
   faceNode.userData.customMaterial=faceMat;
-  faceNode.userData.outline=[0xb87676,.0015];
+  faceNode.userData.outline=[0xd49c96,.0009];
   faceNode.userData.faceCanvas=openCanvas;
 
   // Populate vertex colors cleanly too so Canvas fallback & Node verification read right

@@ -1,69 +1,60 @@
 import * as T from './assets/three.module.min.js';
 
-// High-resolution 1024x1024 UV-mapped anime face illustration textures (open + blink)
-// plus 256x256 Honkai/Genshin-style Face SDF Shadow Map.
-// Uses isotropic 1:1 front-planar UVs:
-//   x in [-0.13, +0.13] -> u in [0, 1]  (u=0.5 is center x=0)
-//   y in [ 0.01,  0.27] -> v in [0, 1]  (canvas cy = (1 - v) * 1024)
+// Warm, relaxed 1024x1024 anime Elysia face texture (gentle half-lidded smile
+// inspired by Reference 2 — never staring or ghostly pale) + 256x256 Face SDF.
 const S = 1024;
 const toX = x => S * (.5 + x / .26);
 const toY = y => S * (1 - (y - .010) / .26);
 const px = m => S * (m / .26);
 
 function drawEye(ctx, side, closed = false) {
-  const cx = toX(side * .045);
-  const cy = toY(.121);
-  const ew = px(.0295);
-  const eh = px(.0215);
+  const cx = toX(side * .044);
+  const cy = toY(.119);
+  const ew = px(.0285);
+  const eh = px(.0165); // Gentle relaxed almond height (no wide-open staring eyes!)
 
   ctx.save();
   ctx.translate(cx, cy);
   if (side < 0) ctx.scale(-1, 1);
 
   if (closed) {
-    // Sweet happy curved anime blink arc
-    ctx.strokeStyle = '#4c2646';
-    ctx.lineWidth = 10.5;
+    ctx.strokeStyle = '#6c3e5a';
+    ctx.lineWidth = 9.0;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(-ew * .88, eh * .18);
-    ctx.quadraticCurveTo(0, -eh * .32, ew * 1.04, eh * .08);
+    ctx.moveTo(-ew * .86, eh * .22);
+    ctx.quadraticCurveTo(0, -eh * .26, ew * .98, eh * .12);
     ctx.stroke();
 
-    ctx.strokeStyle = '#c86c9f';
-    ctx.lineWidth = 4.2;
+    ctx.strokeStyle = '#c5779d';
+    ctx.lineWidth = 6.4;
     ctx.beginPath();
-    ctx.moveTo(ew * .58, -eh * .06);
-    ctx.quadraticCurveTo(ew * .88, -.02 * eh, ew * 1.12, -eh * .08);
-    ctx.stroke();
-
-    ctx.strokeStyle = '#c96f9f';
-    ctx.lineWidth = 7.2;
-    ctx.beginPath();
-    ctx.moveTo(-ew * .78, -eh * 1.48);
-    ctx.quadraticCurveTo(ew * .06, -eh * 1.82, ew * .84, -eh * 1.46);
+    ctx.moveTo(-ew * .76, -eh * 1.62);
+    ctx.quadraticCurveTo(ew * .06, -eh * 1.92, ew * .82, -eh * 1.56);
     ctx.stroke();
     ctx.restore();
     return;
   }
 
-  const topY = -eh;
-  const botY = eh * .82;
+  // Relaxed gentle half-lidded Elysia almond (Ref 2): soft gently arching upper lid,
+  // slightly smiling lower lid curve so eyes look warm & friendly.
+  const topY = -eh * .96;
+  const botY = eh * .86;
 
-  // 1. Soft upper-eye rosy socket tint
-  const sock = ctx.createRadialGradient(0, -eh * .55, eh * .2, 0, -eh * .35, ew * 1.35);
-  sock.addColorStop(0, 'rgba(246,178,196,0.34)');
-  sock.addColorStop(1, 'rgba(246,178,196,0)');
+  // Soft warm rosy-peach eyeshadow around upper lid
+  const sock = ctx.createRadialGradient(0, -eh * .45, eh * .2, 0, -eh * .25, ew * 1.35);
+  sock.addColorStop(0, 'rgba(232,160,174,0.38)');
+  sock.addColorStop(1, 'rgba(232,160,174,0)');
   ctx.fillStyle = sock;
   ctx.beginPath();
-  ctx.ellipse(0, -eh * .3, ew * 1.3, eh * 1.1, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, -eh * .22, ew * 1.28, eh * 1.25, 0, 0, Math.PI * 2);
   ctx.fill();
 
   function eyePath() {
     ctx.beginPath();
-    ctx.moveTo(-ew * .94, eh * .20);
-    ctx.bezierCurveTo(-ew * .58, topY * 1.24, ew * .48, topY * 1.22, ew * .98, -eh * .06);
-    ctx.bezierCurveTo(ew * .64, botY * 1.06, -ew * .42, botY * 1.04, -ew * .94, eh * .20);
+    ctx.moveTo(-ew * .92, eh * .26);
+    ctx.bezierCurveTo(-ew * .52, topY * 1.15, ew * .48, topY * 1.16, ew * .98, -eh * .04);
+    ctx.bezierCurveTo(ew * .62, botY * .96, -ew * .38, botY * .92, -ew * .92, eh * .26);
     ctx.closePath();
   }
 
@@ -71,148 +62,119 @@ function drawEye(ctx, side, closed = false) {
   eyePath();
   ctx.clip();
 
-  // 2. Crisp porcelain-white sclera with delicate lavender-pink top shadow
-  const sc = ctx.createLinearGradient(0, topY * 1.1, 0, botY);
-  sc.addColorStop(0, '#d8c5e8');
-  sc.addColorStop(.28, '#f7eefc');
-  sc.addColorStop(.60, '#ffffff');
-  sc.addColorStop(1, '#fff6fa');
+  // Warm natural sclera (slightly soft cream-lavender top shade — never blinding neon white)
+  const sc = ctx.createLinearGradient(0, topY, 0, botY);
+  sc.addColorStop(0, '#d8c5dc');
+  sc.addColorStop(.32, '#f5ecf5');
+  sc.addColorStop(1, '#fcf5f8');
   ctx.fillStyle = sc;
-  ctx.fillRect(-ew * 1.2, -eh * 1.4, ew * 2.4, eh * 2.8);
+  ctx.fillRect(-ew * 1.2, -eh * 1.5, ew * 2.4, eh * 3.0);
 
-  // 3. Elysia multi-tone crystal iris (deep plum -> orchid violet -> sakura pink -> luminous cyan-ice crescent)
-  const ix = -ew * .03, iy = eh * .02, irx = ew * .57, iry = eh * .86;
+  // Warm soft amethyst-pink Elysia iris gently tucked under upper eyelid
+  const ix = -ew * .02, iy = -eh * .04, irx = ew * .52, iry = eh * .96;
 
-  ctx.fillStyle = '#4f2664';
+  ctx.fillStyle = '#623b78';
   ctx.beginPath();
-  ctx.ellipse(ix, iy, irx * 1.05, iry * 1.04, 0, 0, Math.PI * 2);
+  ctx.ellipse(ix, iy, irx * 1.04, iry * 1.04, 0, 0, Math.PI * 2);
   ctx.fill();
 
   const ig = ctx.createLinearGradient(ix, iy - iry, ix, iy + iry);
-  ig.addColorStop(0.00, '#4a2366');
-  ig.addColorStop(0.24, '#7d49a8');
-  ig.addColorStop(0.50, '#be7ce0');
-  ig.addColorStop(0.73, '#fface3');
-  ig.addColorStop(0.90, '#d7f4ff');
-  ig.addColorStop(1.00, '#effcff');
+  ig.addColorStop(0.00, '#5c3673');
+  ig.addColorStop(0.28, '#8d5db0');
+  ig.addColorStop(0.58, '#cc90dc');
+  ig.addColorStop(0.84, '#f7bce0');
+  ig.addColorStop(1.00, '#e3f1fc');
   ctx.fillStyle = ig;
   ctx.beginPath();
-  ctx.ellipse(ix, iy, irx * .95, iry * .95, 0, 0, Math.PI * 2);
+  ctx.ellipse(ix, iy, irx * .94, iry * .94, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Glowing lower ice-cyan & sakura crystal crescent
-  const glow = ctx.createRadialGradient(ix + irx * .08, iy + iry * .48, irx * .05, ix, iy + iry * .36, irx * .86);
-  glow.addColorStop(0, 'rgba(218,252,255,0.96)');
-  glow.addColorStop(.45, 'rgba(255,192,235,0.78)');
-  glow.addColorStop(1, 'rgba(255,192,235,0)');
+  // Soft lower rosy-lavender luminous crescent
+  const glow = ctx.createRadialGradient(ix, iy + iry * .44, irx * .06, ix, iy + iry * .36, irx * .82);
+  glow.addColorStop(0, 'rgba(240,248,255,0.88)');
+  glow.addColorStop(.55, 'rgba(252,198,232,0.62)');
+  glow.addColorStop(1, 'rgba(252,198,232,0)');
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.ellipse(ix, iy + iry * .22, irx * .84, iry * .70, 0, 0, Math.PI * 2);
+  ctx.ellipse(ix, iy + iry * .22, irx * .82, iry * .68, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Delicate crystalline shimmer arc inside lower iris
-  ctx.strokeStyle = 'rgba(255,244,255,0.52)';
-  ctx.lineWidth = 2.4;
-  ctx.beginPath();
-  ctx.arc(ix, iy + iry * .04, irx * .56, 0.25, Math.PI - 0.25);
-  ctx.stroke();
-
-  // Velvety dark-violet pupil
-  const pg = ctx.createRadialGradient(ix, iy - iry * .06, irx * .08, ix, iy - iry * .04, irx * .44);
-  pg.addColorStop(0, '#36184c');
-  pg.addColorStop(.65, '#592c78');
-  pg.addColorStop(1, 'rgba(130,72,168,0)');
+  // Soft muted violet pupil (not harsh staring black!)
+  const pg = ctx.createRadialGradient(ix, iy - iry * .04, irx * .08, ix, iy - iry * .02, irx * .40);
+  pg.addColorStop(0, '#4a2862');
+  pg.addColorStop(.68, '#724692');
+  pg.addColorStop(1, 'rgba(130,84,166,0)');
   ctx.fillStyle = pg;
   ctx.beginPath();
-  ctx.ellipse(ix, iy - iry * .04, irx * .44, iry * .46, 0, 0, Math.PI * 2);
+  ctx.ellipse(ix, iy - iry * .02, irx * .40, iry * .42, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Soft translucent upper-lid shadow cast across top of iris
-  const lidSh = ctx.createLinearGradient(0, topY * 1.15, 0, topY * .15);
-  lidSh.addColorStop(0, 'rgba(65,30,82,0.56)');
-  lidSh.addColorStop(1, 'rgba(65,30,82,0)');
+  // Soft upper-eyelid shadow creating gentle relaxed gaze
+  const lidSh = ctx.createLinearGradient(0, topY * 1.15, 0, topY * .05);
+  lidSh.addColorStop(0, 'rgba(78,44,92,0.52)');
+  lidSh.addColorStop(1, 'rgba(78,44,92,0)');
   ctx.fillStyle = lidSh;
-  ctx.fillRect(-ew * 1.2, topY * 1.3, ew * 2.4, eh * 1.2);
+  ctx.fillRect(-ew * 1.2, topY * 1.3, ew * 2.4, eh * 1.3);
 
-  // 4. Crisp anime catchlights (luminous upper-left oval, pinpoint & bottom-right crystal diamond)
-  ctx.fillStyle = '#ffffff';
+  // Subtle warm catchlights
+  ctx.fillStyle = 'rgba(255,252,255,0.94)';
   ctx.beginPath();
-  ctx.ellipse(ix - irx * .46, iy - iry * .42, irx * .28, iry * .25, -.28, 0, Math.PI * 2);
+  ctx.ellipse(ix - irx * .42, iy - iry * .36, irx * .24, iry * .21, -.25, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = 'rgba(255,255,255,0.94)';
+  ctx.fillStyle = 'rgba(255,245,252,0.85)';
   ctx.beginPath();
-  ctx.ellipse(ix + irx * .42, iy - iry * .22, irx * .12, iry * .11, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(255,244,255,0.92)';
-  const gx = ix + irx * .30, gy = iy + iry * .44, gr = irx * .20;
-  ctx.beginPath();
-  ctx.moveTo(gx, gy - gr * 1.2);
-  ctx.lineTo(gx + gr * .65, gy);
-  ctx.lineTo(gx, gy + gr * 1.2);
-  ctx.lineTo(gx - gr * .65, gy);
-  ctx.closePath();
+  ctx.ellipse(ix + irx * .34, iy + iry * .38, irx * .15, iry * .13, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
 
-  // 5. Curved dark-plum-to-rose anime upper eyelashes with winged cat-eye flick
+  // Soft plum-brown arched upper eyelashes (softer & warmer, never harsh black ink)
   const lashGrad = ctx.createLinearGradient(-ew, topY, ew, topY);
-  lashGrad.addColorStop(0, '#5a2e4c');
-  lashGrad.addColorStop(.55, '#3f1e3a');
-  lashGrad.addColorStop(1, '#7a3d66');
+  lashGrad.addColorStop(0, '#6e405b');
+  lashGrad.addColorStop(.55, '#55304a');
+  lashGrad.addColorStop(1, '#8c4c72');
   ctx.fillStyle = lashGrad;
   ctx.beginPath();
-  ctx.moveTo(-ew * 1.00, eh * .20);
-  ctx.bezierCurveTo(-ew * .62, topY * 1.44, ew * .48, topY * 1.44, ew * 1.14, -eh * .26);
-  ctx.bezierCurveTo(ew * 1.06, -eh * .06, ew * 1.02, eh * .02, ew * .96, -eh * .02);
-  ctx.bezierCurveTo(ew * .46, topY * 1.08, -ew * .54, topY * 1.12, -ew * .94, eh * .23);
+  ctx.moveTo(-ew * .98, eh * .26);
+  ctx.bezierCurveTo(-ew * .56, topY * 1.36, ew * .46, topY * 1.38, ew * 1.10, -eh * .20);
+  ctx.bezierCurveTo(ew * 1.04, -eh * .02, ew * 1.00, eh * .04, ew * .95, -.02 * eh);
+  ctx.bezierCurveTo(ew * .46, topY * 1.02, -ew * .50, topY * 1.04, -ew * .92, eh * .28);
   ctx.closePath();
   ctx.fill();
 
-  // Signature sakura-rose outer lash wing highlight
-  ctx.strokeStyle = '#c86c9f';
-  ctx.lineWidth = 4.2;
+  // Gentle rose outer lash highlight
+  ctx.strokeStyle = '#c4729e';
+  ctx.lineWidth = 3.5;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(ew * .62, topY * .84);
-  ctx.quadraticCurveTo(ew * .94, topY * .52, ew * 1.16, -eh * .34);
+  ctx.moveTo(ew * .64, topY * .78);
+  ctx.quadraticCurveTo(ew * .94, topY * .46, ew * 1.12, -eh * .24);
   ctx.stroke();
 
-  // Delicate outer lash flicks
-  ctx.strokeStyle = '#5a2f4f';
-  ctx.lineWidth = 3.2;
-  for (const [fx, fy, tx, ty] of [[.84, -.04, 1.08, -.16], [.72, .34, .92, .42]]) {
-    ctx.beginPath();
-    ctx.moveTo(ew * fx, eh * fy);
-    ctx.lineTo(ew * tx, eh * ty);
-    ctx.stroke();
-  }
-
-  // Light partial lower lash line
-  ctx.strokeStyle = 'rgba(122,68,104,0.75)';
-  ctx.lineWidth = 3.4;
+  // Very subtle soft lower lid line
+  ctx.strokeStyle = 'rgba(148,96,120,0.52)';
+  ctx.lineWidth = 2.8;
   ctx.beginPath();
-  ctx.moveTo(-ew * .46, botY * .92);
-  ctx.quadraticCurveTo(ew * .26, botY * 1.12, ew * .88, eh * .24);
+  ctx.moveTo(-ew * .32, botY * .88);
+  ctx.quadraticCurveTo(ew * .28, botY * 1.02, ew * .86, eh * .24);
   ctx.stroke();
 
-  // 6. Fine double-eyelid fold crease
-  ctx.strokeStyle = 'rgba(176,108,128,0.68)';
-  ctx.lineWidth = 3.0;
+  // Fine soft double-eyelid crease
+  ctx.strokeStyle = 'rgba(182,120,132,0.52)';
+  ctx.lineWidth = 2.6;
   ctx.beginPath();
-  ctx.moveTo(-ew * .68, topY * 1.24 - 14);
-  ctx.bezierCurveTo(-ew * .20, topY * 1.54 - 16, ew * .48, topY * 1.50 - 15, ew * .88, topY * .96 - 10);
+  ctx.moveTo(-ew * .64, topY * 1.18 - 13);
+  ctx.bezierCurveTo(-ew * .18, topY * 1.46 - 15, ew * .44, topY * 1.42 - 14, ew * .84, topY * .90 - 9);
   ctx.stroke();
 
-  // 7. Expressive rose-pink anime eyebrow (positioned so inner/outer arch peeks gracefully through bangs)
-  ctx.strokeStyle = '#bf6092';
-  ctx.lineWidth = 8.2;
+  // Soft rose-pink eyebrows
+  ctx.strokeStyle = '#c5779d';
+  ctx.lineWidth = 6.8;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(-ew * .82, -eh * 1.24);
-  ctx.quadraticCurveTo(ew * .04, -eh * 1.54, ew * .86, -eh * 1.22);
+  ctx.moveTo(-ew * .78, -eh * 1.46);
+  ctx.quadraticCurveTo(ew * .04, -eh * 1.78, ew * .84, -eh * 1.40);
   ctx.stroke();
 
   ctx.restore();
@@ -223,94 +185,69 @@ function paintFaceCanvas(closed = false) {
   canvas.width = canvas.height = S;
   const ctx = canvas.getContext('2d');
 
-  // 1. Warm luminous anime porcelain skin base
+  // Warm healthy anime peach-cream skin (NOT ghostly flat white paper!)
   const bg = ctx.createLinearGradient(0, 0, 0, S);
-  bg.addColorStop(0.0, '#fff2eb');
-  bg.addColorStop(0.55, '#fff5ef');
-  bg.addColorStop(1.0, '#ffe9e1');
+  bg.addColorStop(0.00, '#f8dfd2');
+  bg.addColorStop(0.32, '#fce5d9');
+  bg.addColorStop(0.74, '#f8ddd0');
+  bg.addColorStop(1.00, '#ecc9bc');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, S, S);
 
-  // Subtle rosy forehead bloom
-  const fore = ctx.createRadialGradient(S * .5, toY(.185), 20, S * .5, toY(.185), px(.095));
-  fore.addColorStop(0, 'rgba(255,204,218,0.22)');
-  fore.addColorStop(1, 'rgba(255,204,218,0)');
-  ctx.fillStyle = fore;
+  // Subtle warm volumetric cheek/chin/forehead shading baked softly so face feels 3D & alive
+  const centerGlow = ctx.createRadialGradient(S * .5, toY(.112), 40, S * .5, toY(.112), px(.098));
+  centerGlow.addColorStop(0, 'rgba(255,242,234,0.65)');
+  centerGlow.addColorStop(.70, 'rgba(255,232,220,0.18)');
+  centerGlow.addColorStop(1, 'rgba(222,170,162,0.22)');
+  ctx.fillStyle = centerGlow;
   ctx.fillRect(0, 0, S, S);
 
-  // 2. Soft airbrushed sakura cheek blush + anime highlight hatches (///)
+  // Soft natural airbrushed peach-sakura cheek blush (no harsh scratch lines)
   for (const s of [-1, 1]) {
-    const bx = toX(s * .058), by = toY(.095);
-    const bl = ctx.createRadialGradient(bx, by, 8, bx, by, px(.031));
-    bl.addColorStop(0, 'rgba(255,134,168,0.56)');
-    bl.addColorStop(.55, 'rgba(255,168,194,0.28)');
-    bl.addColorStop(1, 'rgba(255,176,198,0)');
+    const bx = toX(s * .055), by = toY(.096);
+    const bl = ctx.createRadialGradient(bx, by, 8, bx, by, px(.034));
+    bl.addColorStop(0, 'rgba(244,148,166,0.44)');
+    bl.addColorStop(.55, 'rgba(248,172,184,0.20)');
+    bl.addColorStop(1, 'rgba(248,172,184,0)');
     ctx.fillStyle = bl;
     ctx.beginPath();
-    ctx.ellipse(bx, by, px(.033), px(.019), 0, 0, Math.PI * 2);
+    ctx.ellipse(bx, by, px(.035), px(.022), 0, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.strokeStyle = 'rgba(255,118,158,0.34)';
-    ctx.lineWidth = 3.4;
-    ctx.lineCap = 'round';
-    for (let k = -1; k <= 1; k++) {
-      const hx = bx + k * 15, hy = by + 4;
-      ctx.beginPath();
-      ctx.moveTo(hx - 6, hy + 10);
-      ctx.lineTo(hx + 6, hy - 10);
-      ctx.stroke();
-    }
   }
 
-  // 3. Delicate tiny anime nose dot + luminous white bridge highlight
+  // Subtle soft anime nose shading
   const nx = toX(0), ny = toY(.091);
-  ctx.fillStyle = 'rgba(202,118,128,0.62)';
+  ctx.fillStyle = 'rgba(196,130,126,0.42)';
   ctx.beginPath();
-  ctx.ellipse(nx + 4, ny + 4, 6.2, 4.0, -.25, 0, Math.PI * 2);
+  ctx.ellipse(nx + 3, ny + 4, 6.0, 3.6, -.22, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillStyle = 'rgba(255,248,244,0.52)';
   ctx.beginPath();
-  ctx.ellipse(nx - 2, ny - 4, 4.2, 8.0, 0, 0, Math.PI * 2);
+  ctx.ellipse(nx - 2, ny - 4, 4.0, 8.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 4. Sweet playful upturned Elysia smile
-  const mx = toX(0), my = toY(.062), mw = px(.020);
-  const lip = ctx.createRadialGradient(mx, my + 6, 4, mx, my + 6, mw * 1.18);
-  lip.addColorStop(0, 'rgba(250,136,162,0.58)');
-  lip.addColorStop(.65, 'rgba(255,172,188,0.24)');
-  lip.addColorStop(1, 'rgba(255,184,196,0)');
+  // Warm gentle natural smile
+  const mx = toX(0), my = toY(.063), mw = px(.0185);
+  const lip = ctx.createRadialGradient(mx, my + 5, 4, mx, my + 5, mw * 1.20);
+  lip.addColorStop(0, 'rgba(236,134,148,0.50)');
+  lip.addColorStop(.65, 'rgba(244,168,176,0.18)');
+  lip.addColorStop(1, 'rgba(244,168,176,0)');
   ctx.fillStyle = lip;
   ctx.beginPath();
-  ctx.ellipse(mx, my + 6, mw * 1.18, mw * .58, 0, 0, Math.PI * 2);
+  ctx.ellipse(mx, my + 5, mw * 1.20, mw * .55, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = '#ea7790';
-  ctx.beginPath();
-  ctx.moveTo(mx - mw * .92, my - 5);
-  ctx.quadraticCurveTo(mx, my + 9, mx + mw * .92, my - 5);
-  ctx.quadraticCurveTo(mx, my + 22, mx - mw * .92, my - 5);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = '#fff5f7';
-  ctx.beginPath();
-  ctx.moveTo(mx - mw * .66, my - 2);
-  ctx.quadraticCurveTo(mx, my + 6, mx + mw * .66, my - 2);
-  ctx.quadraticCurveTo(mx, my + 10, mx - mw * .66, my - 2);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = '#99485e';
-  ctx.lineWidth = 4.5;
+  ctx.strokeStyle = '#a86170';
+  ctx.lineWidth = 4.2;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(mx - mw, my - 7);
-  ctx.quadraticCurveTo(mx, my + 10, mx + mw, my - 7);
+  ctx.moveTo(mx - mw, my - 5);
+  ctx.quadraticCurveTo(mx, my + 8, mx + mw, my - 5);
   ctx.stroke();
 
-  ctx.fillStyle = 'rgba(255,245,248,0.75)';
+  ctx.fillStyle = 'rgba(255,236,238,0.58)';
   ctx.beginPath();
-  ctx.ellipse(mx, my + 21, mw * .34, 4.0, 0, 0, Math.PI * 2);
+  ctx.ellipse(mx, my + 14, mw * .32, 3.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
   drawEye(ctx, -1, closed);
@@ -320,7 +257,7 @@ function paintFaceCanvas(closed = false) {
 
 export function createFaceTextures() {
   if (typeof document === 'undefined') {
-    const dummy = new T.DataTexture(new Uint8Array([255, 244, 238, 255]), 1, 1, T.RGBAFormat);
+    const dummy = new T.DataTexture(new Uint8Array([250, 226, 214, 255]), 1, 1, T.RGBAFormat);
     dummy.needsUpdate = true;
     return { openMap: dummy, closedMap: dummy, openCanvas: null };
   }
@@ -336,8 +273,6 @@ export function createFaceTextures() {
   return { openMap: wrap(openCanvas), closedMap: wrap(closedCanvas), openCanvas };
 }
 
-// Procedural Honkai/Genshin-style 256x256 Face SDF Lightmap:
-// Encodes the smooth horizontal shadow sweep threshold across the anime face.
 export function createFaceSdfTexture() {
   const n = 256;
   const bytes = new Uint8Array(n * n * 4);

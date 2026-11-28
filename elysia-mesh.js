@@ -30,10 +30,10 @@ export function sculpt({coarse=false}={}) {
     crystal:createCelToonMaterial({name:'Elysia · Crystal Toon',shadowTint:0xbfb5ec,rimTint:0xe2fbff,rimStrength:.38,specular:.58,emissive:.16})
   };
   const outlineSpec={
-    silk:[0x65518c,.0019],
-    skin:[0xb87676,.0015],
-    hair:[0x8f436c,.0020],
-    crystal:[0x6c4c8f,.0016]
+    silk:[0x78659c,.0013],
+    skin:[0xc9938f,.0010],
+    hair:[0xa65b82,.0014],
+    crystal:[0x7a5c9e,.0012]
   };
   function surface(joint,nu,nv,position,colour,flip=false,uvFn=null) {
     if(!buckets.has(joint))buckets.set(joint,{p:[],c:[],uv:[],ix:[]});

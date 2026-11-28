@@ -14,7 +14,9 @@ node server.mjs
 
 ## 地面漫游角色
 
-点击“漫游”即可以爱莉希雅「真我·人之律者」第一人称进入校园，视野右下可见赛璐珞描边风格的白色丝绸长手套、紫金袖口、冰晶腕饰与悬浮旋转的樱粉—冰青「真我水晶花」，左手自然收于下方避免遮挡小地图并在行走/疾跑/跳跃时随步态摆动，低头可见花瓣裙摆、淡紫渐变长袜与高跟鞋；按 `V` 或点“第三人称”（也可以[从伯襄路第三人称直接出发](https://gavin0915023-dev.github.io/henu-jinming-map/?view=boxiang&person=third)）可切换至完整第三人称角色，采用三渲二（NPR）管线：1024px 高清二次元面部贴图、面部 SDF 柔光消灰影、彩色背面挤出描边、头发天使光环与硬边二阶赛璐珞色阶。实景参考取景点保持无遮挡镜头；也可单独打开[角色试镜页](https://gavin0915023-dev.github.io/henu-jinming-map/verification/elysia-study.html)。
+点击“漫游”进入第一人称校园街景（无遮挡视野，低头可见裙摆与高跟鞋），按 `V` 或点“第三人称”（也可以[从伯襄路第三人称直接出发](https://gavin0915023-dev.github.io/henu-jinming-map/?view=boxiang&person=third)）切换至第三人称角色。漫游移动速度已提速（第一人称步行 16 m/s、Shift 疾跑 38 m/s；第三人称步行 8 m/s、Shift 疾跑 22 m/s）。
+
+支持直接导入真实 3D 游戏模型（`.glb` / `.gltf` / `.vrm`，如米哈游模之屋官方爱莉希雅 MMD 转换后的 `.glb`）：在漫游模式点底部**“导入模型”**按钮，或直接把 `.glb` / `.vrm` 文件拖进地图画面，会自动缩放到标准身高、落地对齐、驱动内置或人形骨骼动画并保存在浏览器本地（右键点“导入模型”可恢复默认）。也可单独打开[角色试镜页](https://gavin0915023-dev.github.io/henu-jinming-map/verification/elysia-study.html)预览或拖入模型。
 
 ![爱莉希雅漫游模型：侧身抬手、背面头纱和行走姿态](verification/elysia-preview.webp)
 
@@ -57,7 +59,7 @@ node server.mjs
 - `landmark-wings.js`：经济学院、数学楼、生命科学院和华苑餐厅。使用原轮廓裁切退台和门洞，两种渲染器共用同一组表面。露台栏杆与球场围网共用一个索引网格，每段栏板只占一个四边形。
 - `dongyuan.js`：东苑八栋宿舍的沿街山墙、阳台窗、楼梯间与屋面。保留各楼原轮廓，两种渲染器共用同一组立面，窗框和玻璃沿用原有 360 米索引分块。
 - `routing.js` / `minimap.js` / `tour.js`：校园路网 A* 步行寻路、漫游小地图与三条校园主题云游路线。
-- `avatar.js` / `elysia-costume.js` / `elysia-face.js` / `elysia-face-tex.js` / `elysia-toon.js` / `elysia-drape.js` / `elysia-mesh.js` / `elysia-motion.js` / `avatar-canvas.js`：爱莉希雅「真我·人之律者」三渲二 NPR 着色管线（1024px 二次元脸部贴图、面部 SDF 阴影、彩色背面描边、头发天使光环）、第一人称悬浮水晶花长手套与布料步态动画。执行 `node verification/elysia-check.mjs` 可检查两种精度下的模型、动作与脚底接触。
+- `avatar.js` / `custom-avatar.js` / `assets/GLTFLoader.js` / `elysia-*.js` / `avatar-canvas.js`：爱莉希雅默认漫游角色、真实 `.glb`/`.gltf`/`.vrm` 外部角色模型加载与骨骼动画驱动（支持拖放导入与本地缓存）。执行 `node verification/elysia-check.mjs` 可检查内置模型、动作与脚底接触。
 - `walking-space.js` / `navigation-anchors.js`：导航和漫游共用的楼体、围墙、水面与桥面通行规则，以及入口前的落脚点和西门侧通道。路线依现有模型校验，入口坐标与路径不代表实地测绘。
 - `assets/`：原始校园 JSON、Three.js、OrbitControls 与按需加载的 Leaflet 依赖。
 - `index.html` / `viewer.css` / `main.js`：完整的本地查看界面。

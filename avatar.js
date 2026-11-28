@@ -15,12 +15,11 @@ export function createPlayerAvatar(options) {
     map:tex,transparent:true,opacity:.32,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2
   }));
   shadow.geometry.rotateX(-Math.PI/2);shadow.position.y=.032;rig.root.add(shadow);
-  let fps=null, showHands=true;
+  let fps=null, showHands=false;
   function applyVisibility(){
     for(const piece of rig.upper)piece.visible=!fps;
-    // Keep rear trains & hip brooches hidden in FPS, while letting the delicate
-    // white/ice petal skirt corolla + pale-lilac stockings & heels appear if
-    // the player looks straight down.
+    // Keep rear trains & hip brooches hidden in FPS; looking straight down shows
+    // the clean petal skirt, pale-lilac stockings & heels without any uncanny FPS hand.
     for(const piece of rig.skirts)piece.visible=!fps||piece===rig.skirt;
     if(rig.fpsArms){
       rig.fpsArms.visible=Boolean(fps&&showHands);
@@ -30,13 +29,13 @@ export function createPlayerAvatar(options) {
       }
     }
   }
-  function setFirstPerson(value,hands=showHands){
+  function setFirstPerson(value,hands=false){
     const nextFps=Boolean(value), nextHands=Boolean(hands);
     if(fps===nextFps&&showHands===nextHands)return;
     fps=nextFps;showHands=nextHands;
     applyVisibility();
   }
-  setFirstPerson(true,true);rig.root.visible=false;
+  setFirstPerson(true,false);rig.root.visible=false;
   function update(p){
     const offset=fps?.19:0;
     const yaw=p.yaw??0;

@@ -104,7 +104,7 @@
       <div id="street-help" class="street-help" role="group" aria-label="漫游操控" hidden>
         <span class="walk-key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · <kbd>Shift</kbd> 疾跑 · <kbd>Space</kbd> 跳跃 · <kbd>V</kbd> 切换人称 · <kbd>F</kbd> 鼠标锁定</span>
         <span class="walk-touch-hint">滑动环顾 · 摇杆移动 · 点按跳跃 / 切视角</span>
-        <div><button type="button" id="walk-back" aria-label="后退五米">后退</button><button type="button" id="walk-forward" aria-label="前进五米">前进</button><button type="button" id="walk-jump" aria-label="跳跃">跳跃</button><button type="button" id="walk-cam" aria-pressed="false" aria-label="切换第一人称与第三人称视角">第三人称</button><button type="button" id="walk-fps" aria-pressed="false" aria-label="切换鼠标锁定自由视角">FPS 锁定</button><button type="button" id="map-photos">实景参考</button></div>
+        <div><button type="button" id="walk-back" aria-label="后退五米">后退</button><button type="button" id="walk-forward" aria-label="前进五米">前进</button><button type="button" id="walk-jump" aria-label="跳跃">跳跃</button><button type="button" id="walk-cam" aria-pressed="false" aria-label="切换第一人称与第三人称视角">第三人称</button><button type="button" id="walk-model" title="导入 .glb / .vrm 三维角色模型（也支持直接拖入画面）" aria-label="导入自定义三维角色模型">导入模型</button><button type="button" id="walk-fps" aria-pressed="false" aria-label="切换鼠标锁定自由视角">FPS 锁定</button><button type="button" id="map-photos">实景参考</button><input type="file" id="avatar-file" accept=".glb,.gltf,.vrm" hidden></div>
         <nav id="walk-route" aria-label="沿路线换取景点" hidden><button type="button" id="route-prev">‹ 上一站</button><span id="route-position" aria-live="polite"></span><button type="button" id="route-next">下一站 ›</button></nav>
       </div>
       <div id="fallback" role="status">正在构建校园场景…</div>

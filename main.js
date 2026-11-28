@@ -316,7 +316,6 @@ function syncSatelliteRoute() {
 
 function markView(item) {
   activeView = item;
-  model?.setFirstPersonHands(!item);
   const route = walks.find(r => r.stops.includes(item)), i = route ? route.stops.indexOf(item) : -1;
   $('#walk-route').hidden = i < 0;
   if (i >= 0) {
@@ -1029,11 +1028,51 @@ function syncWalkHud() {
   reticle.classList.toggle('locked', locked);
   reticle.hidden = mode !== 'walk' || cam !== 'fps' || Boolean(activeView);
   if (mode === 'walk' && !activeView && !activeRoute) {
-    $('#mode-note').textContent = cam === 'third'
-      ? '第三人称 · 爱莉希雅「真我·人之律者」'
-      : '第一人称 · 爱莉希雅「真我·人之律者」';
+    const customLabel = model?.getCustomAvatarLabel?.();
+    const who = customLabel || '爱莉希雅「真我·人之律者」';
+    $('#mode-note').textContent = cam === 'third' ? `第三人称 · ${who}` : `第一人称 · ${who}`;
   }
 }
+async function handleAvatarFile(file) {
+  if (!model || !file) return;
+  if (!/\.(glb|gltf|vrm)$/i.test(file.name)) {
+    notice('请选择 .glb / .gltf / .vrm 格式的三维角色模型');
+    return;
+  }
+  notice(`正在加载三维角色「${file.name}」…`, 4000);
+  try {
+    const label = await model.loadAvatarModel(file, file.name, true);
+    if (mode !== 'walk') setMode('walk');
+    model.setWalkCamera('third');
+    syncWalkHud();
+    notice(`已切换为「${label}」（已本地保存；右键点“导入模型”可恢复默认）`, 4200);
+  } catch (err) {
+    console.warn('Custom avatar load failed', err);
+    notice('模型加载失败，请确认是有效的 .glb 或 .vrm 文件');
+  }
+}
+$('#walk-model')?.addEventListener('click', () => $('#avatar-file')?.click());
+$('#walk-model')?.addEventListener('contextmenu', async e => {
+  e.preventDefault();
+  if (!model?.getCustomAvatarLabel?.()) return;
+  await model.clearAvatarModel();
+  syncWalkHud();
+  notice('已恢复默认漫游角色', 2400);
+});
+$('#avatar-file')?.addEventListener('change', e => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (file) handleAvatarFile(file);
+});
+stage.addEventListener('dragover', e => {
+  if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+});
+stage.addEventListener('drop', e => {
+  const file = [...(e.dataTransfer?.files ?? [])].find(f => /\.(glb|gltf|vrm)$/i.test(f.name));
+  if (!file) return;
+  e.preventDefault();
+  handleAvatarFile(file);
+});
 $('#walk-jump').onclick = () => {
   model?.jump();
   stage.focus({ preventScroll: true });
@@ -1293,6 +1332,10 @@ try {
     model.setOrbitPose(reqCam.slice(0, 3), reqCam.slice(3, 6));
   }
   if (mode === 'walk' && params.get('person') === 'third') { model.setWalkCamera('third'); syncWalkHud(); }
+  const reqModel = params.get('model');
+  if (reqModel && /^[a-z0-9_./-]+\.(glb|gltf|vrm)$/i.test(reqModel) && !reqModel.includes('..')) {
+    model.loadAvatarModel(reqModel, reqModel.split('/').pop().replace(/\.\w+$/, '')).then(() => syncWalkHud()).catch(() => {});
+  }
   model.setVisible(mode !== 'satellite');
   if (!requested && mode === 'model' && stage.dataset.renderer === 'canvas') $('#mode-note').textContent = '兼容模式 · 基础模型';
   requestAnimationFrame(() => {
